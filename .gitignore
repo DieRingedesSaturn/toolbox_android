@@ -1,0 +1,17 @@
+.gradle/
+.kotlin/
+.idea/
+local.properties
+*.iml
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.jks
+*.keystore
+keystore.properties
+
+# Local reference repositories (not part of the product source)
+tmp/

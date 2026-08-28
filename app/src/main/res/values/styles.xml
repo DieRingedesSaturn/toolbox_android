@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.Toolbox" parent="android:style/Theme.DeviceDefault.NoActionBar" />
+</resources>
