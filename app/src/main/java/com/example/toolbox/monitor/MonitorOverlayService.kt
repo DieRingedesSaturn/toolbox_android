@@ -173,8 +173,12 @@ class MonitorOverlayService : Service() {
     }
 
     private fun overlayHeight(metricCount: Int, cpuDisplayMode: MonitorCpuDisplayMode): Int {
-        val extra = if (cpuDisplayMode == MonitorCpuDisplayMode.CORE_FREQUENCIES && MonitorMetric.CPU in selectedMetrics) {
-            24f
+        val extra = if (MonitorMetric.CPU in selectedMetrics) {
+            when (cpuDisplayMode) {
+                MonitorCpuDisplayMode.CORE_FREQUENCIES -> 24f
+                MonitorCpuDisplayMode.TOPOLOGY_MATRIX -> 0f
+                MonitorCpuDisplayMode.WEIGHTED_USAGE -> 0f
+            }
         } else {
             0f
         }

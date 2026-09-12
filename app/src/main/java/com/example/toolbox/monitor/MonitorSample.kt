@@ -9,6 +9,7 @@ enum class MonitorMetric {
 }
 
 enum class MonitorCpuDisplayMode {
+    TOPOLOGY_MATRIX,
     CORE_FREQUENCIES,
     WEIGHTED_USAGE,
 }

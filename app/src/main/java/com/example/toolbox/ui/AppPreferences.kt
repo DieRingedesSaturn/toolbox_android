@@ -60,9 +60,9 @@ class AppPreferences(context: Context) {
             preferences.getString(
                 MONITOR_CPU_DISPLAY_MODE_KEY,
                 null,
-            ) ?: MonitorCpuDisplayMode.CORE_FREQUENCIES.name,
+            ) ?: MonitorCpuDisplayMode.TOPOLOGY_MATRIX.name,
         )
-    }.getOrDefault(MonitorCpuDisplayMode.CORE_FREQUENCIES)
+    }.getOrDefault(MonitorCpuDisplayMode.TOPOLOGY_MATRIX)
 
     fun saveMonitorCpuDisplayMode(value: MonitorCpuDisplayMode) {
         preferences.edit { putString(MONITOR_CPU_DISPLAY_MODE_KEY, value.name) }

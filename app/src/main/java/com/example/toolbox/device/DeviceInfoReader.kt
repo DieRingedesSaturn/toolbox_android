@@ -53,20 +53,40 @@ object DeviceInfoReader {
             Build.HARDWARE
         }.displayValue()
 
-        val maxFrequency = runCatching {
-            val khz = File("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")
-                .readText()
-                .trim()
-                .toLong()
-            "${(khz / 1000.0).roundToInt()} MHz"
-        }.getOrDefault("Not available")
+        val cores = Runtime.getRuntime().availableProcessors()
+
+        val maxKhz = (0 until cores).mapNotNull { index ->
+            readCpuMaxFreqKhz(index)
+        }.maxOrNull()
+
+        val maxFrequency = if (maxKhz != null && maxKhz > 0) {
+            val ghz = maxKhz / 1_000_000.0
+            val mhz = (maxKhz / 1000.0).roundToInt()
+            if (ghz >= 1.0) "%.2f GHz (%d MHz)".format(Locale.US, ghz, mhz) else "$mhz MHz"
+        } else {
+            "Not available"
+        }
 
         return CpuInfo(
             name = name,
             abi = Build.SUPPORTED_ABIS.firstOrNull().orUnknown(),
-            cores = Runtime.getRuntime().availableProcessors(),
+            cores = cores,
             maxFrequency = maxFrequency,
         )
+    }
+
+    private fun readCpuMaxFreqKhz(index: Int): Long? {
+        val candidates = listOf(
+            File("/sys/devices/system/cpu/cpu$index/cpufreq/cpuinfo_max_freq"),
+            File("/sys/devices/system/cpu/cpufreq/policy$index/cpuinfo_max_freq"),
+            File("/sys/devices/system/cpu/cpu$index/cpufreq/scaling_max_freq"),
+            File("/sys/devices/system/cpu/cpufreq/policy$index/scaling_max_freq"),
+        )
+        for (file in candidates) {
+            val value = runCatching { file.readText().trim().toLong() }.getOrNull()
+            if (value != null && value > 0) return value
+        }
+        return null
     }
 
     private fun readGpu(context: Context): GpuInfo {

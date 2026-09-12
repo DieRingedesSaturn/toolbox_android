@@ -57,11 +57,15 @@ class MonitorReader(context: Context) {
         val previous = previousCpuTicks
         previousCpuTicks = ticks
         val currentCores = frequencies.map { core ->
-            core.copy(
-                usagePercent = ticks?.perCore[core.index]?.let { current ->
-                    previous?.perCore?.get(core.index)?.let { old -> usageBetween(current, old) }
-                },
+            val tickUsage = ticks?.perCore?.get(core.index)?.let { current ->
+                previous?.perCore?.get(core.index)?.let { old -> usageBetween(current, old) }
+            }
+            val usagePercent = tickUsage ?: frequencyRatioPercent(
+                current = core.currentFrequencyMhz,
+                minimum = core.minimumFrequencyMhz,
+                maximum = core.maximumFrequencyMhz,
             )
+            core.copy(usagePercent = usagePercent)
         }
         val currentAggregate = ticks?.aggregate ?: ticks?.perCore?.values?.let(::sumCpuTicks)
         val previousAggregate = previous?.aggregate ?: previous?.perCore?.values?.let(::sumCpuTicks)
@@ -72,10 +76,21 @@ class MonitorReader(context: Context) {
                 null
             },
             currentFrequencyMhz = currentCores.mapNotNull { it.currentFrequencyMhz }.averageInt(),
-            minimumFrequencyMhz = currentCores.mapNotNull { it.minimumFrequencyMhz }.averageInt(),
-            maximumFrequencyMhz = currentCores.mapNotNull { it.maximumFrequencyMhz }.averageInt(),
+            minimumFrequencyMhz = currentCores.mapNotNull { it.minimumFrequencyMhz }.minOrNull(),
+            maximumFrequencyMhz = currentCores.mapNotNull { it.maximumFrequencyMhz }.maxOrNull(),
             cores = currentCores,
         )
+    }
+
+    private fun frequencyRatioPercent(current: Int?, minimum: Int?, maximum: Int?): Float? {
+        val currentValue = current ?: return null
+        val maximumValue = maximum?.takeIf { it > 0 } ?: return null
+        val minimumValue = minimum?.coerceIn(0, maximumValue) ?: 0
+        return if (maximumValue > minimumValue) {
+            ((currentValue - minimumValue) * 100f / (maximumValue - minimumValue)).coerceIn(0f, 100f)
+        } else {
+            (currentValue * 100f / maximumValue).coerceIn(0f, 100f)
+        }
     }
 
     private fun readCpuFrequency(): List<CpuCoreFrequency> = discoverCpuIndexes().map { index ->
@@ -83,7 +98,7 @@ class MonitorReader(context: Context) {
             index = index,
             currentFrequencyMhz = readCpuValue(index, listOf("scaling_cur_freq", "cpuinfo_cur_freq")),
             minimumFrequencyMhz = readCpuValue(index, listOf("cpuinfo_min_freq", "scaling_min_freq")),
-            maximumFrequencyMhz = readCpuValue(index, listOf("scaling_max_freq", "cpuinfo_max_freq")),
+            maximumFrequencyMhz = readCpuValue(index, listOf("cpuinfo_max_freq", "scaling_max_freq")),
         )
     }
 
@@ -183,7 +198,9 @@ class MonitorReader(context: Context) {
     }
 
     private fun readGpu(): GpuSample {
-        val usage = listOf(
+        val headroomUsage = readGpuHeadroomUsage()
+
+        val usage = headroomUsage ?: listOf(
             "/sys/class/kgsl/kgsl-3d0/gpubusy",
             "/proc/gpufreq/gpu_loading",
             "/proc/gpufreq/gpu_load",
@@ -209,6 +226,38 @@ class MonitorReader(context: Context) {
             minimumFrequencyMhz = frequency?.minimum?.let(::frequencyToMhz),
             maximumFrequencyMhz = frequency?.maximum?.let(::frequencyToMhz),
         )
+    }
+
+    private fun readGpuHeadroomUsage(): Float? {
+        if (Build.VERSION.SDK_INT < 36) return null
+        return runCatching {
+            val healthManager = appContext.getSystemService(android.os.health.SystemHealthManager::class.java)
+                ?: return null
+            val method = healthManager.javaClass.methods.firstOrNull { it.name == "getGpuHeadroom" }
+                ?: return null
+            val paramTypes = method.parameterTypes
+            val result = if (paramTypes.isEmpty()) {
+                method.invoke(healthManager)
+            } else if (paramTypes.size == 1) {
+                val paramClass = paramTypes[0]
+                val builderClass = runCatching { Class.forName("${paramClass.name}\$Builder") }.getOrNull()
+                val paramInstance = if (builderClass != null) {
+                    val builder = builderClass.getDeclaredConstructor().newInstance()
+                    builderClass.getMethod("build").invoke(builder)
+                } else {
+                    paramClass.getDeclaredConstructor().newInstance()
+                }
+                method.invoke(healthManager, paramInstance)
+            } else {
+                null
+            }
+            val headroom = (result as? Number)?.toFloat()
+            if (headroom != null && !headroom.isNaN() && !headroom.isInfinite()) {
+                (100f - headroom).coerceIn(0f, 100f)
+            } else {
+                null
+            }
+        }.getOrNull()
     }
 
     private fun readGpuUsage(file: File): Float? {

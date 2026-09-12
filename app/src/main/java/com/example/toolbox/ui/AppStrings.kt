@@ -100,16 +100,45 @@ class ToolboxStrings(val language: AppLanguage) {
         }
     val cpuDisplayModeTitle: String
         get() = if (chinese) "悬浮窗 CPU 显示" else "Overlay CPU display"
+    val coreTopologyBars: String
+        get() = if (chinese) "核心拓扑直角柱" else "Core Topology Bars"
     val coreFrequencies: String
         get() = if (chinese) "逐核心频率" else "Per-core frequency"
     val weightedCpuUsage: String
-        get() = if (chinese) "加权占比" else "Weighted usage"
+        get() = if (chinese) "加权占比折线" else "Weighted usage chart"
     val cpuDisplayModeHint: String
         get() = if (chinese) {
-            "逐核心频率适合观察大小核调度；加权占比按各核心最高频率作为容量权重。真实占用率受系统权限影响时会标记 ≈。"
+            "支持核心拓扑直角柱、逐核心频率与加权占比折线图，满足不同监控偏好。受系统权限影响时以 ≈ 标记估算值。"
         } else {
-            "Per-core frequency shows big.LITTLE scheduling; weighted usage uses each core’s maximum frequency as capacity. Restricted usage is marked ≈."
+            "Supports Core Topology Bars, Per-core Frequencies, and Weighted Usage Chart."
         }
+    val cpuTopologyTitle: String
+        get() = if (chinese) "CPU 核心拓扑图谱" else "CPU Core Topology"
+    val cpuTopologyDescription: String
+        get() = if (chinese) {
+            "按各核心物理算力能级加权分配宽度，基频归零实时呈现各核调频与负载状态。"
+        } else {
+            "Weighted core widths by cluster capacity, showing live frequency and load scaling from baseline 0."
+        }
+    val frequencyMode: String
+        get() = if (chinese) "实时主频" else "Frequency"
+    val usageMode: String
+        get() = if (chinese) "核心负载" else "Core Load"
+    val matrixView: String
+        get() = if (chinese) "图谱视图" else "Topology Matrix"
+    val gridView: String
+        get() = if (chinese) "数据网格" else "Data Grid"
+    val offlineCore: String
+        get() = if (chinese) "休眠" else "Offline"
+    val littleCore: String
+        get() = if (chinese) "小核" else "Little"
+    val midCore: String
+        get() = if (chinese) "中核" else "Mid"
+    val bigCore: String
+        get() = if (chinese) "大核" else "Big"
+    val primeCore: String
+        get() = if (chinese) "超大核" else "Prime"
+
     val waitingForData: String
         get() = if (chinese) "等待数据" else "Waiting for data"
     val noFrequencyData: String

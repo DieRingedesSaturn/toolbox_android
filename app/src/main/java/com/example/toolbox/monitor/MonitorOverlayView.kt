@@ -38,10 +38,29 @@ class MonitorOverlayView @JvmOverloads constructor(
         color = 0xFF5F6368.toInt()
         textSize = dp(10f)
     }
+    private val clusterPaints = mapOf(
+        0 to Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF26A69A.toInt() },
+        1 to Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFB300.toInt() },
+        2 to Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF7043.toInt() },
+        3 to Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE91E63.toInt() },
+    )
+    private val barBackgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x33888888
+    }
+    private val barBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(0.8f)
+        color = 0x55888888
+    }
+    private val coreLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+        textSize = dp(7.5f)
+        isFakeBoldText = true
+    }
     private val closeBounds = RectF()
     private val history = mutableMapOf<MonitorMetric, MutableList<Float>>()
     private var metrics: List<MonitorMetric> = MonitorMetric.entries.toList()
-    private var cpuDisplayMode = MonitorCpuDisplayMode.CORE_FREQUENCIES
+    private var cpuDisplayMode = MonitorCpuDisplayMode.TOPOLOGY_MATRIX
     private var latestSample: MonitorSample? = null
     private var chinese = false
     private var accentColor = 0xFF8AB4F8.toInt()
@@ -124,9 +143,20 @@ class MonitorOverlayView @JvmOverloads constructor(
 
     private fun drawMetric(canvas: Canvas, metric: MonitorMetric, top: Float, padding: Float) {
         val sample = latestSample
-        if (metric == MonitorMetric.CPU && cpuDisplayMode == MonitorCpuDisplayMode.CORE_FREQUENCIES) {
-            drawCoreFrequencies(canvas, sample, top, padding)
-            return
+        if (metric == MonitorMetric.CPU) {
+            when (cpuDisplayMode) {
+                MonitorCpuDisplayMode.TOPOLOGY_MATRIX -> {
+                    drawCoreTopologyMatrix(canvas, sample, top, padding)
+                    return
+                }
+                MonitorCpuDisplayMode.CORE_FREQUENCIES -> {
+                    drawCoreFrequencies(canvas, sample, top, padding)
+                    return
+                }
+                MonitorCpuDisplayMode.WEIGHTED_USAGE -> {
+                    // Fall through to single line chart
+                }
+            }
         }
         val label = when (metric) {
             MonitorMetric.CPU -> "CPU"
@@ -157,6 +187,81 @@ class MonitorOverlayView @JvmOverloads constructor(
                 if (valueIndex == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
             canvas.drawPath(path, accentPaint)
+        }
+    }
+
+    private fun drawCoreTopologyMatrix(
+        canvas: Canvas,
+        sample: MonitorSample?,
+        top: Float,
+        padding: Float,
+    ) {
+        val label = if (chinese) "CPU · 拓扑" else "CPU · Topology"
+        textPaint.textSize = dp(11f)
+        canvas.drawText(label, padding, top + dp(12f), textPaint)
+
+        val display = displayValue(MonitorMetric.CPU, sample)
+        secondaryTextPaint.textSize = dp(10f)
+        val displayWidth = secondaryTextPaint.measureText(display)
+        canvas.drawText(display, width - padding - displayWidth, top + dp(12f), secondaryTextPaint)
+
+        val cores = sample?.cpuCores.orEmpty()
+        if (cores.isEmpty()) {
+            val waiting = waitingLabel()
+            canvas.drawText(waiting, width - padding - secondaryTextPaint.measureText(waiting), top + dp(12f), secondaryTextPaint)
+            return
+        }
+
+        val barTop = top + dp(18f)
+        val barBottom = top + metricRowHeight(MonitorMetric.CPU) - dp(4f)
+        val barHeight = barBottom - barTop
+        val gap = dp(1.5f)
+        val totalAvailableWidth = (width - padding * 2f) - gap * (cores.size - 1)
+
+        val minMaxMhz = cores.minOfOrNull { it.maximumFrequencyMhz ?: 1000 }?.coerceAtLeast(100) ?: 1000
+        val weights = cores.map { ((it.maximumFrequencyMhz ?: minMaxMhz).toFloat() / minMaxMhz.toFloat()).coerceIn(1.0f, 2.4f) }
+        val sumWeights = weights.sum().coerceAtLeast(1f)
+
+        var curX = padding
+        cores.forEachIndexed { index, core ->
+            val w = totalAvailableWidth * (weights[index] / sumWeights)
+            val left = curX
+            val right = left + w
+            curX = right + gap
+
+            val minMhz = core.minimumFrequencyMhz ?: 0
+            val maxMhz = core.maximumFrequencyMhz ?: minMaxMhz
+            val curMhz = core.currentFrequencyMhz
+            val isOffline = curMhz == null || curMhz <= 0
+
+            // 1. Crisp outer rectangular background track
+            canvas.drawRect(left, barTop, right, barBottom, barBackgroundPaint)
+
+            // 2. Vertical fill from effective dynamic baseline (min_freq -> max_freq)
+            if (!isOffline && curMhz > minMhz && maxMhz > minMhz) {
+                val ratio = ((curMhz - minMhz).toFloat() / (maxMhz - minMhz).toFloat()).coerceIn(0f, 1f)
+                val fillTop = barBottom - barHeight * ratio
+                val ghz = maxMhz / 1000.0
+                val clusterPaint = when {
+                    ghz >= 3.2 -> clusterPaints[3]!!
+                    ghz >= 2.6 -> clusterPaints[2]!!
+                    ghz >= 2.0 -> clusterPaints[1]!!
+                    else -> clusterPaints[0]!!
+                }
+                canvas.drawRect(left, fillTop, right, barBottom, clusterPaint)
+            }
+
+            // 3. Crisp rectangular border
+            canvas.drawRect(left, barTop, right, barBottom, barBorderPaint)
+
+            // 4. Tiny core label inside column
+            if (w >= dp(8.5f)) {
+                val coreText = if (w >= dp(14f)) "C${core.index}" else "${core.index}"
+                val textWidth = coreLabelPaint.measureText(coreText)
+                val textX = left + (w - textWidth) / 2f
+                val textY = barBottom - dp(2f)
+                canvas.drawText(coreText, textX, textY, coreLabelPaint)
+            }
         }
     }
 
@@ -231,12 +336,11 @@ class MonitorOverlayView @JvmOverloads constructor(
 
     private fun unavailableLabel(): String = if (chinese) "不可用" else "N/A"
 
-    private fun metricRowHeight(metric: MonitorMetric): Float =
-        if (metric == MonitorMetric.CPU && cpuDisplayMode == MonitorCpuDisplayMode.CORE_FREQUENCIES) {
-            dp(80f)
-        } else {
-            dp(56f)
-        }
+    private fun metricRowHeight(metric: MonitorMetric): Float = when {
+        metric == MonitorMetric.CPU && cpuDisplayMode == MonitorCpuDisplayMode.TOPOLOGY_MATRIX -> dp(52f)
+        metric == MonitorMetric.CPU && cpuDisplayMode == MonitorCpuDisplayMode.CORE_FREQUENCIES -> dp(80f)
+        else -> dp(56f)
+    }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
