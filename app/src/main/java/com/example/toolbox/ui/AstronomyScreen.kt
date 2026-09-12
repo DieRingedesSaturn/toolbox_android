@@ -1,5 +1,6 @@
 package com.example.toolbox.ui
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
@@ -36,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,8 +100,12 @@ fun AstronomyScreen(
         if (locationReader.hasLocationPermission()) {
             runCatching {
                 val lm = context.getSystemService(android.location.LocationManager::class.java)
+                @SuppressLint("MissingPermission")
                 val loc = lm?.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
-                    ?: lm?.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                    ?: run {
+                        @SuppressLint("MissingPermission")
+                        lm?.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                    }
                 if (loc != null) {
                     latitude = loc.latitude
                     longitude = loc.longitude
@@ -110,12 +116,16 @@ fun AstronomyScreen(
         isRefreshing = false
     }
 
-    remember(locationReader) {
+    LaunchedEffect(locationReader) {
         if (locationReader.hasLocationPermission()) {
             runCatching {
                 val lm = context.getSystemService(android.location.LocationManager::class.java)
+                @SuppressLint("MissingPermission")
                 val loc = lm?.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
-                    ?: lm?.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                    ?: run {
+                        @SuppressLint("MissingPermission")
+                        lm?.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                    }
                 if (loc != null) {
                     latitude = loc.latitude
                     longitude = loc.longitude

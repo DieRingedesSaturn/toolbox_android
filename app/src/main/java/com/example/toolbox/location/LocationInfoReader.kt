@@ -64,7 +64,11 @@ class LocationInfoReader(context: Context) {
         }
 
         return try {
-            manager.registerGnssStatusCallback(mainExecutor, callback)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                manager.registerGnssStatusCallback(mainExecutor, callback)
+            } else {
+                manager.registerGnssStatusCallback(callback, android.os.Handler(Looper.getMainLooper()))
+            }
             if (manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 @Suppress("DEPRECATION")
                 manager.requestLocationUpdates(
