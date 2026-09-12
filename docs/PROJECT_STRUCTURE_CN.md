@@ -47,9 +47,17 @@ app/src/main/java/com/example/toolbox/
 │   ├── CoordinateFormatter.kt
 │   ├── LocationInfo.kt
 │   └── LocationInfoReader.kt
+├── astronomy/
+│   ├── AstronomyCalculator.kt
+│   └── AstronomyInfo.kt
 ├── network/
 │   ├── NetworkInfo.kt
 │   └── NetworkInfoReader.kt
+├── usage/
+│   ├── AppCategory.kt
+│   ├── AppCategoryResolver.kt
+│   ├── AppUsageInfo.kt
+│   └── AppUsageReader.kt
 ├── ui/
 │   ├── ToolboxApp.kt
 │   ├── ToolboxTheme.kt
@@ -59,7 +67,10 @@ app/src/main/java/com/example/toolbox/
 │   ├── HomeScreen.kt
 │   ├── MonitorScreen.kt
 │   ├── DeviceScreen.kt
-│   ├── PlaceholderScreen.kt
+│   ├── LocationScreen.kt
+│   ├── AstronomyScreen.kt
+│   ├── NetworkScreen.kt
+│   ├── AppUsageScreen.kt
 │   ├── SettingsScreen.kt
 │   └── AboutScreen.kt
 └── device/
@@ -78,7 +89,9 @@ app/src/main/java/com/example/toolbox/
 | `ui/ToolboxTheme.kt` | Material 主题、颜色、排版 | 页面状态 |
 | `ui/AppStrings.kt` | 集中的用户可见文案 | Android 系统值解析 |
 | `device/` | Device 数据模型和读取逻辑 | Compose UI |
-| `monitor/` | 用户明确要求的采样、悬浮窗服务和图表视图 | 无关的页面设置或设备摘要 |
+| `monitor/` | 性能采样、CPU 拓扑计算、悬浮窗服务与渲染视图 | 无关的页面设置或设备摘要 |
+| `usage/` | 应用与流量统计读取、离线分类解析模型 | 直接 Compose UI 渲染 |
+| `astronomy/` | 日月升落计算、天文模型算法 | Android 系统服务调用 |
 
 ## v0.1 的增量结构
 

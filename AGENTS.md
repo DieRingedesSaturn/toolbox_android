@@ -4,13 +4,15 @@ This file applies to the entire repository. Its purpose is to help developers an
 
 ## 1. Project scope
 
-Toolbox is a lightweight Android toolbox, not an always-on system monitor. Version 0.1 contains only:
+Toolbox is a lightweight Android toolbox, not an always-on telemetry daemon. Current capabilities include:
 
-- Device: summaries of the device, CPU/GPU, memory, storage, display, and battery.
-- Location: on-demand coordinate retrieval and copying; request permission only after the user opens the feature.
+- Device: summaries of the device, CPU/GPU, memory, storage, display, battery, and thermals.
+- Location & Astronomy: on-demand coordinate retrieval, formatting, and solar/lunar ephemeris calculations.
 - Network: local connection information and public IP lookup after an explicit user refresh.
+- App & Traffic Usage: on-demand foreground app screen time and network traffic (Wi-Fi vs. Mobile) statistics, multi-category offline classification, and time range filtering (Today, Yesterday, 7 Days, 30 Days).
+- Live Performance Monitor & Overlay: on-demand foreground sampling, weighted CPU core topology visualizer matrix, and customizable floating window overlay.
 
-Unless explicitly requested, do not add speed tests, complex real-time charts, Shizuku/root integration, process management, databases, accounts, cloud synchronization, advertisements, analytics SDKs, Firebase, or persistent background services.
+Unless explicitly requested, do not add speed tests, Shizuku/root integration, process management, databases, accounts, cloud synchronization, advertisements, analytics SDKs, Firebase, or persistent background services.
 
 ## 2. Core principles
 
@@ -30,8 +32,11 @@ app/src/main/java/com/example/toolbox/
 ├── MainActivity.kt       # Android entry point; window setup and Compose startup only
 ├── ui/                   # App shell, screens, theme, strings, and shared Compose components
 ├── device/               # Device models and Android information readers
-├── location/             # Create only when Location implementation begins
-└── network/              # Create only when Network implementation begins
+├── location/             # Location models, coordinate formatters, and readers
+├── astronomy/            # Solar/lunar ephemeris calculators and models
+├── network/              # Network models and information readers
+├── usage/                # App usage/traffic readers, category resolver, and models
+└── monitor/              # Real-time sampling, overlay service, and views
 ```
 
 Placement rules:
@@ -61,9 +66,11 @@ Do not commit `.gradle/`, `.kotlin/`, `build/`, `local.properties`, IDE state, A
 - Treat the Gradle files as the source of truth for `minSdk`, `targetSdk`, and dependency versions. When upgrading them, verify both the Debug build and physical-device behavior.
 - Device must not require sensitive permissions.
 - Location may request `ACCESS_COARSE_LOCATION` / `ACCESS_FINE_LOCATION` only after the user opens the feature and starts location retrieval. Never request background location.
+- App Usage statistics require `PACKAGE_USAGE_STATS`, requested on-demand only when the user navigates to the App Usage feature.
+- Floating overlay requires `SYSTEM_ALERT_WINDOW`, requested on-demand only when the user enables the floating monitor.
 - Network access must follow a clear user action, use timeouts, expose failure states, and avoid automatic high-frequency polling.
 - Keep GNSS altitude distinct from any future terrain elevation value. Never present one as the other.
-- Android vendors may restrict `/proc`, `/sys`, and hardware fields. Reads must fail safely without crashing the screen.
+- Android vendors may restrict `/proc`, `/sys`, and hardware fields via SELinux. Fall back gracefully (e.g. CPU frequency scaling estimation for restricted `/proc/stat`, and standard fallback when Android 16 `getGpuHeadroom()` HAL is unsupported).
 - Do not log or upload precise locations, IP addresses, device identifiers, or other sensitive data. Avoid complete sensitive values in logs.
 
 ## 6. Build and verification

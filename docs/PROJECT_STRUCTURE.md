@@ -47,9 +47,17 @@ app/src/main/java/com/example/toolbox/
 │   ├── CoordinateFormatter.kt
 │   ├── LocationInfo.kt
 │   └── LocationInfoReader.kt
+├── astronomy/
+│   ├── AstronomyCalculator.kt
+│   └── AstronomyInfo.kt
 ├── network/
 │   ├── NetworkInfo.kt
 │   └── NetworkInfoReader.kt
+├── usage/
+│   ├── AppCategory.kt
+│   ├── AppCategoryResolver.kt
+│   ├── AppUsageInfo.kt
+│   └── AppUsageReader.kt
 ├── ui/
 │   ├── ToolboxApp.kt
 │   ├── ToolboxTheme.kt
@@ -59,7 +67,10 @@ app/src/main/java/com/example/toolbox/
 │   ├── HomeScreen.kt
 │   ├── MonitorScreen.kt
 │   ├── DeviceScreen.kt
-│   ├── PlaceholderScreen.kt
+│   ├── LocationScreen.kt
+│   ├── AstronomyScreen.kt
+│   ├── NetworkScreen.kt
+│   ├── AppUsageScreen.kt
 │   ├── SettingsScreen.kt
 │   └── AboutScreen.kt
 └── device/
@@ -78,7 +89,9 @@ Responsibility boundaries:
 | `ui/ToolboxTheme.kt` | Material theme, colors, typography | Screen state |
 | `ui/AppStrings.kt` | Centralized user-facing strings | Android system value parsing |
 | `device/` | Device models and reader logic | Compose UI |
-| `monitor/` | Explicitly requested sampling, overlay service, and chart view | UI-only settings or unrelated device summaries |
+| `monitor/` | Sampling, CPU topology math, overlay service, and views | UI-only settings or unrelated device summaries |
+| `usage/` | App usage / traffic statistics reader and offline category resolver | Direct Compose UI rendering |
+| `astronomy/` | Solar/lunar ephemeris math and models | Android system services |
 
 ## Incremental v0.1 layout
 
