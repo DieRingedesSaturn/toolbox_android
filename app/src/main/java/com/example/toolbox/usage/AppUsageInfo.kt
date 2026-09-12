@@ -53,3 +53,16 @@ data class UsageReport(
 ) {
     val totalBytes: Long get() = totalWifiBytes + totalCellularBytes
 }
+
+data class UsageEventRecord(
+    val eventType: Int,
+    val packageName: String?,
+    val timestamp: Long,
+)
+
+data class ProcessedUsageEvents(
+    val measuredScreenDurationMillis: Long,
+    val appDurations: Map<String, Long>,
+    val appLastUsed: Map<String, Long>,
+)
+
