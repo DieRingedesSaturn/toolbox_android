@@ -1,19 +1,38 @@
 package com.example.toolbox
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.example.toolbox.ui.ToolboxApp
 
 class MainActivity : ComponentActivity() {
+
+    private var launchAction by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestSmoothRefreshRate()
-        setContent {
-            ToolboxApp()
+        if (savedInstanceState == null) {
+            launchAction = intent?.action
         }
+        setContent {
+            ToolboxApp(
+                launchAction = launchAction,
+                onLaunchActionConsumed = { launchAction = null },
+            )
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        launchAction = intent.action
     }
 
     @Suppress("DEPRECATION")
@@ -25,14 +44,8 @@ class MainActivity : ComponentActivity() {
         }
         val maxMode = display?.supportedModes?.maxByOrNull { it.refreshRate }
         if (maxMode != null) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                window.attributes = window.attributes.apply {
-                    preferredDisplayModeId = maxMode.modeId
-                }
-            } else {
-                window.attributes = window.attributes.apply {
-                    preferredRefreshRate = maxMode.refreshRate
-                }
+            window.attributes = window.attributes.apply {
+                preferredDisplayModeId = maxMode.modeId
             }
         }
     }

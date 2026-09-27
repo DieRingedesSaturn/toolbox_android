@@ -290,7 +290,7 @@ class LocationInfoReader(context: Context) {
         latitude = latitude,
         longitude = longitude,
         accuracyMeters = if (hasAccuracy()) accuracy else null,
-        verticalAccuracyMeters = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && hasVerticalAccuracy()) {
+        verticalAccuracyMeters = if (hasVerticalAccuracy()) {
             verticalAccuracyMeters
         } else {
             null
@@ -334,7 +334,7 @@ class LocationInfoReader(context: Context) {
                 if (used) usedCount++
                 counts[constellation] = (counts[constellation] ?: 0) + 1
 
-                val carrierFreq = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && status.hasCarrierFrequencyHz(i)) {
+                val carrierFreq = if (status.hasCarrierFrequencyHz(i)) {
                     status.getCarrierFrequencyHz(i).toDouble()
                 } else {
                     null

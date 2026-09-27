@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -16,6 +17,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.example.toolbox.device.DeviceInfo
 import com.example.toolbox.device.DeviceInfoReader
+import com.example.toolbox.ledger.ACTION_ADD_LEDGER_ENTRY
+import com.example.toolbox.ledger.ACTION_OPEN_LEDGER
+import com.example.toolbox.ledger.LedgerWidget
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -31,12 +35,17 @@ enum class ToolboxModule {
     MONITOR,
     ASTRONOMY,
     USAGE,
+    LEDGER,
+    FX,
     SETTINGS,
     ABOUT,
 }
 
 @Composable
-fun ToolboxApp() {
+fun ToolboxApp(
+    launchAction: String? = null,
+    onLaunchActionConsumed: () -> Unit = {},
+) {
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
     var languageName by rememberSaveable { mutableStateOf(preferences.language().name) }
@@ -55,7 +64,22 @@ fun ToolboxApp() {
     var deviceInfo by remember { mutableStateOf<DeviceInfo?>(null) }
     var isDeviceInfoLoading by rememberSaveable { mutableStateOf(false) }
     var lastDeviceInfoUpdate by rememberSaveable { mutableStateOf<String?>(null) }
+    var ledgerEditorRequested by remember { mutableStateOf(false) }
+    var ledgerInitialTab by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(launchAction) {
+        when (launchAction) {
+            ACTION_OPEN_LEDGER -> moduleName = ToolboxModule.LEDGER.name
+            ACTION_ADD_LEDGER_ENTRY -> {
+                moduleName = ToolboxModule.LEDGER.name
+                ledgerEditorRequested = true
+            }
+        }
+        if (launchAction != null) {
+            onLaunchActionConsumed()
+        }
+    }
 
     fun refreshDeviceInfo() {
         if (isDeviceInfoLoading) return
@@ -84,6 +108,9 @@ fun ToolboxApp() {
     fun updateLanguage(value: AppLanguage) {
         languageName = value.name
         preferences.saveLanguage(value)
+        scope.launch(Dispatchers.IO) {
+            LedgerWidget.refreshAll(context.applicationContext)
+        }
     }
 
     fun updateTheme(value: ThemeMode) {
@@ -106,6 +133,10 @@ fun ToolboxApp() {
                 strings = strings,
                 deviceInfo = deviceInfo,
                 onOpen = { moduleName = it.name },
+                onOpenLedgerAccounts = {
+                    ledgerInitialTab = 3
+                    moduleName = ToolboxModule.LEDGER.name
+                },
             )
 
             ToolboxModule.DEVICE -> DeviceScreen(
@@ -139,6 +170,19 @@ fun ToolboxApp() {
             )
 
             ToolboxModule.USAGE -> AppUsageScreen(
+                strings = strings,
+                onBack = { moduleName = ToolboxModule.HOME.name },
+            )
+
+            ToolboxModule.LEDGER -> LedgerScreen(
+                strings = strings,
+                onBack = { moduleName = ToolboxModule.HOME.name },
+                openEditorRequested = ledgerEditorRequested,
+                onEditorRequestHandled = { ledgerEditorRequested = false },
+                initialTab = ledgerInitialTab,
+            )
+
+            ToolboxModule.FX -> FxScreen(
                 strings = strings,
                 onBack = { moduleName = ToolboxModule.HOME.name },
             )

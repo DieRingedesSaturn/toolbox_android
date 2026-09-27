@@ -4,19 +4,19 @@ import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,7 +34,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NetworkScreen(
     strings: ToolboxStrings,
@@ -76,13 +75,10 @@ fun NetworkScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(strings.network) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
-                    }
-                },
+            ToolboxTopBar(
+                title = strings.network,
+                onBack = onBack,
+                backLabel = strings.back,
                 actions = {
                     TextButton(onClick = ::refreshLocal, enabled = !isLoadingLocal) {
                         Text(if (isLoadingLocal) strings.refreshing else strings.refresh)
@@ -139,9 +135,11 @@ fun NetworkScreen(
                     ) {
                         if (isLoadingPublicIp) {
                             CircularProgressIndicator(
-                                modifier = Modifier.padding(end = 8.dp),
+                                modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
+                                color = LocalContentColor.current,
                             )
+                            Spacer(modifier = Modifier.size(8.dp))
                         }
                         Text(if (isLoadingPublicIp) strings.loading else strings.queryPublicIp)
                     }

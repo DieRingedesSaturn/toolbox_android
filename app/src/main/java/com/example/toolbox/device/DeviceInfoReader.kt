@@ -108,8 +108,45 @@ object DeviceInfoReader {
         return MemoryInfo(total = memoryInfo.totalMem, available = memoryInfo.availMem)
     }
 
+    fun readQuickStatus(context: Context): QuickStatus {
+        val intent = batteryStatusIntent(context)
+        val stat = dataStatFs()
+        return QuickStatus(
+            batteryPercent = batteryPercent(
+                intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1,
+                intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100,
+            ),
+            isCharging = batteryIsCharging(
+                intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1,
+            ),
+            storageAvailable = stat.availableBytes,
+            storageTotal = stat.totalBytes,
+        )
+    }
+
+    private fun batteryStatusIntent(context: Context): Intent? =
+        context.registerReceiver(
+            null,
+            IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+        )
+
+    private fun batteryPercent(level: Int, scale: Int): Int? =
+        if (level >= 0 && scale > 0) (level * 100f / scale).roundToInt() else null
+
+    private fun batteryIsCharging(status: Int): Boolean? = when (status) {
+        BatteryManager.BATTERY_STATUS_CHARGING,
+        BatteryManager.BATTERY_STATUS_FULL -> true
+
+        BatteryManager.BATTERY_STATUS_DISCHARGING,
+        BatteryManager.BATTERY_STATUS_NOT_CHARGING -> false
+
+        else -> null
+    }
+
+    private fun dataStatFs(): StatFs = StatFs(Environment.getDataDirectory().path)
+
     private fun readStorage(): StorageInfo {
-        val stat = StatFs(Environment.getDataDirectory().path)
+        val stat = dataStatFs()
         return StorageInfo(
             total = stat.totalBytes,
             available = stat.availableBytes,
@@ -120,8 +157,8 @@ object DeviceInfoReader {
     private fun readDisplay(context: Context): DisplayInfo {
         val display = context.getSystemService(WindowManager::class.java)?.defaultDisplay
         val metrics = context.resources.displayMetrics
-        val width = display?.width ?: metrics.widthPixels
-        val height = display?.height ?: metrics.heightPixels
+        val width = display?.mode?.physicalWidth ?: metrics.widthPixels
+        val height = display?.mode?.physicalHeight ?: metrics.heightPixels
         val refreshRate = display?.refreshRate?.let { "${it.roundToInt()} Hz" }.orUnknown()
         val hdrTypes = display?.hdrCapabilities?.supportedHdrTypes ?: intArrayOf()
 
@@ -134,27 +171,20 @@ object DeviceInfoReader {
     }
 
     private fun readBattery(context: Context): BatteryInfo {
-        val intent = context.registerReceiver(
-            null,
-            IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+        val intent = batteryStatusIntent(context)
+        val percent = batteryPercent(
+            intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1,
+            intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100,
         )
-        val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
-        val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val charging = batteryIsCharging(
+            intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1,
+        )
         val temperature = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
         val voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
 
         return BatteryInfo(
-            level = if (level >= 0 && scale > 0) "${(level * 100f / scale).roundToInt()}%" else "Unknown",
-            charging = when (status) {
-                BatteryManager.BATTERY_STATUS_CHARGING,
-                BatteryManager.BATTERY_STATUS_FULL -> "Yes"
-
-                BatteryManager.BATTERY_STATUS_DISCHARGING,
-                BatteryManager.BATTERY_STATUS_NOT_CHARGING -> "No"
-
-                else -> "Unknown"
-            },
+            level = percent?.let { "$it%" } ?: "Unknown",
+            charging = charging?.let { if (it) "Yes" else "No" } ?: "Unknown",
             temperature = if (temperature >= 0) {
                 String.format(Locale.US, "%.1f °C", temperature / 10f)
             } else {

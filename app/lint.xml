@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- False positive for the launcher icon: adaptive-icon XMLs are only
+         linked from mipmap-anydpi-v26, so the unqualified mipmap-anydpi
+         folder this check suggests does not produce the icon resource. -->
+    <issue id="ObsoleteSdkInt" severity="ignore" />
+</lint>

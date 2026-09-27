@@ -10,6 +10,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.core.content.FileProvider
+import androidx.core.graphics.createBitmap
+import com.example.toolbox.location.formatShortCoordinates
 import com.example.toolbox.ui.ToolboxStrings
 import java.io.File
 import java.io.FileOutputStream
@@ -39,7 +42,7 @@ object AstronomyImageExporter {
     ): Uri? {
         val width = 1080
         val height = 1720
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
         // 1. Fill Main Background
@@ -61,15 +64,14 @@ object AstronomyImageExporter {
         textPaint.textSize = 38f
         textPaint.isFakeBoldText = true
         textPaint.textAlign = Paint.Align.LEFT
-        canvas.drawText("Toolbox · 今夜天文观测与天体时段", pad + 32f, pad + 56f, textPaint)
+        canvas.drawText("${strings.appName} · ${strings.astronomyTitle}", pad + 32f, pad + 56f, textPaint)
 
         textPaint.color = palette.textSecondaryColor
         textPaint.textSize = 26f
         textPaint.isFakeBoldText = false
-        val latStr = "%.2f°N".format(Locale.US, timeline.observerLatitude)
-        val lonStr = "%.2f°E".format(Locale.US, timeline.observerLongitude)
+        val coordStr = formatShortCoordinates(timeline.observerLatitude, timeline.observerLongitude)
         val dateStr = dateFmt.format(Date(timeline.referenceDateMillis))
-        val locText = "观测坐标: $latStr, $lonStr  ·  日期: $dateStr"
+        val locText = "${strings.observerCoordinates}: $coordStr  ·  ${strings.dateLabel}: $dateStr"
         canvas.drawText(locText, pad + 32f, pad + 102f, textPaint)
 
         // 3. Moon Phase Hero Card (Matching App Screen)
@@ -88,10 +90,10 @@ object AstronomyImageExporter {
         textPaint.color = palette.textPrimaryColor
         textPaint.textSize = 32f
         textPaint.isFakeBoldText = true
-        canvas.drawText(timeline.moonPhase.phase.nameZh, pad + 130f, moonCardTop + 55f, textPaint)
+        canvas.drawText(strings.moonPhaseName(timeline.moonPhase.phase), pad + 130f, moonCardTop + 55f, textPaint)
 
         val moonAgeStr = "%.1f".format(Locale.US, timeline.moonPhase.moonAgeDays)
-        val moonAgeTag = "月龄 $moonAgeStr 天"
+        val moonAgeTag = "${strings.moonAge} $moonAgeStr ${strings.daysUnit}"
         shapePaint.color = palette.cardInnerBackgroundColor
         val tagRect = RectF(width - pad - 200f, moonCardTop + 24f, width - pad - 24f, moonCardTop + 68f)
         canvas.drawRoundRect(tagRect, 12f, 12f, shapePaint)
@@ -121,7 +123,7 @@ object AstronomyImageExporter {
         textPaint.color = palette.primaryColor
         textPaint.textSize = 22f
         textPaint.isFakeBoldText = true
-        canvas.drawText("照亮比例: ${timeline.moonPhase.illuminationPercent}%", barLeft, barY + 40f, textPaint)
+        canvas.drawText("${strings.moonIllumination}: ${timeline.moonPhase.illuminationPercent}%", barLeft, barY + 40f, textPaint)
 
         // 4. Night Timeline Showcase Card (Gantt Chart with Pixel-Perfect Alignment)
         val chartTop = moonCardRect.bottom + 20f
@@ -196,7 +198,7 @@ object AstronomyImageExporter {
             textPaint.textAlign = Paint.Align.LEFT
             textPaint.textSize = 24f
             textPaint.isFakeBoldText = true
-            canvas.drawText(body.nameZh, iconX + 26f, rowCenterY + 8f, textPaint)
+            canvas.drawText(strings.bodyName(body), iconX + 26f, rowCenterY + 8f, textPaint)
 
             // 2. Right Sky Track for this row (Clean rectangular track)
             val trackRect = RectF(ganttLeft, rowY + 4f, ganttRight, rowY + rowHeight - 4f)
@@ -253,9 +255,9 @@ object AstronomyImageExporter {
 
         // Legend at bottom of Gantt card
         val legendY = chartRect.bottom - 16f
-        drawLegend(canvas, chartRect.left + 24f, legendY, 0xFF4CAF50.toInt(), "可见时段", palette)
-        drawLegend(canvas, chartRect.left + 150f, legendY, palette.cardInnerBackgroundColor, "完全暗夜", palette)
-        drawLegend(canvas, chartRect.left + 276f, legendY, palette.errorColor, "当前时刻", palette)
+        drawLegend(canvas, chartRect.left + 24f, legendY, 0xFF4CAF50.toInt(), strings.legendVisiblePeriod, palette)
+        drawLegend(canvas, chartRect.left + 150f, legendY, palette.cardInnerBackgroundColor, strings.darkNightLabel, palette)
+        drawLegend(canvas, chartRect.left + 276f, legendY, palette.errorColor, strings.legendCurrentTime, palette)
 
         // 5. Celestial Bodies Summary Cards (2x2 Structure matching App UI)
         val detailsTop = chartRect.bottom + 20f
@@ -268,7 +270,7 @@ object AstronomyImageExporter {
         textPaint.color = palette.primaryColor
         textPaint.textSize = 30f
         textPaint.isFakeBoldText = true
-        canvas.drawText("天体详细观测参数", pad + 28f, detailsTop + 44f, textPaint)
+        canvas.drawText(strings.celestialBodiesTitle, pad + 28f, detailsTop + 44f, textPaint)
 
         var cardY = detailsTop + 70f
         val itemHeight = 100f
@@ -293,11 +295,12 @@ object AstronomyImageExporter {
             textPaint.textAlign = Paint.Align.LEFT
             textPaint.textSize = 26f
             textPaint.isFakeBoldText = true
-            canvas.drawText("${body.nameZh} ${body.nameEn}", avX + 28f, itemBox.top + 34f, textPaint)
+            canvas.drawText(strings.bodyName(body), avX + 28f, itemBox.top + 34f, textPaint)
 
             // Status tag
             val maxAltStr = "%.0f°".format(Locale.US, body.maxAltitudeDegrees)
-            val statusTag = if (body.isVisibleTonight) "今夜可见 (最高 $maxAltStr)" else "白天出没 (最高 $maxAltStr)"
+            val statusText = if (body.isVisibleTonight) strings.visibleTonight else strings.notVisibleTonight
+            val statusTag = "$statusText (${strings.maxAltitude} $maxAltStr)"
             textPaint.color = if (body.isVisibleTonight) 0xFF4CAF50.toInt() else palette.textSecondaryColor
             textPaint.textSize = 20f
             textPaint.isFakeBoldText = true
@@ -314,7 +317,7 @@ object AstronomyImageExporter {
             textPaint.textSize = 21f
             textPaint.color = palette.textSecondaryColor
             textPaint.isFakeBoldText = false
-            val metricsText = "升落: $riseStr → $setStr   ·   中天: $transitStr   ·   亮度: $magStr"
+            val metricsText = "${strings.riseSetLabel}: $riseStr → $setStr   ·   ${strings.transitTime}: $transitStr   ·   ${strings.visualMagnitude}: $magStr"
             canvas.drawText(metricsText, avX + 28f, itemBox.top + 68f, textPaint)
 
             cardY += itemHeight + 4f
@@ -325,9 +328,9 @@ object AstronomyImageExporter {
         textPaint.color = palette.textSecondaryColor
         textPaint.textSize = 20f
         textPaint.isFakeBoldText = false
-        canvas.drawText("由 Toolbox 生成", width / 2f, height - 20f, textPaint)
+        canvas.drawText(strings.generatedByToolbox, width / 2f, height - 20f, textPaint)
 
-        return saveBitmapToMediaStore(context, bitmap)
+        return saveBitmap(context, bitmap)
     }
 
     private fun drawTwilightChip(
@@ -380,7 +383,7 @@ object AstronomyImageExporter {
         canvas.drawText(label, x + 12f, y, paint)
     }
 
-    private fun saveBitmapToMediaStore(context: Context, bitmap: Bitmap): Uri? {
+    private fun saveBitmap(context: Context, bitmap: Bitmap): Uri? {
         return runCatching {
             val fileName = "Toolbox_Astronomy_${System.currentTimeMillis()}.png"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -401,13 +404,12 @@ object AstronomyImageExporter {
                 }
                 uri
             } else {
-                val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                val toolboxDir = File(picturesDir, "Toolbox").apply { mkdirs() }
-                val file = File(toolboxDir, fileName)
+                val exportsDir = File(context.cacheDir, "exports").apply { mkdirs() }
+                val file = File(exportsDir, fileName)
                 FileOutputStream(file).use { out ->
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
                 }
-                Uri.fromFile(file)
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             }
         }.getOrNull()
     }

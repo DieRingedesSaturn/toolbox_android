@@ -8,6 +8,19 @@ import kotlin.math.roundToInt
 fun formatDecimalDegrees(value: Double): String =
     String.format(Locale.US, "%.6f°", value)
 
+fun formatShortCoordinates(latitude: Double, longitude: Double): String {
+    val latSuffix = if (latitude < 0.0) 'S' else 'N'
+    val lonSuffix = if (longitude < 0.0) 'W' else 'E'
+    return String.format(
+        Locale.US,
+        "%.2f°%c, %.2f°%c",
+        abs(latitude),
+        latSuffix,
+        abs(longitude),
+        lonSuffix,
+    )
+}
+
 fun formatLatitudeDms(value: Double): String = formatDms(value, 'N', 'S')
 
 fun formatLongitudeDms(value: Double): String = formatDms(value, 'E', 'W')

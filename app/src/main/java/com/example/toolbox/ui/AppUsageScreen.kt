@@ -33,14 +33,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -55,7 +53,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.toolbox.usage.AppCategory
 import com.example.toolbox.usage.AppUsageItem
 import com.example.toolbox.usage.AppUsageReader
@@ -73,7 +71,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppUsageScreen(
     strings: ToolboxStrings,
@@ -107,20 +104,19 @@ fun AppUsageScreen(
     LaunchedEffect(hasPermission, timeRange, refreshCounter) {
         if (hasPermission) {
             isLoading = true
-            report = AppUsageReader.queryUsageReport(context, timeRange)
+            report = runCatching {
+                AppUsageReader.queryUsageReport(context, timeRange)
+            }.getOrNull()
             isLoading = false
         }
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(strings.appUsage) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
-                    }
-                },
+            ToolboxTopBar(
+                title = strings.appUsage,
+                onBack = onBack,
+                backLabel = strings.back,
                 actions = {
                     if (hasPermission) {
                         TextButton(
@@ -178,6 +174,7 @@ fun AppUsageScreen(
                 // 1. Time Range Selector Segment
                 item {
                     TimeRangeSegmentedBar(
+                        strings = strings,
                         selectedRange = timeRange,
                         onSelectRange = { timeRange = it },
                     )
@@ -196,6 +193,7 @@ fun AppUsageScreen(
                 // 3. Category Filter Chips Row
                 item {
                     CategoryFilterRow(
+                        strings = strings,
                         selectedCategory = selectedCategory,
                         onSelectCategory = { selectedCategory = it },
                         report = report,
@@ -205,6 +203,7 @@ fun AppUsageScreen(
                 // 4. Sort Tabs Row (Duration / Total Traffic / Cellular / Wi-Fi)
                 item {
                     SortModeTabs(
+                        strings = strings,
                         sortMode = sortMode,
                         onSelectMode = { sortMode = it },
                     )
@@ -305,6 +304,7 @@ private fun PermissionGuideView(
 
 @Composable
 private fun TimeRangeSegmentedBar(
+    strings: ToolboxStrings,
     selectedRange: UsageTimeRange,
     onSelectRange: (UsageTimeRange) -> Unit,
 ) {
@@ -332,7 +332,7 @@ private fun TimeRangeSegmentedBar(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = range.nameZh,
+                    text = strings.usageTimeRange(range),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -365,19 +365,19 @@ private fun UsageOverviewCard(
             ) {
                 OverviewMetricItem(
                     label = strings.totalScreenTime,
-                    value = formatDuration(report.totalScreenDurationMillis),
+                    value = strings.duration(report.totalScreenDurationMillis),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1.2f),
                 )
                 OverviewMetricItem(
                     label = strings.totalCellularData,
-                    value = formatBytes(report.totalCellularBytes),
+                    value = formatDataBytes(report.totalCellularBytes),
                     color = Color(0xFFFF9800),
                     modifier = Modifier.weight(1f),
                 )
                 OverviewMetricItem(
                     label = strings.totalWifiData,
-                    value = formatBytes(report.totalWifiBytes),
+                    value = formatDataBytes(report.totalWifiBytes),
                     color = Color(0xFF2196F3),
                     modifier = Modifier.weight(1f),
                 )
@@ -431,7 +431,7 @@ private fun UsageOverviewCard(
                                         .background(Color(summary.category.colorRgb), CircleShape),
                                 )
                                 Text(
-                                    text = "${summary.category.nameZh} ${formatDuration(summary.totalDurationMillis)}",
+                                    text = "${strings.appCategory(summary.category)} ${strings.duration(summary.totalDurationMillis)}",
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -471,6 +471,7 @@ private fun OverviewMetricItem(
 
 @Composable
 private fun CategoryFilterRow(
+    strings: ToolboxStrings,
     selectedCategory: AppCategory,
     onSelectCategory: (AppCategory) -> Unit,
     report: UsageReport?,
@@ -494,11 +495,7 @@ private fun CategoryFilterRow(
                 onClick = { onSelectCategory(category) },
                 label = {
                     Text(
-                        text = if (category == AppCategory.ALL) {
-                            "${category.emoji} ${category.nameZh} ($count)"
-                        } else {
-                            "${category.emoji} ${category.nameZh} $count"
-                        },
+                        text = "${category.emoji} ${strings.appCategory(category)} $count",
                         fontSize = 12.sp,
                     )
                 },
@@ -511,15 +508,16 @@ private fun CategoryFilterRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SortModeTabs(
+    strings: ToolboxStrings,
     sortMode: UsageSortMode,
     onSelectMode: (UsageSortMode) -> Unit,
 ) {
-    TabRow(
+    PrimaryTabRow(
         selectedTabIndex = sortMode.ordinal,
         containerColor = Color.Transparent,
-        divider = {},
     ) {
         UsageSortMode.entries.forEach { mode ->
             Tab(
@@ -527,7 +525,7 @@ private fun SortModeTabs(
                 onClick = { onSelectMode(mode) },
                 text = {
                     Text(
-                        text = mode.nameZh,
+                        text = strings.usageSortMode(mode),
                         fontSize = 12.sp,
                         fontWeight = if (sortMode == mode) FontWeight.Bold else FontWeight.Normal,
                     )
@@ -554,10 +552,10 @@ private fun AppUsageListItem(
     }
 
     val primaryText = when (sortMode) {
-        UsageSortMode.DURATION -> formatDuration(item.foregroundDurationMillis)
-        UsageSortMode.TOTAL_DATA -> formatBytes(item.totalBytes)
-        UsageSortMode.CELLULAR_DATA -> formatBytes(item.totalCellularBytes)
-        UsageSortMode.WIFI_DATA -> formatBytes(item.totalWifiBytes)
+        UsageSortMode.DURATION -> strings.duration(item.foregroundDurationMillis)
+        UsageSortMode.TOTAL_DATA -> formatDataBytes(item.totalBytes)
+        UsageSortMode.CELLULAR_DATA -> formatDataBytes(item.totalCellularBytes)
+        UsageSortMode.WIFI_DATA -> formatDataBytes(item.totalWifiBytes)
     }
 
     val currentMetric = when (sortMode) {
@@ -575,15 +573,16 @@ private fun AppUsageListItem(
             .clickable {
                 val timeFmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
                 val lastUsed = if (item.lastTimeUsedMillis > 0) timeFmt.format(Date(item.lastTimeUsedMillis)) else "--"
-                val copyText = buildString {
-                    appendLine("应用：${item.label} (${item.packageName})")
-                    appendLine("分类：${item.category.emoji} ${item.category.nameZh}")
-                    appendLine("屏幕使用时长：${formatDuration(item.foregroundDurationMillis)}")
-                    appendLine("移动蜂窝流量：${formatBytes(item.totalCellularBytes)}")
-                    appendLine("WLAN 流量：${formatBytes(item.totalWifiBytes)}")
-                    appendLine("总消耗流量：${formatBytes(item.totalBytes)}")
-                    append("最后使用时间：$lastUsed")
-                }
+                val copyText = strings.appUsageCopyText(
+                    label = item.label,
+                    packageName = item.packageName,
+                    category = item.category,
+                    screenDuration = strings.duration(item.foregroundDurationMillis),
+                    cellular = formatDataBytes(item.totalCellularBytes),
+                    wifi = formatDataBytes(item.totalWifiBytes),
+                    total = formatDataBytes(item.totalBytes),
+                    lastUsed = lastUsed,
+                )
                 copyToClipboard(context, item.label, copyText, strings.copied(item.label))
             },
         shape = RoundedCornerShape(12.dp),
@@ -649,7 +648,7 @@ private fun AppUsageListItem(
                                 .padding(horizontal = 4.dp, vertical = 1.dp),
                         ) {
                             Text(
-                                text = "${item.category.emoji} ${item.category.nameZh}",
+                                text = "${item.category.emoji} ${strings.appCategory(item.category)}",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(item.category.colorRgb),
@@ -659,7 +658,7 @@ private fun AppUsageListItem(
 
                     // Secondary info (Cellular vs Wi-Fi)
                     Text(
-                        text = "蜂窝: ${formatBytes(item.totalCellularBytes)}  ·  WLAN: ${formatBytes(item.totalWifiBytes)}",
+                        text = "${strings.totalCellularData}: ${formatDataBytes(item.totalCellularBytes)}  ·  ${strings.totalWifiData}: ${formatDataBytes(item.totalWifiBytes)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -696,22 +695,7 @@ private fun AppUsageListItem(
     }
 }
 
-private fun formatDuration(millis: Long): String {
-    if (millis < 60000L) {
-        val secs = millis / 1000L
-        return if (secs > 0) "$secs 秒" else "< 1 秒"
-    }
-    val mins = millis / 60000L
-    val hours = mins / 60L
-    val remMins = mins % 60L
-    return if (hours > 0) {
-        "${hours}小时 ${remMins}分"
-    } else {
-        "$remMins 分钟"
-    }
-}
-
-private fun formatBytes(bytes: Long): String {
+private fun formatDataBytes(bytes: Long): String {
     if (bytes <= 0) return "0 B"
     val kb = bytes / 1024.0
     val mb = kb / 1024.0

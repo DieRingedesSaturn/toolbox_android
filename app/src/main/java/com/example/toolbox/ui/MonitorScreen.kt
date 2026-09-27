@@ -35,20 +35,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -70,7 +69,8 @@ import androidx.core.net.toUri
 import java.util.Locale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.toolbox.monitor.MonitorCpuDisplayMode
 import com.example.toolbox.monitor.MonitorMetric
 import com.example.toolbox.monitor.MonitorOverlayColors
@@ -85,7 +85,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MonitorScreen(
     strings: ToolboxStrings,
@@ -107,22 +106,19 @@ fun MonitorScreen(
         mutableStateOf(preferences.monitorOverlayTheme())
     }
     var overlayCustomColor by remember {
-        mutableStateOf(preferences.monitorOverlayCustomColor())
+        mutableIntStateOf(preferences.monitorOverlayCustomColor())
     }
     var overlayOpacity by remember {
-        mutableStateOf(preferences.monitorOverlayOpacity())
+        mutableFloatStateOf(preferences.monitorOverlayOpacity())
     }
     var isRunning by rememberSaveable { mutableStateOf(MonitorOverlayService.running) }
     var latestSample by remember { mutableStateOf<MonitorSample?>(null) }
     var overlayGranted by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var notificationGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
-    val notificationLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> notificationGranted = granted }
-    val lifecycleOwner = context as? LifecycleOwner
+    var pendingStart by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {
-        if (lifecycleOwner == null) return@DisposableEffect onDispose { }
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 overlayGranted = Settings.canDrawOverlays(context)
@@ -140,12 +136,15 @@ fun MonitorScreen(
         .getOrDefault(MonitorCpuDisplayMode.CORE_FREQUENCIES)
     val monitorReader = remember(context) { MonitorReader(context) }
 
-    LaunchedEffect(monitorReader) {
-        while (isActive) {
-            latestSample = runCatching {
-                withContext(Dispatchers.IO) { monitorReader.read() }
-            }.getOrNull()
-            delay(SAMPLE_INTERVAL_MILLIS)
+    LaunchedEffect(monitorReader, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                latestSample = runCatching {
+                    withContext(Dispatchers.IO) { monitorReader.read() }
+                }.getOrNull()
+                isRunning = MonitorOverlayService.running
+                delay(SAMPLE_INTERVAL_MILLIS)
+            }
         }
     }
 
@@ -170,6 +169,17 @@ fun MonitorScreen(
         )
     }
 
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        notificationGranted = granted
+        if (pendingStart) {
+            pendingStart = false
+            startOverlay()
+            isRunning = true
+        }
+    }
+
     fun startMonitoring() {
         overlayGranted = Settings.canDrawOverlays(context)
         if (!overlayGranted) {
@@ -182,7 +192,8 @@ fun MonitorScreen(
             return
         }
         notificationGranted = hasNotificationPermission(context)
-        if (!notificationGranted) {
+        if (!notificationGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pendingStart = true
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             return
         }
@@ -197,13 +208,10 @@ fun MonitorScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(strings.monitor) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
-                    }
-                },
+            ToolboxTopBar(
+                title = strings.monitor,
+                onBack = onBack,
+                backLabel = strings.back,
             )
         },
     ) { padding ->
@@ -405,13 +413,6 @@ fun MonitorScreen(
                             Text(strings.requestNotificationPermission)
                         }
                     }
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                        Text(
-                            text = strings.notificationReady,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                     Text(
                         text = strings.foregroundServicePermissionTitle,
                         style = MaterialTheme.typography.titleSmall,
@@ -562,7 +563,7 @@ private fun CpuFrequencyCard(
     var displayMode by rememberSaveable { mutableStateOf(CpuTopologyDisplayMode.FREQUENCY) }
     var viewType by rememberSaveable { mutableStateOf(CpuTopologyViewType.MATRIX) }
     val cores = sample?.cpuCores.orEmpty()
-    val clusterSummary = remember(cores) { buildClusterSummary(strings, cores) }
+    val clusterSummary = remember(cores, strings) { buildClusterSummary(strings, cores) }
 
     InfoCard(strings.cpuTopologyTitle) {
         Text(
@@ -581,7 +582,7 @@ private fun CpuFrequencyCard(
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
                 Text(
-                    text = "⚙️ $clusterSummary",
+                    text = clusterSummary,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
@@ -608,12 +609,12 @@ private fun CpuFrequencyCard(
                 FilterChip(
                     selected = viewType == CpuTopologyViewType.MATRIX,
                     onClick = { viewType = CpuTopologyViewType.MATRIX },
-                    label = { Text("📊 ${strings.matrixView}") },
+                    label = { Text(strings.matrixView) },
                 )
                 FilterChip(
                     selected = viewType == CpuTopologyViewType.GRID,
                     onClick = { viewType = CpuTopologyViewType.GRID },
-                    label = { Text("📋 ${strings.gridView}") },
+                    label = { Text(strings.gridView) },
                 )
 
                 if (viewType == CpuTopologyViewType.MATRIX) {
@@ -621,12 +622,12 @@ private fun CpuFrequencyCard(
                     FilterChip(
                         selected = displayMode == CpuTopologyDisplayMode.FREQUENCY,
                         onClick = { displayMode = CpuTopologyDisplayMode.FREQUENCY },
-                        label = { Text("⚡ ${strings.frequencyMode}") },
+                        label = { Text(strings.frequencyMode) },
                     )
                     FilterChip(
                         selected = displayMode == CpuTopologyDisplayMode.USAGE,
                         onClick = { displayMode = CpuTopologyDisplayMode.USAGE },
-                        label = { Text("📈 ${strings.usageMode}") },
+                        label = { Text(strings.usageMode) },
                     )
                 }
             }
@@ -647,11 +648,11 @@ private fun CpuFrequencyCard(
                             else -> strings.littleCore
                         }
                         val copyText = buildString {
-                            appendLine("CPU 核心：C${core.index} ($clusterLabel)")
-                            appendLine("实时主频：${curMhz?.let { "$it MHz" } ?: strings.offlineCore}")
-                            appendLine("最高主频：${maxMhz} MHz")
+                            appendLine("${strings.cpuCoreName}: C${core.index} ($clusterLabel)")
+                            appendLine("${strings.currentFrequencyLabel}: ${curMhz?.let { "$it MHz" } ?: strings.offlineCore}")
+                            appendLine("${strings.cpuMaxFrequency}: $maxMhz MHz")
                             if (core.usagePercent != null) {
-                                append("核心负载：${core.usagePercent}%")
+                                append("${strings.usageMode}: ${core.usagePercent}%")
                             }
                         }
                         copyToClipboard(context, "CPU C${core.index}", copyText, strings.copied("C${core.index}"))
@@ -789,7 +790,7 @@ private fun CpuTopologyMatrix(
                     // Footer: Real-time Metric
                     if (isOffline) {
                         Text(
-                            text = "💤",
+                            text = "—",
                             fontSize = 11.sp,
                         )
                     } else {

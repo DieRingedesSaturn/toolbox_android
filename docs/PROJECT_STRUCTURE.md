@@ -58,6 +58,25 @@ app/src/main/java/com/example/toolbox/
 │   ├── AppCategoryResolver.kt
 │   ├── AppUsageInfo.kt
 │   └── AppUsageReader.kt
+├── ledger/
+│   ├── LedgerModels.kt
+│   ├── LedgerCategory.kt
+│   ├── LedgerTag.kt
+│   ├── LedgerAccount.kt
+│   ├── LedgerCalculator.kt
+│   ├── SubscriptionRenewals.kt
+│   ├── LedgerBackup.kt
+│   ├── LedgerCsv.kt
+│   ├── LedgerSyncContract.kt
+│   ├── LedgerStore.kt
+│   ├── LedgerWebDavConfig.kt
+│   ├── LedgerWebDavClient.kt
+│   ├── LedgerWebDavSync.kt
+│   └── LedgerWidget.kt
+├── fx/
+│   ├── FxRates.kt
+│   ├── FxRateReader.kt
+│   └── FxRateStore.kt
 ├── ui/
 │   ├── ToolboxApp.kt
 │   ├── ToolboxTheme.kt
@@ -71,6 +90,20 @@ app/src/main/java/com/example/toolbox/
 │   ├── AstronomyScreen.kt
 │   ├── NetworkScreen.kt
 │   ├── AppUsageScreen.kt
+│   ├── LedgerScreen.kt
+│   ├── LedgerAccountsTab.kt
+│   ├── LedgerAccountDetail.kt
+│   ├── LedgerOverviewTab.kt
+│   ├── LedgerTransactionsTab.kt
+│   ├── LedgerCostTab.kt
+│   ├── LedgerEntryEditor.kt
+│   ├── LedgerRenewals.kt
+│   ├── LedgerDisposalDialog.kt
+│   ├── LedgerTagsDialog.kt
+│   ├── LedgerDatePicker.kt
+│   ├── LedgerBackupDialogs.kt
+│   ├── LedgerWebDavDialog.kt
+│   ├── FxScreen.kt
 │   ├── SettingsScreen.kt
 │   └── AboutScreen.kt
 └── device/
@@ -92,6 +125,8 @@ Responsibility boundaries:
 | `monitor/` | Sampling, CPU topology math, overlay service, and views | UI-only settings or unrelated device summaries |
 | `usage/` | App usage / traffic statistics reader and offline category resolver | Direct Compose UI rendering |
 | `astronomy/` | Solar/lunar ephemeris math and models | Android system services |
+| `ledger/` | Bookkeeping models and custom tags, one-time/periodic cost amortization calculator, calendar renewal scheduling, native SQLite store (tags + accounts tables, parent/link/disposal/account fields), shared backup/WebDAV exchange format, file backup (JSON/CSV) logic, manual WebDAV backup/sync client, and the RemoteViews widget provider | Compose UI rendering |
+| `fx/` | Exchange-rate models and blocking reader with a Frankfurter → ECB → community mirror fallback chain, plus a SharedPreferences cache of latest + up to 120 dated rates (fetch only on explicit actions) | Compose UI rendering |
 
 ## Incremental v0.1 layout
 

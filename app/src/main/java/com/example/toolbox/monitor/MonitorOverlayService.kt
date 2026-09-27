@@ -131,8 +131,12 @@ class MonitorOverlayService : Service() {
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
                 alpha = overlayWindowAlpha()
-                x = positionPreferences.getInt(POSITION_X_KEY, dp(12f)).coerceAtLeast(0)
-                y = positionPreferences.getInt(POSITION_Y_KEY, dp(100f)).coerceAtLeast(0)
+                val displayWidthPx = resources.displayMetrics.widthPixels
+                val displayHeightPx = resources.displayMetrics.heightPixels
+                x = positionPreferences.getInt(POSITION_X_KEY, dp(12f))
+                    .coerceIn(0, (displayWidthPx - width).coerceAtLeast(0))
+                y = positionPreferences.getInt(POSITION_Y_KEY, dp(100f))
+                    .coerceIn(0, (displayHeightPx - height).coerceAtLeast(0))
             }
             view.updateConfig(selectedMetrics, cpuDisplayMode, chinese, accentColor, fixedPosition, colors)
             windowManager.addView(view, params)
@@ -163,8 +167,10 @@ class MonitorOverlayService : Service() {
         if (fixedPosition) return
         val view = overlayView ?: return
         val params = layoutParams ?: return
-        params.x = (params.x + dx.roundToInt()).coerceAtLeast(0)
-        params.y = (params.y + dy.roundToInt()).coerceAtLeast(0)
+        params.x = (params.x + dx.roundToInt())
+            .coerceIn(0, (resources.displayMetrics.widthPixels - params.width).coerceAtLeast(0))
+        params.y = (params.y + dy.roundToInt())
+            .coerceIn(0, (resources.displayMetrics.heightPixels - params.height).coerceAtLeast(0))
         runCatching { windowManager.updateViewLayout(view, params) }
         getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE).edit {
             putInt(POSITION_X_KEY, params.x)

@@ -58,6 +58,25 @@ app/src/main/java/com/example/toolbox/
 │   ├── AppCategoryResolver.kt
 │   ├── AppUsageInfo.kt
 │   └── AppUsageReader.kt
+├── ledger/
+│   ├── LedgerModels.kt
+│   ├── LedgerCategory.kt
+│   ├── LedgerTag.kt
+│   ├── LedgerAccount.kt
+│   ├── LedgerCalculator.kt
+│   ├── SubscriptionRenewals.kt
+│   ├── LedgerBackup.kt
+│   ├── LedgerCsv.kt
+│   ├── LedgerSyncContract.kt
+│   ├── LedgerStore.kt
+│   ├── LedgerWebDavConfig.kt
+│   ├── LedgerWebDavClient.kt
+│   ├── LedgerWebDavSync.kt
+│   └── LedgerWidget.kt
+├── fx/
+│   ├── FxRates.kt
+│   ├── FxRateReader.kt
+│   └── FxRateStore.kt
 ├── ui/
 │   ├── ToolboxApp.kt
 │   ├── ToolboxTheme.kt
@@ -71,6 +90,20 @@ app/src/main/java/com/example/toolbox/
 │   ├── AstronomyScreen.kt
 │   ├── NetworkScreen.kt
 │   ├── AppUsageScreen.kt
+│   ├── LedgerScreen.kt
+│   ├── LedgerAccountsTab.kt
+│   ├── LedgerAccountDetail.kt
+│   ├── LedgerOverviewTab.kt
+│   ├── LedgerTransactionsTab.kt
+│   ├── LedgerCostTab.kt
+│   ├── LedgerEntryEditor.kt
+│   ├── LedgerRenewals.kt
+│   ├── LedgerDisposalDialog.kt
+│   ├── LedgerTagsDialog.kt
+│   ├── LedgerDatePicker.kt
+│   ├── LedgerBackupDialogs.kt
+│   ├── LedgerWebDavDialog.kt
+│   ├── FxScreen.kt
 │   ├── SettingsScreen.kt
 │   └── AboutScreen.kt
 └── device/
@@ -92,6 +125,8 @@ app/src/main/java/com/example/toolbox/
 | `monitor/` | 性能采样、CPU 拓扑计算、悬浮窗服务与渲染视图 | 无关的页面设置或设备摘要 |
 | `usage/` | 应用与流量统计读取、离线分类解析模型 | 直接 Compose UI 渲染 |
 | `astronomy/` | 日月升落计算、天文模型算法 | Android 系统服务调用 |
+| `ledger/` | 记账模型与自定义多标签、一次性大件摊销/周期订阅计算、按日历日期的续费调度、原生 SQLite 存储（标签表、账户表与父级关联/处置/账户字段）、共享的备份/WebDAV 交换格式、文件备份（JSON/CSV）逻辑、手动 WebDAV 备份同步客户端及 RemoteViews 小组件提供器 | 直接 Compose UI 渲染 |
+| `fx/` | 汇率模型与阻塞式读取器（Frankfurter → 欧洲央行官网 → 社区镜像的回退链），以及 SharedPreferences 缓存（最新汇率 + 最多 120 个历史日期；仅在用户主动操作时联网） | 直接 Compose UI 渲染 |
 
 ## v0.1 的增量结构
 

@@ -11,8 +11,10 @@ Toolbox is a lightweight Android toolbox, not an always-on telemetry daemon. Cur
 - Network: local connection information and public IP lookup after an explicit user refresh.
 - App & Traffic Usage: on-demand foreground app screen time and network traffic (Wi-Fi vs. Mobile) statistics, multi-category offline classification, and time range filtering (Today, Yesterday, 7 Days, 30 Days).
 - Live Performance Monitor & Overlay: on-demand foreground sampling, weighted CPU core topology visualizer matrix, and customizable floating window overlay.
+- Ledger & Cost Amortization: local bookkeeping (CNY/JPY/USD/EUR entries; foreign entries lock the CNY-per-unit rate — fetched per entry date via the Frankfurter → ECB → currency-api fallback chain, or typed manually — at save so all totals stay in CNY, and the source used is recorded per entry) with custom multi-tags, asset disposal (sell/scrap records a linked income entry), calendar-accurate subscription and recurring-income renewals recorded as real child transactions after user confirmation, and optional cost amortization for one-time long-term purchases (daily/monthly depreciated cost) and periodic subscriptions, persisted via Android SDK `SQLiteOpenHelper` (`uuid`, timestamps, soft-delete tombstones merged Last-Write-Wins via the shared `LedgerSyncPayload` backup/WebDAV file format; schema 3 adds tags, ledger accounts with balances/transfers/reconciliation adjustments, and parent/link/disposal/FX-source fields; schema 4 retires unused untouched category-derived tags — fresh installs start tagless and seeds only stay for referenced categories). Includes local file backup through the system picker (JSON full backup incl. deletions, CSV spreadsheet export; Merge or Replace import; no storage permission), manual HTTPS WebDAV backup/sync to a user-created folder (explicit tap only, newest-10 dated snapshots restorable via file Replace import), and a RemoteViews home-screen widget (no extra permissions, no background service; refreshes on ledger writes and via the ~3-hour system widget scheduler). The app must not depend on any fixed server.
+- Currency converter: EUR-base reference rates from the Frankfurter → ECB → currency-api fallback chain, fetched only on explicit actions, cached locally, no API key.
 
-Unless explicitly requested, do not add speed tests, Shizuku/root integration, process management, databases, accounts, cloud synchronization, advertisements, analytics SDKs, Firebase, or persistent background services.
+Unless explicitly requested, do not add speed tests, Shizuku/root integration, process management, third-party ORM frameworks, advertisements, analytics SDKs, Firebase, or persistent background services.
 
 ## 2. Core principles
 
@@ -36,6 +38,8 @@ app/src/main/java/com/example/toolbox/
 ├── astronomy/            # Solar/lunar ephemeris calculators and models
 ├── network/              # Network models and information readers
 ├── usage/                # App usage/traffic readers, category resolver, and models
+├── ledger/               # Bookkeeping models/categories, cost amortization math, SQLite store, backup/WebDAV file format, and widget
+├── fx/                   # Frankfurter/ECB exchange-rate models, reader, and local cache
 └── monitor/              # Real-time sampling, overlay service, and views
 ```
 
@@ -68,7 +72,9 @@ Do not commit `.gradle/`, `.kotlin/`, `build/`, `local.properties`, IDE state, A
 - Location may request `ACCESS_COARSE_LOCATION` / `ACCESS_FINE_LOCATION` only after the user opens the feature and starts location retrieval. Never request background location.
 - App Usage statistics require `PACKAGE_USAGE_STATS`, requested on-demand only when the user navigates to the App Usage feature.
 - Floating overlay requires `SYSTEM_ALERT_WINDOW`, requested on-demand only when the user enables the floating monitor.
-- Network access must follow a clear user action, use timeouts, expose failure states, and avoid automatic high-frequency polling.
+- Network access must follow a clear user action, use timeouts, expose failure states, and avoid automatic high-frequency polling. Exchange-rate requests are the only non-WebDAV outbound traffic: Frankfurter (`api.frankfurter.dev`), the ECB eurofxref feed (`www.ecb.europa.eu`), and the community currency-api (`cdn.jsdelivr.net`, `*.currency-api.pages.dev`) — they carry only the requested date or date range and run only on an explicit refresh/save/renewal action.
+- WebDAV ledger sync runs only after an explicit user tap (never automatically or in the background), uses HTTPS only, and writes solely to the user's own pre-created folder. The stored password is encrypted with Android Keystore, and credentials or URLs must never be logged.
+- Exchange rates are fetched only after an explicit action (saving a foreign-currency entry without a cached rate for its date, confirming renewals, or the converter's refresh/get-rates button). Never fetch on screen open or in the background; send only the date path; cache every fetched rate locally.
 - Keep GNSS altitude distinct from any future terrain elevation value. Never present one as the other.
 - Android vendors may restrict `/proc`, `/sys`, and hardware fields via SELinux. Fall back gracefully (e.g. CPU frequency scaling estimation for restricted `/proc/stat`, and standard fallback when Android 16 `getGpuHeadroom()` HAL is unsupported).
 - Do not log or upload precise locations, IP addresses, device identifiers, or other sensitive data. Avoid complete sensitive values in logs.

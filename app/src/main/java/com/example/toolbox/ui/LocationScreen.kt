@@ -13,30 +13,32 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,10 +52,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.toolbox.location.GnssConstellation
 import com.example.toolbox.location.GnssSkyViewStatus
 import com.example.toolbox.location.LocationInfo
@@ -70,9 +74,10 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocationScreen(
     strings: ToolboxStrings,
@@ -92,6 +97,7 @@ fun LocationScreen(
     var isObservingGnss by remember { mutableStateOf(false) }
     var gnssStatus by remember { mutableStateOf<GnssSkyViewStatus?>(null) }
     var stopGnssObservation by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var positioningSystems by remember { mutableStateOf<PositioningSystemInfo?>(null) }
 
     fun readLocation() {
         if (isLoading) return
@@ -159,13 +165,22 @@ fun LocationScreen(
         }
     }
 
-    val lifecycleOwner = context as? LifecycleOwner
+    LaunchedEffect(reader) {
+        positioningSystems = withContext(Dispatchers.IO) {
+            runCatching { reader.readPositioningSystems() }.getOrNull()
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
-        if (lifecycleOwner == null) return@DisposableEffect onDispose { }
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasPermission = reader.hasLocationPermission()
-                hasFinePermission = reader.hasFineLocationPermission()
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    hasPermission = reader.hasLocationPermission()
+                    hasFinePermission = reader.hasFineLocationPermission()
+                }
+                Lifecycle.Event.ON_STOP -> stopGnssObservation()
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -187,13 +202,10 @@ fun LocationScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(strings.location) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
-                    }
-                },
+            ToolboxTopBar(
+                title = strings.location,
+                onBack = onBack,
+                backLabel = strings.back,
                 actions = {
                     TextButton(
                         onClick = ::requestOrReadLocation,
@@ -231,9 +243,11 @@ fun LocationScreen(
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
-                                modifier = Modifier.padding(end = 8.dp),
+                                modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
+                                color = LocalContentColor.current,
                             )
+                            Spacer(modifier = Modifier.size(8.dp))
                         }
                         Text(if (isLoading) strings.locationLoading else strings.getCurrentLocation)
                     }
@@ -299,7 +313,7 @@ fun LocationScreen(
                 PositioningSystemsCard(
                     context = context,
                     strings = strings,
-                    info = locationInfo?.positioningSystems ?: remember(reader) { reader.readPositioningSystems() },
+                    info = locationInfo?.positioningSystems ?: positioningSystems,
                 )
             }
             item {
@@ -415,9 +429,11 @@ private fun TerrainElevationCard(
         ) {
             if (isQuerying) {
                 CircularProgressIndicator(
-                    modifier = Modifier.padding(end = 8.dp),
+                    modifier = Modifier.size(18.dp),
                     strokeWidth = 2.dp,
+                    color = LocalContentColor.current,
                 )
+                Spacer(modifier = Modifier.size(8.dp))
             }
             Text(if (isQuerying) strings.queryingTerrainElevation else strings.queryTerrainElevation)
         }
@@ -470,6 +486,7 @@ private fun CopyableLocationRow(
 private fun formatLocationTime(timestampMillis: Long): String =
     SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(timestampMillis))
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GnssSkyViewCard(
     strings: ToolboxStrings,
@@ -492,6 +509,7 @@ private fun GnssSkyViewCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -511,7 +529,7 @@ private fun GnssSkyViewCard(
                         color = if (status != null && status.usedInFixCount > 0) MaterialTheme.colorScheme.primary else Color(0xFFF5A623),
                     )
                 }
-                Button(
+                OutlinedButton(
                     onClick = onStop,
                 ) {
                     Text(strings.gnssStopObservation)
@@ -539,9 +557,10 @@ private fun GnssSkyViewCard(
                 }
 
                 if (status.constellationCounts.isNotEmpty()) {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         status.constellationCounts.forEach { (constellation, count) ->
                             Box(
@@ -576,17 +595,20 @@ private fun GnssSkyViewCard(
                                 .padding(10.dp),
                         ) {
                             Text(
-                                text = "💡 " + strings.gnssIndoorFixHint,
+                                text = strings.gnssIndoorFixHint,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
 
-                    GnssRadarView(satellites = status.satellites)
+                    GnssRadarView(
+                        strings = strings,
+                        satellites = status.satellites,
+                    )
 
                     Text(
-                        text = "🌐 " + strings.gnssEarthCenter,
+                        text = strings.gnssEarthCenter,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -607,59 +629,69 @@ private fun GnssSkyViewCard(
 
 @Composable
 private fun GnssRadarView(
+    strings: ToolboxStrings,
     satellites: List<SatelliteInfo>,
     modifier: Modifier = Modifier,
 ) {
-    val northPaint = remember {
+    val density = LocalDensity.current
+    val northPaint = remember(density) {
         android.graphics.Paint().apply {
             color = android.graphics.Color.WHITE
-            textSize = 28f
+            textSize = with(density) { 12.sp.toPx() }
             isFakeBoldText = true
             textAlign = android.graphics.Paint.Align.CENTER
         }
     }
-    val cardinalPaint = remember {
+    val cardinalPaint = remember(density) {
         android.graphics.Paint().apply {
             color = android.graphics.Color.LTGRAY
-            textSize = 24f
+            textSize = with(density) { 12.sp.toPx() }
             isFakeBoldText = true
             textAlign = android.graphics.Paint.Align.CENTER
         }
     }
-    val elevPaint = remember {
+    val elevPaint = remember(density) {
         android.graphics.Paint().apply {
             color = android.graphics.Color.GRAY
-            textSize = 18f
+            textSize = with(density) { 10.sp.toPx() }
             textAlign = android.graphics.Paint.Align.LEFT
         }
     }
-    val svUsedPaint = remember {
+    val svUsedPaint = remember(density) {
         android.graphics.Paint().apply {
             color = android.graphics.Color.WHITE
-            textSize = 18f
+            textSize = with(density) { 10.sp.toPx() }
             isFakeBoldText = true
             textAlign = android.graphics.Paint.Align.LEFT
         }
     }
-    val svUnusedPaint = remember {
+    val svUnusedPaint = remember(density) {
         android.graphics.Paint().apply {
             color = android.graphics.Color.LTGRAY
-            textSize = 18f
+            textSize = with(density) { 10.sp.toPx() }
             isFakeBoldText = false
             textAlign = android.graphics.Paint.Align.LEFT
         }
     }
 
+    val northLabel = strings.compassDirection(0.0)
+    val southLabel = strings.compassDirection(180.0)
+    val eastLabel = strings.compassDirection(90.0)
+    val westLabel = strings.compassDirection(270.0)
+
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(310.dp),
+        modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(modifier = Modifier.size(290.dp)) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 320.dp)
+                .aspectRatio(1f),
+        ) {
             val center = Offset(size.width / 2f, size.height / 2f)
-            val discRadius = size.width / 2f - 14f
-            val maxRadius = discRadius - 16f
+            val discRadius = size.width / 2f - 5.dp.toPx()
+            val maxRadius = discRadius - 6.dp.toPx()
 
             // 1. Dark circular Sky Dome Disc background
             drawCircle(
@@ -671,45 +703,45 @@ private fun GnssRadarView(
                 color = Color(0xFF334654),
                 radius = discRadius,
                 center = center,
-                style = Stroke(width = 3f),
+                style = Stroke(width = 1.dp.toPx()),
             )
 
             // 2. Concentric Elevation Circles
-            drawCircle(color = Color(0xFF3E5466), radius = maxRadius, center = center, style = Stroke(width = 2f))
-            drawCircle(color = Color(0xFF283A48), radius = maxRadius * 0.67f, center = center, style = Stroke(width = 1.5f))
-            drawCircle(color = Color(0xFF283A48), radius = maxRadius * 0.33f, center = center, style = Stroke(width = 1.5f))
+            drawCircle(color = Color(0xFF3E5466), radius = maxRadius, center = center, style = Stroke(width = 0.75.dp.toPx()))
+            drawCircle(color = Color(0xFF283A48), radius = maxRadius * 0.67f, center = center, style = Stroke(width = 0.5.dp.toPx()))
+            drawCircle(color = Color(0xFF283A48), radius = maxRadius * 0.33f, center = center, style = Stroke(width = 0.5.dp.toPx()))
 
             // 3. Axes
             drawLine(
                 color = Color(0xFF3E5466),
                 start = Offset(center.x, center.y - maxRadius),
                 end = Offset(center.x, center.y + maxRadius),
-                strokeWidth = 1.5f,
+                strokeWidth = 0.5.dp.toPx(),
             )
             drawLine(
                 color = Color(0xFF3E5466),
                 start = Offset(center.x - maxRadius, center.y),
                 end = Offset(center.x + maxRadius, center.y),
-                strokeWidth = 1.5f,
+                strokeWidth = 0.5.dp.toPx(),
             )
             val diag = maxRadius * 0.7071f
-            drawLine(color = Color(0xFF202C36), start = Offset(center.x - diag, center.y - diag), end = Offset(center.x + diag, center.y + diag), strokeWidth = 1f)
-            drawLine(color = Color(0xFF202C36), start = Offset(center.x - diag, center.y + diag), end = Offset(center.x + diag, center.y - diag), strokeWidth = 1f)
+            drawLine(color = Color(0xFF202C36), start = Offset(center.x - diag, center.y - diag), end = Offset(center.x + diag, center.y + diag), strokeWidth = 0.4.dp.toPx())
+            drawLine(color = Color(0xFF202C36), start = Offset(center.x - diag, center.y + diag), end = Offset(center.x + diag, center.y - diag), strokeWidth = 0.4.dp.toPx())
 
             // 4. Cardinal Direction Labels
-            drawContext.canvas.nativeCanvas.drawText("北 N", center.x, center.y - maxRadius + 22f, northPaint)
-            drawContext.canvas.nativeCanvas.drawText("南 S", center.x, center.y + maxRadius - 8f, cardinalPaint)
-            drawContext.canvas.nativeCanvas.drawText("东 E", center.x + maxRadius - 26f, center.y + 8f, cardinalPaint)
-            drawContext.canvas.nativeCanvas.drawText("西 W", center.x - maxRadius + 26f, center.y + 8f, cardinalPaint)
+            drawContext.canvas.nativeCanvas.drawText(northLabel, center.x, center.y - maxRadius + 8.dp.toPx(), northPaint)
+            drawContext.canvas.nativeCanvas.drawText(southLabel, center.x, center.y + maxRadius - 3.dp.toPx(), cardinalPaint)
+            drawContext.canvas.nativeCanvas.drawText(eastLabel, center.x + maxRadius - 9.dp.toPx(), center.y + 3.dp.toPx(), cardinalPaint)
+            drawContext.canvas.nativeCanvas.drawText(westLabel, center.x - maxRadius + 9.dp.toPx(), center.y + 3.dp.toPx(), cardinalPaint)
 
             // Elevation tags
-            drawContext.canvas.nativeCanvas.drawText("60°", center.x + 6f, center.y - maxRadius * 0.33f + 14f, elevPaint)
-            drawContext.canvas.nativeCanvas.drawText("30°", center.x + 6f, center.y - maxRadius * 0.67f + 14f, elevPaint)
+            drawContext.canvas.nativeCanvas.drawText("60°", center.x + 2.dp.toPx(), center.y - maxRadius * 0.33f + 5.dp.toPx(), elevPaint)
+            drawContext.canvas.nativeCanvas.drawText("30°", center.x + 2.dp.toPx(), center.y - maxRadius * 0.67f + 5.dp.toPx(), elevPaint)
 
             // 5. Center Earth / Observer Graphic
-            drawCircle(color = Color(0x4442A5F5), radius = 18f, center = center)
-            drawCircle(color = Color(0xFF1E88E5), radius = 10f, center = center)
-            drawCircle(color = Color(0xFF90CAF9), radius = 4f, center = center)
+            drawCircle(color = Color(0x4442A5F5), radius = 6.5.dp.toPx(), center = center)
+            drawCircle(color = Color(0xFF1E88E5), radius = 3.5.dp.toPx(), center = center)
+            drawCircle(color = Color(0xFF90CAF9), radius = 1.5.dp.toPx(), center = center)
 
             // 6. Draw Satellites
             satellites.forEach { sat ->
@@ -723,26 +755,26 @@ private fun GnssRadarView(
                 if (sat.usedInFix) {
                     drawCircle(
                         color = satColor,
-                        radius = 12f,
+                        radius = 4.5.dp.toPx(),
                         center = Offset(px, py),
                     )
                     drawCircle(
                         color = Color.White,
-                        radius = 12f,
+                        radius = 4.5.dp.toPx(),
                         center = Offset(px, py),
-                        style = Stroke(width = 3f),
+                        style = Stroke(width = 1.dp.toPx()),
                     )
                 } else {
                     drawCircle(
                         color = satColor.copy(alpha = 0.35f),
-                        radius = 10f,
+                        radius = 3.5.dp.toPx(),
                         center = Offset(px, py),
                     )
                     drawCircle(
                         color = satColor,
-                        radius = 10f,
+                        radius = 3.5.dp.toPx(),
                         center = Offset(px, py),
-                        style = Stroke(width = 1.5f),
+                        style = Stroke(width = 0.5.dp.toPx()),
                     )
                 }
 
@@ -750,8 +782,8 @@ private fun GnssRadarView(
                 val paint = if (sat.usedInFix) svUsedPaint else svUnusedPaint
                 drawContext.canvas.nativeCanvas.drawText(
                     svText,
-                    px + 13f,
-                    py + 6f,
+                    px + 4.5.dp.toPx(),
+                    py + 2.dp.toPx(),
                     paint,
                 )
             }

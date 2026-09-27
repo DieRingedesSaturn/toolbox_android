@@ -11,24 +11,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.toolbox.device.DeviceInfo
-import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceScreen(
     strings: ToolboxStrings,
@@ -44,21 +41,15 @@ fun DeviceScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(strings.device) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
-                    }
-                },
+            ToolboxTopBar(
+                title = strings.device,
+                onBack = onBack,
+                backLabel = strings.back,
                 actions = {
                     TextButton(onClick = onRefresh, enabled = !isLoading) {
                         Text(if (isLoading) strings.refreshing else strings.refresh)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                ),
             )
         },
     ) { padding ->
@@ -101,7 +92,9 @@ fun DeviceScreen(
                 }
                 items(sections) { row ->
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         row.forEach { section ->
@@ -110,7 +103,9 @@ fun DeviceScreen(
                                 strings = strings,
                                 section = section,
                                 deviceInfo = deviceInfo,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
                             )
                         }
                         repeat(columns - row.size) {
@@ -216,16 +211,4 @@ private fun LocalizedInfoRow(
             copiedMessage = strings.copied(localizedLabel),
         )
     }
-}
-
-private fun formatBytes(bytes: Long): String {
-    if (bytes < 1024L) return "$bytes B"
-    val units = listOf("KB", "MB", "GB", "TB")
-    var value = bytes.toDouble()
-    var index = -1
-    while (value >= 1024 && index < units.lastIndex) {
-        value /= 1024
-        index++
-    }
-    return String.format(Locale.US, "%.1f %s", value, units[index])
 }

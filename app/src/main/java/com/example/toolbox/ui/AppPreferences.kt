@@ -16,6 +16,7 @@ private const val MONITOR_OVERLAY_FIXED_KEY = "monitor_overlay_fixed"
 private const val MONITOR_OVERLAY_THEME_KEY = "monitor_overlay_theme"
 private const val MONITOR_OVERLAY_CUSTOM_COLOR_KEY = "monitor_overlay_custom_color"
 private const val MONITOR_OVERLAY_OPACITY_KEY = "monitor_overlay_opacity"
+private const val LEDGER_LAST_ACCOUNT_KEY = "ledger_last_account"
 
 class AppPreferences(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -105,5 +106,12 @@ class AppPreferences(context: Context) {
 
     fun saveMonitorOverlayOpacity(value: Float) {
         preferences.edit { putFloat(MONITOR_OVERLAY_OPACITY_KEY, value) }
+    }
+
+    /** Last ledger account picked in the editor; "" = none remembered. */
+    fun ledgerLastAccount(): String = preferences.getString(LEDGER_LAST_ACCOUNT_KEY, "") ?: ""
+
+    fun saveLedgerLastAccount(value: String) {
+        preferences.edit { putString(LEDGER_LAST_ACCOUNT_KEY, value) }
     }
 }

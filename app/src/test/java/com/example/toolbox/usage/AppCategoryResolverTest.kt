@@ -44,12 +44,14 @@ class AppCategoryResolverTest {
     fun testDefaultFallback() {
         val unknownApp = ApplicationInfo().apply {
             packageName = "com.random.user.app"
+            category = ApplicationInfo.CATEGORY_UNDEFINED
         }
         assertEquals(AppCategory.OTHER, AppCategoryResolver.resolve(unknownApp))
 
         val systemApp = ApplicationInfo().apply {
             packageName = "com.system.internal.service"
             flags = ApplicationInfo.FLAG_SYSTEM
+            category = ApplicationInfo.CATEGORY_UNDEFINED
         }
         assertEquals(AppCategory.TOOL, AppCategoryResolver.resolve(systemApp))
     }

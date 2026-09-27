@@ -207,8 +207,6 @@ class MonitorOverlayView @JvmOverloads constructor(
 
         val cores = sample?.cpuCores.orEmpty()
         if (cores.isEmpty()) {
-            val waiting = waitingLabel()
-            canvas.drawText(waiting, width - padding - secondaryTextPaint.measureText(waiting), top + dp(12f), secondaryTextPaint)
             return
         }
 

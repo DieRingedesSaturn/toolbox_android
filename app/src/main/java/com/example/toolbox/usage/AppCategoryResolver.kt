@@ -1,7 +1,6 @@
 package com.example.toolbox.usage
 
 import android.content.pm.ApplicationInfo
-import android.os.Build
 
 object AppCategoryResolver {
 
@@ -42,19 +41,18 @@ object AppCategoryResolver {
             return AppCategory.GAME
         }
 
-        // 3. Check Android Native App Category (API 26+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            when (appInfo.category) {
-                ApplicationInfo.CATEGORY_GAME -> return AppCategory.GAME
-                ApplicationInfo.CATEGORY_AUDIO -> return AppCategory.AUDIO
-                ApplicationInfo.CATEGORY_VIDEO -> return AppCategory.VIDEO
-                ApplicationInfo.CATEGORY_SOCIAL -> return AppCategory.SOCIAL
-                ApplicationInfo.CATEGORY_NEWS -> return AppCategory.NEWS
-                ApplicationInfo.CATEGORY_MAPS -> return AppCategory.TRAVEL
-                ApplicationInfo.CATEGORY_PRODUCTIVITY -> return AppCategory.PRODUCTIVITY
-                ApplicationInfo.CATEGORY_IMAGE -> return AppCategory.VIDEO
-                ApplicationInfo.CATEGORY_ACCESSIBILITY -> return AppCategory.TOOL
-            }
+        // 3. Check Android Native App Category
+        when (appInfo.category) {
+            ApplicationInfo.CATEGORY_GAME -> return AppCategory.GAME
+            ApplicationInfo.CATEGORY_AUDIO -> return AppCategory.AUDIO
+            ApplicationInfo.CATEGORY_VIDEO -> return AppCategory.VIDEO
+            ApplicationInfo.CATEGORY_SOCIAL -> return AppCategory.SOCIAL
+            ApplicationInfo.CATEGORY_NEWS -> return AppCategory.NEWS
+            ApplicationInfo.CATEGORY_MAPS -> return AppCategory.TRAVEL
+            ApplicationInfo.CATEGORY_PRODUCTIVITY -> return AppCategory.PRODUCTIVITY
+            ApplicationInfo.CATEGORY_IMAGE -> return AppCategory.VIDEO
+            ApplicationInfo.CATEGORY_ACCESSIBILITY -> return AppCategory.TOOL
+            ApplicationInfo.CATEGORY_UNDEFINED -> return if (isSystemApp(appInfo)) AppCategory.TOOL else AppCategory.OTHER
         }
 
         // 4. Default classification

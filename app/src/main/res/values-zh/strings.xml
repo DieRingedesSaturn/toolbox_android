@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Toolbox</string>
+    <string name="ledger_widget_label">记账</string>
+    <string name="ledger_widget_description">一眼查看日均成本与本月支出</string>
+    <string name="ledger_widget_add">记一笔</string>
+</resources>

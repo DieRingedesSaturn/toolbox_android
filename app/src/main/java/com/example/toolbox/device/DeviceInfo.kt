@@ -54,3 +54,10 @@ data class BatteryInfo(
     val temperature: String,
     val voltage: String,
 )
+
+data class QuickStatus(
+    val batteryPercent: Int?,
+    val isCharging: Boolean?,
+    val storageAvailable: Long,
+    val storageTotal: Long,
+)

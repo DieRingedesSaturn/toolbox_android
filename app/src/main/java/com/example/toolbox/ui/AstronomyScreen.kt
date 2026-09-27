@@ -3,6 +3,7 @@ package com.example.toolbox.ui
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -11,6 +12,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,17 +31,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,28 +48,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.toolbox.astronomy.AstronomyCalculator
 import com.example.toolbox.astronomy.AstronomyImageExporter
-import com.example.toolbox.astronomy.CelestialBodyType
 import com.example.toolbox.astronomy.CelestialBodyVisibility
 import com.example.toolbox.astronomy.ExportThemePalette
 import com.example.toolbox.astronomy.MoonPhaseInfo
 import com.example.toolbox.astronomy.NightTimeline
 import com.example.toolbox.location.LocationInfoReader
+import com.example.toolbox.location.formatShortCoordinates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,7 +79,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AstronomyScreen(
     strings: ToolboxStrings,
@@ -85,54 +88,50 @@ fun AstronomyScreen(
     val scope = rememberCoroutineScope()
     val locationReader = remember(context) { LocationInfoReader(context) }
 
-    var latitude by remember { mutableStateOf(39.9042) }
-    var longitude by remember { mutableStateOf(116.4074) }
+    var latitude by remember { mutableDoubleStateOf(39.9042) }
+    var longitude by remember { mutableDoubleStateOf(116.4074) }
     var isUsingDefaultLocation by remember { mutableStateOf(true) }
     var isExporting by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
-    var referenceTimeMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var referenceTimeMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     val colorScheme = MaterialTheme.colorScheme
 
-    fun refreshAstronomy() {
-        isRefreshing = true
-        referenceTimeMillis = System.currentTimeMillis()
-        if (locationReader.hasLocationPermission()) {
+    suspend fun applyLastKnownLocation() {
+        val loc = withContext(Dispatchers.IO) {
+            if (!locationReader.hasLocationPermission()) return@withContext null
             runCatching {
                 val lm = context.getSystemService(android.location.LocationManager::class.java)
                 @SuppressLint("MissingPermission")
-                val loc = lm?.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+                lm?.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
                     ?: run {
                         @SuppressLint("MissingPermission")
                         lm?.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
                     }
-                if (loc != null) {
-                    latitude = loc.latitude
-                    longitude = loc.longitude
-                    isUsingDefaultLocation = false
-                }
+            }.getOrNull()
+        }
+        if (loc != null) {
+            latitude = loc.latitude
+            longitude = loc.longitude
+            isUsingDefaultLocation = false
+        }
+    }
+
+    fun refreshAstronomy() {
+        if (isRefreshing) return
+        scope.launch {
+            isRefreshing = true
+            try {
+                referenceTimeMillis = System.currentTimeMillis()
+                applyLastKnownLocation()
+            } finally {
+                isRefreshing = false
             }
         }
-        isRefreshing = false
     }
 
     LaunchedEffect(locationReader) {
-        if (locationReader.hasLocationPermission()) {
-            runCatching {
-                val lm = context.getSystemService(android.location.LocationManager::class.java)
-                @SuppressLint("MissingPermission")
-                val loc = lm?.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
-                    ?: run {
-                        @SuppressLint("MissingPermission")
-                        lm?.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
-                    }
-                if (loc != null) {
-                    latitude = loc.latitude
-                    longitude = loc.longitude
-                    isUsingDefaultLocation = false
-                }
-            }
-        }
+        applyLastKnownLocation()
     }
 
     val timeline = remember(latitude, longitude, referenceTimeMillis) {
@@ -170,7 +169,12 @@ fun AstronomyScreen(
             }
             isExporting = false
             if (uri != null) {
-                Toast.makeText(context, strings.exportSuccess, Toast.LENGTH_SHORT).show()
+                val message = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    strings.exportSuccess
+                } else {
+                    strings.exportReadyToShare
+                }
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                     type = "image/png"
                     putExtra(Intent.EXTRA_STREAM, uri)
@@ -185,28 +189,12 @@ fun AstronomyScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = strings.astronomy,
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                        val latStr = "%.2f°N".format(Locale.US, latitude)
-                        val lonStr = "%.2f°E".format(Locale.US, longitude)
-                        val note = if (isUsingDefaultLocation) " (${strings.defaultLocationNote})" else ""
-                        Text(
-                            text = "$latStr, $lonStr$note",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
-                    }
-                },
+            ToolboxTopBar(
+                title = strings.astronomy,
+                onBack = onBack,
+                backLabel = strings.back,
+                subtitle = formatShortCoordinates(latitude, longitude) +
+                    if (isUsingDefaultLocation) " ${strings.defaultLocationNote}" else "",
                 actions = {
                     TextButton(
                         onClick = ::refreshAstronomy,
@@ -251,7 +239,6 @@ fun AstronomyScreen(
                 NightTimelineShowcaseCard(
                     strings = strings,
                     timeline = timeline,
-                    onExport = ::handleExportImage,
                 )
             }
 
@@ -361,7 +348,7 @@ private fun MoonPhaseHeroCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = moonPhase.phase.nameZh,
+                        text = strings.moonPhaseName(moonPhase.phase),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -425,11 +412,11 @@ private fun MoonPhaseHeroCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NightTimelineShowcaseCard(
     strings: ToolboxStrings,
     timeline: NightTimeline,
-    onExport: () -> Unit,
 ) {
     val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.US) }
 
@@ -491,7 +478,7 @@ private fun NightTimelineShowcaseCard(
                         .height(20.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Spacer(modifier = Modifier.width(76.dp))
+                    Spacer(modifier = Modifier.width(TimelineLabelWidth + 6.dp))
                     NightTimeRulerCanvas(
                         windowStart = windowStart,
                         totalDuration = totalDuration,
@@ -512,7 +499,7 @@ private fun NightTimelineShowcaseCard(
                     ) {
                         // Left Column: Celestial Body Label with Centered Circle
                         Row(
-                            modifier = Modifier.width(70.dp),
+                            modifier = Modifier.width(TimelineLabelWidth),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(5.dp),
                         ) {
@@ -539,11 +526,12 @@ private fun NightTimelineShowcaseCard(
                                 )
                             }
                             Text(
-                                text = body.nameZh,
+                                text = strings.bodyName(body),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
 
@@ -563,37 +551,23 @@ private fun NightTimelineShowcaseCard(
                 }
             }
 
-            // Legend & Export Button Footer
-            Row(
+            // Legend Footer
+            FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    LegendItem(color = Color(0xFF4CAF50), text = "可见时段")
-                    LegendItem(color = MaterialTheme.colorScheme.surfaceVariant, text = "完全暗夜")
-                    LegendItem(color = MaterialTheme.colorScheme.error, text = "当前时刻")
-                }
-
-                Text(
-                    text = strings.exportImage,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable(onClick = onExport)
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                )
+                LegendItem(color = Color(0xFF4CAF50), text = strings.legendVisiblePeriod)
+                LegendItem(color = MaterialTheme.colorScheme.surfaceVariant, text = strings.darkNightLabel)
+                LegendItem(color = MaterialTheme.colorScheme.error, text = strings.legendCurrentTime)
             }
         }
     }
 }
+
+private val TimelineLabelWidth = 84.dp
 
 @Composable
 private fun NightTimeRulerCanvas(
@@ -602,10 +576,11 @@ private fun NightTimeRulerCanvas(
     modifier: Modifier = Modifier,
 ) {
     val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
-    val timePaint = remember(onSurfaceVariantColor) {
+    val density = LocalDensity.current
+    val timePaint = remember(onSurfaceVariantColor, density) {
         android.graphics.Paint().apply {
             color = onSurfaceVariantColor
-            textSize = 22f
+            textSize = with(density) { 10.sp.toPx() }
             textAlign = android.graphics.Paint.Align.CENTER
         }
     }
@@ -622,7 +597,7 @@ private fun NightTimeRulerCanvas(
             drawContext.canvas.nativeCanvas.drawText(
                 timeFmt.format(Date(tickTime)),
                 tickX,
-                size.height - 4f,
+                size.height - 1.dp.toPx(),
                 timePaint,
             )
         }
@@ -644,10 +619,11 @@ private fun SingleBodyGanttRowCanvas(
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
     val errorColor = MaterialTheme.colorScheme.error
 
-    val barBadgePaint = remember {
+    val density = LocalDensity.current
+    val barBadgePaint = remember(density) {
         android.graphics.Paint().apply {
             color = android.graphics.Color.BLACK
-            textSize = 22f
+            textSize = with(density) { 10.sp.toPx() }
             isFakeBoldText = true
             textAlign = android.graphics.Paint.Align.CENTER
         }
@@ -656,8 +632,8 @@ private fun SingleBodyGanttRowCanvas(
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        val trackTop = 2f
-        val trackHeight = h - 4f
+        val trackTop = 1.dp.toPx()
+        val trackHeight = h - 2.dp.toPx()
 
         // 1. Draw Clean Rectangular Track Background
         drawRect(
@@ -687,7 +663,7 @@ private fun SingleBodyGanttRowCanvas(
                 color = gridColor,
                 start = Offset(tickX, trackTop),
                 end = Offset(tickX, trackTop + trackHeight),
-                strokeWidth = 1f,
+                strokeWidth = 0.4.dp.toPx(),
             )
         }
 
@@ -698,7 +674,7 @@ private fun SingleBodyGanttRowCanvas(
             val startFrac = ((interval.startMillis - windowStart).toFloat() / totalDuration).coerceIn(0f, 1f)
             val endFrac = ((interval.endMillis - windowStart).toFloat() / totalDuration).coerceIn(0f, 1f)
             val barLeft = w * startFrac
-            val barWidth = (w * (endFrac - startFrac)).coerceAtLeast(10f)
+            val barWidth = (w * (endFrac - startFrac)).coerceAtLeast(4.dp.toPx())
 
             // Draw Clean Rectangular Bar
             drawRect(
@@ -708,12 +684,14 @@ private fun SingleBodyGanttRowCanvas(
             )
 
             // Readable Max Altitude Tag inside the bar
-            if (barWidth > 60f && body.maxAltitudeDegrees > 0) {
+            if (barWidth > 22.dp.toPx() && body.maxAltitudeDegrees > 0) {
                 val badgeText = "%.0f°".format(Locale.US, body.maxAltitudeDegrees)
+                val fontMetrics = barBadgePaint.fontMetrics
+                val badgeBaseline = trackTop + (trackHeight / 2f) - (fontMetrics.ascent + fontMetrics.descent) / 2f
                 drawContext.canvas.nativeCanvas.drawText(
                     badgeText,
                     barLeft + (barWidth / 2f),
-                    trackTop + (trackHeight / 2f) + 8f,
+                    badgeBaseline,
                     barBadgePaint,
                 )
             }
@@ -729,7 +707,7 @@ private fun SingleBodyGanttRowCanvas(
                 color = errorColor,
                 start = Offset(nowX, trackTop),
                 end = Offset(nowX, trackTop + trackHeight),
-                strokeWidth = 2.5f,
+                strokeWidth = 1.dp.toPx(),
             )
         }
     }
@@ -847,7 +825,7 @@ private fun CelestialBodyCard(
 
                     Column {
                         Text(
-                            text = "${body.nameZh}  ${body.nameEn}",
+                            text = strings.bodyName(body),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                         )
@@ -905,7 +883,7 @@ private fun CelestialBodyCard(
                         label = "${strings.riseTime} → ${strings.setTime}",
                         value = "$riseStr → $setStr",
                         onClick = {
-                            copyToClipboard(context, "${body.nameZh} 升落时刻", "$riseStr → $setStr", strings.copied(body.nameZh))
+                            copyToClipboard(context, "${strings.bodyName(body)} ${strings.copyLabelRiseSet}", "$riseStr → $setStr", strings.copied(strings.bodyName(body)))
                         },
                     )
                     MetricTile(
@@ -913,7 +891,7 @@ private fun CelestialBodyCard(
                         label = strings.maxAltitude,
                         value = "$maxAltStr ($transitStr)",
                         onClick = {
-                            copyToClipboard(context, "${body.nameZh} 最高仰角", "$maxAltStr ($transitStr)", strings.copied(body.nameZh))
+                            copyToClipboard(context, "${strings.bodyName(body)} ${strings.copyLabelMaxAltitude}", "$maxAltStr ($transitStr)", strings.copied(strings.bodyName(body)))
                         },
                     )
                 }
@@ -921,7 +899,7 @@ private fun CelestialBodyCard(
                 // Current Altitude and Azimuth Tile
                 val altStr = "%.1f°".format(Locale.US, body.currentAltitudeDegrees)
                 val azStr = "%.1f°".format(Locale.US, body.currentAzimuthDegrees)
-                val directionName = azimuthToDirection(body.currentAzimuthDegrees)
+                val directionName = strings.compassDirection(body.currentAzimuthDegrees)
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -932,7 +910,7 @@ private fun CelestialBodyCard(
                         label = strings.currentAltAz,
                         value = "$altStr / $azStr ($directionName)",
                         onClick = {
-                            copyToClipboard(context, "${body.nameZh} 当前高度方位", "$altStr / $azStr ($directionName)", strings.copied(body.nameZh))
+                            copyToClipboard(context, "${strings.bodyName(body)} ${strings.copyLabelAltAz}", "$altStr / $azStr ($directionName)", strings.copied(strings.bodyName(body)))
                         },
                     )
                 }
@@ -970,19 +948,5 @@ private fun MetricTile(
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
-    }
-}
-
-private fun azimuthToDirection(azimuth: Double): String {
-    val norm = (azimuth % 360 + 360) % 360
-    return when {
-        norm < 22.5 || norm >= 337.5 -> "北"
-        norm < 67.5 -> "东北"
-        norm < 112.5 -> "东"
-        norm < 157.5 -> "东南"
-        norm < 202.5 -> "南"
-        norm < 247.5 -> "西南"
-        norm < 292.5 -> "西"
-        else -> "西北"
     }
 }
