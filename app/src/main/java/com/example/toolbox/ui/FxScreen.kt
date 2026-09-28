@@ -40,6 +40,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.toolbox.R
+import com.example.toolbox.fx.CurrencySearch
 import com.example.toolbox.fx.LEDGER_CURRENCIES
 import com.example.toolbox.fx.FxException
 import com.example.toolbox.fx.FxFailure
@@ -83,6 +84,8 @@ internal fun FxScreen(
     var sourceCurrency by rememberSaveable { mutableStateOf("EUR") }
     var showAll by rememberSaveable { mutableStateOf(false) }
     var showCurrencyPicker by remember { mutableStateOf(false) }
+    var currencyQuery by rememberSaveable { mutableStateOf("") }
+    var pickerQuery by rememberSaveable { mutableStateOf("") }
     var lastAttempts by remember { mutableStateOf<List<Pair<FxSource, FxFailure>>>(emptyList()) }
 
     LaunchedEffect(Unit) {
@@ -188,7 +191,10 @@ internal fun FxScreen(
                     item {
                         FilterChip(
                             selected = sourceCurrency !in LEDGER_CURRENCIES,
-                            onClick = { showCurrencyPicker = true },
+                            onClick = {
+                                pickerQuery = ""
+                                showCurrencyPicker = true
+                            },
                             label = {
                                 Text(
                                     if (sourceCurrency !in LEDGER_CURRENCIES) {
@@ -204,20 +210,64 @@ internal fun FxScreen(
             }
 
             val currentRates = rates
+            if (currentRates != null) {
+                item {
+                    OutlinedTextField(
+                        value = currencyQuery,
+                        onValueChange = { currencyQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(strings.fxSearchHint) },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_search),
+                                contentDescription = null,
+                            )
+                        },
+                        trailingIcon = {
+                            if (currencyQuery.isNotEmpty()) {
+                                IconButton(onClick = { currencyQuery = "" }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_close),
+                                        contentDescription = strings.cancelAction,
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                    )
+                }
+            }
             val amount = amountText.replace(',', '.').toDoubleOrNull()
             if (currentRates != null && amount != null) {
                 item {
                     InfoCard(title = strings.moduleTitle(ToolboxModule.FX)) {
+                        val currencyKeys = remember(currentRates) {
+                            CurrencySearch.keys(currentRates.currencies)
+                        }
                         val ledgerCodes = LEDGER_CURRENCIES
                             .filter { it != sourceCurrency }
                             .filter { it in currentRates.eurRates }
                         val otherCodes = currentRates.currencies
                             .filter { it != sourceCurrency }
                             .filter { it !in LEDGER_CURRENCIES }
-                        val shown = if (showAll) {
+                        val searching = currencyQuery.isNotBlank()
+                        val shown = if (searching) {
+                            CurrencySearch.filter(
+                                ledgerCodes + otherCodes,
+                                currencyQuery,
+                                currencyKeys,
+                            )
+                        } else if (showAll) {
                             ledgerCodes + otherCodes
                         } else {
                             ledgerCodes
+                        }
+                        if (searching && shown.isEmpty()) {
+                            Text(
+                                text = strings.fxSearchEmpty,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                         shown.forEachIndexed { index, code ->
                             if (index > 0) {
@@ -246,7 +296,7 @@ internal fun FxScreen(
                                 },
                             )
                         }
-                        if (!showAll && otherCodes.isNotEmpty()) {
+                        if (!searching && !showAll && otherCodes.isNotEmpty()) {
                             TextButton(
                                 onClick = { showAll = true },
                                 modifier = Modifier.padding(top = 4.dp),
@@ -261,25 +311,61 @@ internal fun FxScreen(
     }
 
     if (showCurrencyPicker && rates != null) {
+        val pickerKeys = remember(rates) {
+            CurrencySearch.keys(rates?.currencies.orEmpty())
+        }
+        val pickerShown = CurrencySearch.filter(
+            rates!!.currencies,
+            pickerQuery,
+            pickerKeys,
+        )
         AlertDialog(
             onDismissRequest = { showCurrencyPicker = false },
             title = { Text(strings.fxPickCurrency) },
             text = {
-                LazyColumn {
-                    items(rates!!.currencies) { code ->
-                        TextButton(
-                            onClick = {
-                                sourceCurrency = code
-                                showCurrencyPicker = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                text = "$code · " + currencyDisplayName(
-                                    code,
-                                    displayLocale,
-                                ),
+                Column {
+                    OutlinedTextField(
+                        value = pickerQuery,
+                        onValueChange = { pickerQuery = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        placeholder = { Text(strings.fxSearchHint) },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_search),
+                                contentDescription = null,
                             )
+                        },
+                        singleLine = true,
+                    )
+                    LazyColumn {
+                        if (pickerShown.isEmpty()) {
+                            item {
+                                Text(
+                                    text = strings.fxSearchEmpty,
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme
+                                        .onSurfaceVariant,
+                                )
+                            }
+                        }
+                        items(pickerShown) { code ->
+                            TextButton(
+                                onClick = {
+                                    sourceCurrency = code
+                                    showCurrencyPicker = false
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    text = "$code · " + currencyDisplayName(
+                                        code,
+                                        displayLocale,
+                                    ),
+                                )
+                            }
                         }
                     }
                 }

@@ -48,6 +48,7 @@ import com.example.toolbox.ledger.LedgerEntryType
 import com.example.toolbox.ledger.LedgerTag
 import com.example.toolbox.ledger.TagFilterMode
 import java.time.Instant
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 
@@ -399,30 +400,12 @@ internal fun LedgerTransactionsTab(
         } else {
             dayGroups.forEach { group ->
                 item(key = "day-${group.date}") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = strings.formatLedgerDay(group.date),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = buildString {
-                                if (group.expenseCents > 0L) {
-                                    append("-${LedgerCalculator.formatCurrency(group.expenseCents / 100.0)}")
-                                }
-                                if (group.incomeCents > 0L) {
-                                    if (isNotEmpty()) append("  ")
-                                    append("+${LedgerCalculator.formatCurrency(group.incomeCents / 100.0)}")
-                                }
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    LedgerDayHeader(
+                        strings = strings,
+                        date = group.date,
+                        expenseCents = group.expenseCents,
+                        incomeCents = group.incomeCents,
+                    )
                 }
                 item(key = "card-${group.date}") {
                     Card(
@@ -462,6 +445,137 @@ internal fun LedgerTransactionsTab(
                                             onCopyEntry(entry)
                                         }
                                     },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LedgerDayHeader(
+    strings: ToolboxStrings,
+    date: LocalDate,
+    expenseCents: Long,
+    incomeCents: Long,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = strings.formatLedgerDay(date),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = buildString {
+                if (expenseCents > 0L) {
+                    append("-${LedgerCalculator.formatCurrency(expenseCents / 100.0)}")
+                }
+                if (incomeCents > 0L) {
+                    if (isNotEmpty()) append("  ")
+                    append("+${LedgerCalculator.formatCurrency(incomeCents / 100.0)}")
+                }
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Flat cross-month result list for the ledger search box. [results] must
+ * already be matched and sorted newest-first (see
+ * [LedgerCalculator.searchEntries]).
+ */
+@Composable
+internal fun LedgerSearchResults(
+    strings: ToolboxStrings,
+    results: List<LedgerEntry>,
+    tags: List<LedgerTag>,
+    accounts: List<LedgerAccount>,
+    onOpenEntry: (LedgerEntry) -> Unit,
+    onCopyEntry: (LedgerEntry) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val zone = ZoneId.systemDefault()
+    val groups = remember(results) {
+        results
+            .groupBy {
+                Instant.ofEpochMilli(it.occurredAtMillis).atZone(zone).toLocalDate()
+            }
+            .toList()
+            .sortedByDescending { it.first }
+    }
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 88.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Text(
+                text = strings.searchResultCount(results.size),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (results.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                ) {
+                    Text(
+                        text = strings.searchEmptyResult,
+                        modifier = Modifier.padding(18.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            groups.forEach { (date, dayEntries) ->
+                item(key = "sday-$date") {
+                    LedgerDayHeader(
+                        strings = strings,
+                        date = date,
+                        expenseCents = dayEntries
+                            .filter { it.type == LedgerEntryType.EXPENSE }
+                            .sumOf { it.baseAmountCents },
+                        incomeCents = dayEntries
+                            .filter { it.type == LedgerEntryType.INCOME }
+                            .sumOf { it.baseAmountCents },
+                    )
+                }
+                item(key = "scard-$date") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        ),
+                    ) {
+                        Column {
+                            dayEntries.forEachIndexed { index, entry ->
+                                if (index > 0) {
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                            .copy(alpha = 0.5f),
+                                    )
+                                }
+                                LedgerEntryRow(
+                                    strings = strings,
+                                    entry = entry,
+                                    tags = tags,
+                                    accounts = accounts,
+                                    onOpen = { onOpenEntry(entry) },
+                                    onCopy = { onCopyEntry(entry) },
                                 )
                             }
                         }

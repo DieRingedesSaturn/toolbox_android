@@ -32,6 +32,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,7 +47,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -138,6 +146,8 @@ fun LedgerScreen(
     var nearestForIssue by remember { mutableStateOf<Map<LocalDate, FxRates>>(emptyMap()) }
     var confirmSkipDues by remember { mutableStateOf<List<DueRenewal>?>(null) }
     var selectedEntryUuids by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // Non-null while the ledger search box is open; "" means "just opened".
+    var searchQuery by rememberSaveable { mutableStateOf<String?>(null) }
     var bulkTagPickAdd by remember { mutableStateOf(false) }
     var bulkTagPickRemove by remember { mutableStateOf(false) }
     // True when the tags dialog opened from the ledger screen (entry rows
@@ -229,6 +239,11 @@ fun LedgerScreen(
     val nowMillis = remember(entries) { System.currentTimeMillis() }
     val filteredEntries = remember(entries, filterSelected, filterMode) {
         entries.filter { LedgerTags.matches(it, filterSelected, filterMode) }
+    }
+    val searchResults = remember(entries, tags, accounts, searchQuery) {
+        searchQuery?.let {
+            LedgerCalculator.searchEntries(entries, it, tags, accounts)
+        }
     }
     val childrenByParent = remember(entries) { LedgerCalculator.childrenByParent(entries) }
     val summary = remember(entries, tags, nowMillis) {
@@ -861,122 +876,204 @@ fun LedgerScreen(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(::startImport) }
 
+    val searching = searchQuery != null
+    val searchFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(searching) {
+        if (searching) {
+            searchFocus.requestFocus()
+            keyboard?.show()
+        }
+    }
+
     Scaffold(
         topBar = {
             Column {
-                ToolboxTopBar(
-                    title = strings.ledger,
-                    onBack = onBack,
-                    backLabel = strings.back,
-                    actions = {
-                        Box {
-                            IconButton(onClick = { menuExpanded = true }) {
+                if (searching) {
+                    TopAppBar(
+                        title = {
+                            TextField(
+                                value = searchQuery.orEmpty(),
+                                onValueChange = { searchQuery = it },
+                                placeholder = {
+                                    Text(
+                                        text = strings.searchFieldHint,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(searchFocus),
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent,
+                                ),
+                                trailingIcon = {
+                                    if (!searchQuery.isNullOrEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(
+                                                painter = painterResource(
+                                                    R.drawable.ic_close,
+                                                ),
+                                                contentDescription =
+                                                    strings.cancelAction,
+                                            )
+                                        }
+                                    }
+                                },
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { searchQuery = null }) {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_more_vert),
-                                    contentDescription = strings.moreOptions,
+                                    painter = painterResource(
+                                        R.drawable.ic_arrow_back,
+                                    ),
+                                    contentDescription = strings.back,
                                 )
                             }
-                            DropdownMenu(
-                                expanded = menuExpanded,
-                                onDismissRequest = { menuExpanded = false },
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.background,
+                        ),
+                    )
+                } else {
+                    ToolboxTopBar(
+                        title = strings.ledger,
+                        onBack = onBack,
+                        backLabel = strings.back,
+                        actions = {
+                            IconButton(
+                                onClick = {
+                                    selectedEntryUuids = emptySet()
+                                    searchQuery = ""
+                                },
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text(strings.webDavBackupMenu) },
-                                    onClick = {
-                                        menuExpanded = false
-                                        showWebDavDialog = true
-                                    },
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_search),
+                                    contentDescription = strings.searchAction,
                                 )
-                                webDavConfig?.takeIf { it.isComplete }?.let { config ->
+                            }
+                            Box {
+                                IconButton(onClick = { menuExpanded = true }) {
+                                    Icon(
+                                        painter = painterResource(
+                                            R.drawable.ic_more_vert,
+                                        ),
+                                        contentDescription = strings.moreOptions,
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = menuExpanded,
+                                    onDismissRequest = { menuExpanded = false },
+                                ) {
                                     DropdownMenuItem(
-                                        text = { Text(strings.webDavSyncNow) },
+                                        text = { Text(strings.webDavBackupMenu) },
                                         onClick = {
                                             menuExpanded = false
-                                            runWebDavSync(
-                                                config,
-                                                toastResult = true,
+                                            showWebDavDialog = true
+                                        },
+                                    )
+                                    webDavConfig?.takeIf { it.isComplete }
+                                        ?.let { config ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(strings.webDavSyncNow)
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    runWebDavSync(
+                                                        config,
+                                                        toastResult = true,
+                                                    )
+                                                },
+                                            )
+                                        }
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text(strings.manageTagsMenu) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            tagsDialogEntryNav = true
+                                            showTagsDialog = true
+                                        },
+                                    )
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text(strings.backupExportJson) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            exportJsonLauncher.launch(
+                                                backupFileName(
+                                                    "yyyyMMdd-HHmmss",
+                                                    ".json",
+                                                ),
+                                            )
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(strings.backupExportCsv) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            exportCsvLauncher.launch(
+                                                backupFileName("yyyyMMdd", ".csv"),
+                                            )
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(strings.backupImport) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            importLauncher.launch(
+                                                arrayOf(
+                                                    "application/json",
+                                                    "text/plain",
+                                                    "application/octet-stream",
+                                                ),
                                             )
                                         },
                                     )
                                 }
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text(strings.manageTagsMenu) },
-                                    onClick = {
-                                        menuExpanded = false
-                                        tagsDialogEntryNav = true
-                                        showTagsDialog = true
-                                    },
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text(strings.backupExportJson) },
-                                    onClick = {
-                                        menuExpanded = false
-                                        exportJsonLauncher.launch(
-                                            backupFileName(
-                                                "yyyyMMdd-HHmmss",
-                                                ".json",
-                                            ),
-                                        )
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(strings.backupExportCsv) },
-                                    onClick = {
-                                        menuExpanded = false
-                                        exportCsvLauncher.launch(
-                                            backupFileName("yyyyMMdd", ".csv"),
-                                        )
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(strings.backupImport) },
-                                    onClick = {
-                                        menuExpanded = false
-                                        importLauncher.launch(
-                                            arrayOf(
-                                                "application/json",
-                                                "text/plain",
-                                                "application/octet-stream",
-                                            ),
-                                        )
-                                    },
-                                )
                             }
+                        },
+                    )
+                }
+                if (!searching) {
+                    PrimaryTabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = MaterialTheme.colorScheme.background,
+                    ) {
+                        listOf(
+                            strings.ledgerTabOverview,
+                            strings.ledgerTabTransactions,
+                            strings.ledgerTabCosts,
+                            strings.accountsTabLabel,
+                        ).forEachIndexed { index, tabTitle ->
+                            Tab(
+                                selected = selectedTab == index,
+                                onClick = {
+                                    selectedTab = index
+                                    selectedEntryUuids = emptySet()
+                                },
+                                text = {
+                                    Text(
+                                        text = tabTitle,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
+                            )
                         }
-                    },
-                )
-                PrimaryTabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.background,
-                ) {
-                    listOf(
-                        strings.ledgerTabOverview,
-                        strings.ledgerTabTransactions,
-                        strings.ledgerTabCosts,
-                        strings.accountsTabLabel,
-                    ).forEachIndexed { index, tabTitle ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = {
-                                selectedTab = index
-                                selectedEntryUuids = emptySet()
-                            },
-                            text = {
-                                Text(
-                                    text = tabTitle,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                        )
                     }
                 }
             }
         },
         floatingActionButton = {
-            if (selectedEntryUuids.isEmpty()) {
+            if (!searching && selectedEntryUuids.isEmpty()) {
                 ExtendedFloatingActionButton(
                     onClick = { openEditor(null) },
                     icon = {
@@ -995,7 +1092,16 @@ fun LedgerScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when (selectedTab) {
+            if (searching) {
+                LedgerSearchResults(
+                    strings = strings,
+                    results = searchResults.orEmpty(),
+                    tags = tags,
+                    accounts = accounts.filter { it.deletedAtMillis == null },
+                    onOpenEntry = ::openEditor,
+                    onCopyEntry = ::copyEntry,
+                )
+            } else when (selectedTab) {
                 0 -> LedgerOverviewTab(
                     strings = strings,
                     entries = entries,
@@ -1332,6 +1438,11 @@ fun LedgerScreen(
     // Back clears an active multi-select before the screen reacts.
     if (selectedEntryUuids.isNotEmpty()) {
         BackHandler { selectedEntryUuids = emptySet() }
+    }
+
+    // While searching, Back closes the search box instead of leaving.
+    if (searching) {
+        BackHandler { searchQuery = null }
     }
 
     // Bulk-tag pickers for the transactions selection mode.

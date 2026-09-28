@@ -668,6 +668,24 @@ class ToolboxStrings(val language: AppLanguage) {
         }
     val emptyMonthEntries: String
         get() = if (chinese) "本月暂无收支记录" else "No entries this month"
+    val searchAction: String
+        get() = if (chinese) "搜索" else "Search"
+    val searchFieldHint: String
+        get() = if (chinese) {
+            "搜索标题、备注、标签、账户或金额"
+        } else {
+            "Search title, note, tag, account, or amount"
+        }
+    val searchEmptyResult: String
+        get() = if (chinese) "没有匹配的记录" else "No matching entries"
+    val fxSearchHint: String
+        get() = if (chinese) "搜索货币代码或名称" else "Search code or currency name"
+    val fxSearchEmpty: String
+        get() = if (chinese) "没有匹配的货币" else "No matching currency"
+    fun searchResultCount(count: Int): String =
+        if (chinese) "找到 $count 条记录" else {
+            "$count result${if (count == 1) "" else "s"}"
+        }
     val costSectionAssets: String
         get() = if (chinese) "长期资产" else "Assets"
     val costSectionSubscriptions: String

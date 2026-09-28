@@ -401,6 +401,44 @@ object LedgerCalculator {
             .sortedByDescending { it.date }
     }
 
+    /**
+     * Case-insensitive search across all live records for the ledger
+     * search box. Matches title, note, live tag names, account names
+     * (both legs of a transfer), and the amount in original or CNY
+     * terms. Reconcile adjustments are excluded — like in the
+     * Transactions list they are account corrections, not records.
+     */
+    fun searchEntries(
+        entries: List<LedgerEntry>,
+        query: String,
+        tags: List<LedgerTag>,
+        accounts: List<LedgerAccount>,
+    ): List<LedgerEntry> {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) return emptyList()
+        val liveTags = tags.filter { it.deletedAtMillis == null }.associateBy { it.uuid }
+        val accountNames = accounts
+            .filter { it.deletedAtMillis == null }
+            .associate { it.uuid to it.name.lowercase() }
+        fun amountMatches(cents: Long): Boolean =
+            "%.2f".format(Locale.US, cents / 100.0).contains(q)
+        return entries
+            .filter { it.deletedAtMillis == null }
+            .filter { it.type != LedgerEntryType.ADJUSTMENT }
+            .filter { entry ->
+                entry.title.lowercase().contains(q) ||
+                    entry.note.lowercase().contains(q) ||
+                    entry.tagUuids.any { uuid ->
+                        liveTags[uuid]?.name?.lowercase()?.contains(q) == true
+                    } ||
+                    accountNames[entry.accountUuid]?.contains(q) == true ||
+                    accountNames[entry.toAccountUuid]?.contains(q) == true ||
+                    amountMatches(entry.amountCents) ||
+                    amountMatches(entry.baseAmountCents)
+            }
+            .sortedByDescending { it.occurredAtMillis }
+    }
+
     fun formatCurrency(amountYuan: Double, symbol: String = "¥"): String =
         "$symbol%.2f".format(Locale.US, amountYuan)
 

@@ -784,4 +784,66 @@ class LedgerCalculatorTest {
             LedgerCalculator.groupByDay(adjustOnly, month, ZoneId.of("UTC")).isEmpty(),
         )
     }
+
+    @Test
+    fun testSearchEntries() {
+        val tag = LedgerTag(
+            uuid = "tag1",
+            name = "数码",
+            colorArgb = 0xFF112233.toInt(),
+            emoji = "📱",
+            sortOrder = 0,
+            createdAtMillis = 0,
+            updatedAtMillis = 0,
+        )
+        val account = LedgerAccount(
+            uuid = "acc1",
+            name = "Alipay",
+            currency = "CNY",
+            openingBalanceCents = 0L,
+            openingAtMillis = 0L,
+            colorArgb = 0xFF000000.toInt(),
+        )
+        val spend = LedgerEntry(
+            uuid = "a",
+            title = "iPad",
+            amountCents = 249_900L,
+            note = "bought online",
+            tagUuids = listOf("tag1"),
+            accountUuid = "acc1",
+            occurredAtMillis = 2_000L,
+        )
+        val income = LedgerEntry(
+            uuid = "b",
+            title = "Salary",
+            amountCents = 500_000L,
+            type = LedgerEntryType.INCOME,
+            accountUuid = "acc1",
+            occurredAtMillis = 1_000L,
+        )
+        val adjustment = LedgerEntry(
+            uuid = "c",
+            title = "Balance adjust",
+            amountCents = 249_900L,
+            type = LedgerEntryType.ADJUSTMENT,
+            accountUuid = "acc1",
+            occurredAtMillis = 3_000L,
+        )
+        val all = listOf(spend, income, adjustment)
+
+        fun search(q: String) = LedgerCalculator.searchEntries(
+            all, q, listOf(tag), listOf(account),
+        ).map { it.uuid }
+
+        assertEquals(listOf("a"), search("ipad"))          // title, case-insensitive
+        assertEquals(listOf("a"), search("online"))        // note
+        assertEquals(listOf("a"), search("数码"))           // tag name
+        assertEquals(listOf("a", "b"), search("alipay"))   // account name, newest first
+        assertEquals(listOf("a"), search("2499"))          // amount
+        assertEquals(listOf("b"), search("5000"))
+        assertEquals(listOf("b"), search("5000.00"))
+        assertEquals(emptyList<String>(), search("  "))    // blank query
+        // Adjustments are excluded from search.
+        assertEquals(emptyList<String>(), search("Balance adjust"))
+    }
 }
