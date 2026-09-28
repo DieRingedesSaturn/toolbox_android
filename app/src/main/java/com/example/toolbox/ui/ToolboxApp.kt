@@ -51,6 +51,7 @@ fun ToolboxApp(
     var languageName by rememberSaveable { mutableStateOf(preferences.language().name) }
     var themeName by rememberSaveable { mutableStateOf(preferences.themeMode().name) }
     var accentName by rememberSaveable { mutableStateOf(preferences.accentColor().name) }
+    var customAccentRgb by rememberSaveable { mutableStateOf(preferences.customAccentRgb()) }
     var moduleName by rememberSaveable { mutableStateOf(ToolboxModule.HOME.name) }
 
     val language = runCatching { AppLanguage.valueOf(languageName) }
@@ -123,7 +124,16 @@ fun ToolboxApp(
         preferences.saveAccentColor(value)
     }
 
-    ToolboxTheme(themeMode = themeMode, accentColor = accentColor) {
+    fun updateCustomAccent(rgb: Int) {
+        customAccentRgb = rgb
+        preferences.saveCustomAccentRgb(rgb)
+    }
+
+    ToolboxTheme(
+        themeMode = themeMode,
+        accentColor = accentColor,
+        customAccentRgb = customAccentRgb,
+    ) {
         if (module != ToolboxModule.HOME) {
             BackHandler { moduleName = ToolboxModule.HOME.name }
         }
@@ -161,6 +171,7 @@ fun ToolboxApp(
             ToolboxModule.MONITOR -> MonitorScreen(
                 strings = strings,
                 accentColor = accentColor,
+                customAccentRgb = customAccentRgb,
                 onBack = { moduleName = ToolboxModule.HOME.name },
             )
 
@@ -192,9 +203,11 @@ fun ToolboxApp(
                 language = language,
                 themeMode = themeMode,
                 accentColor = accentColor,
+                customAccentRgb = customAccentRgb,
                 onLanguageChange = ::updateLanguage,
                 onThemeModeChange = ::updateTheme,
                 onAccentColorChange = ::updateAccent,
+                onCustomAccentChange = ::updateCustomAccent,
                 onBack = { moduleName = ToolboxModule.HOME.name },
             )
 

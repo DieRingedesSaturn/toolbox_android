@@ -1,6 +1,8 @@
 package com.example.toolbox.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,13 +21,20 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(
@@ -33,9 +42,11 @@ fun SettingsScreen(
     language: AppLanguage,
     themeMode: ThemeMode,
     accentColor: AccentColor,
+    customAccentRgb: Int,
     onLanguageChange: (AppLanguage) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
     onAccentColorChange: (AccentColor) -> Unit,
+    onCustomAccentChange: (Int) -> Unit,
     onBack: () -> Unit,
 ) {
     Scaffold(
@@ -89,10 +100,7 @@ fun SettingsScreen(
                             when (it) {
                                 AccentColor.DYNAMIC -> strings.dynamic
                                 AccentColor.EVERFOREST -> strings.everforest
-                                AccentColor.BLUE -> strings.blue
-                                AccentColor.GREEN -> strings.green
-                                AccentColor.ORANGE -> strings.orange
-                                AccentColor.PURPLE -> strings.purple
+                                AccentColor.CUSTOM -> strings.custom
                             }
                         },
                         leading = { color ->
@@ -100,11 +108,30 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .size(18.dp)
                                     .clip(CircleShape)
-                                    .background(color.swatch()),
+                                    .background(color.swatch(customAccentRgb))
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outline
+                                            .copy(alpha = 0.4f),
+                                        shape = CircleShape,
+                                    ),
                             )
                         },
                         onSelected = onAccentColorChange,
                     )
+                    when (accentColor) {
+                        AccentColor.DYNAMIC -> Text(
+                            text = strings.accentDynamicHint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        AccentColor.CUSTOM -> CustomAccentPicker(
+                            strings = strings,
+                            customAccentRgb = customAccentRgb,
+                            onCustomAccentChange = onCustomAccentChange,
+                        )
+                        AccentColor.EVERFOREST -> Unit
+                    }
                 }
             }
         }
@@ -160,5 +187,62 @@ private fun <T> ChoiceStrip(
             )
         }
         Spacer(modifier = Modifier.size(1.dp))
+    }
+}
+
+@Composable
+private fun CustomAccentPicker(
+    strings: ToolboxStrings,
+    customAccentRgb: Int,
+    onCustomAccentChange: (Int) -> Unit,
+) {
+    var hexInput by remember(customAccentRgb) {
+        mutableStateOf("%06X".format(Locale.US, customAccentRgb and 0xFFFFFF))
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ACCENT_PRESET_COLORS.forEach { colorInt ->
+                val isSelected =
+                    (customAccentRgb and 0x00FFFFFF) == (colorInt and 0x00FFFFFF)
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(colorInt or (0xFF shl 24)))
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                            },
+                            shape = CircleShape,
+                        )
+                        .clickable { onCustomAccentChange(colorInt) },
+                )
+            }
+        }
+        OutlinedTextField(
+            value = hexInput,
+            onValueChange = { input ->
+                hexInput = input
+                parseHexColor(input)?.let(onCustomAccentChange)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(strings.accentHexLabel) },
+            prefix = { Text("#") },
+            singleLine = true,
+            isError = parseHexColor(hexInput) == null,
+            supportingText = {
+                if (parseHexColor(hexInput) == null) {
+                    Text(strings.accentHexError)
+                }
+            },
+        )
     }
 }

@@ -11,12 +11,21 @@ private const val PREFERENCES_NAME = "toolbox_preferences"
 private const val LANGUAGE_KEY = "language"
 private const val THEME_KEY = "theme"
 private const val ACCENT_KEY = "accent"
+private const val CUSTOM_ACCENT_RGB_KEY = "custom_accent_rgb"
 private const val MONITOR_CPU_DISPLAY_MODE_KEY = "monitor_cpu_display_mode"
 private const val MONITOR_OVERLAY_FIXED_KEY = "monitor_overlay_fixed"
 private const val MONITOR_OVERLAY_THEME_KEY = "monitor_overlay_theme"
 private const val MONITOR_OVERLAY_CUSTOM_COLOR_KEY = "monitor_overlay_custom_color"
 private const val MONITOR_OVERLAY_OPACITY_KEY = "monitor_overlay_opacity"
 private const val LEDGER_LAST_ACCOUNT_KEY = "ledger_last_account"
+
+/** Retired accent presets seed the custom accent instead of reverting. */
+private val LEGACY_ACCENT_SEEDS = mapOf(
+    "BLUE" to 0x415F91,
+    "GREEN" to 0x386A3F,
+    "ORANGE" to 0x8B5000,
+    "PURPLE" to 0x735184,
+)
 
 class AppPreferences(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -29,9 +38,24 @@ class AppPreferences(context: Context) {
         ThemeMode.valueOf(preferences.getString(THEME_KEY, null) ?: ThemeMode.SYSTEM.name)
     }.getOrDefault(ThemeMode.SYSTEM)
 
-    fun accentColor(): AccentColor = runCatching {
-        AccentColor.valueOf(preferences.getString(ACCENT_KEY, null) ?: AccentColor.DYNAMIC.name)
-    }.getOrDefault(AccentColor.DYNAMIC)
+    fun accentColor(): AccentColor {
+        val saved = preferences.getString(ACCENT_KEY, null)
+            ?: return AccentColor.DYNAMIC
+        runCatching { AccentColor.valueOf(saved) }.getOrNull()?.let { return it }
+        // Retired presets become a custom accent seeded with their color.
+        val legacySeed = LEGACY_ACCENT_SEEDS[saved] ?: return AccentColor.DYNAMIC
+        if (!preferences.contains(CUSTOM_ACCENT_RGB_KEY)) {
+            saveCustomAccentRgb(legacySeed)
+        }
+        return AccentColor.CUSTOM
+    }
+
+    fun customAccentRgb(): Int =
+        preferences.getInt(CUSTOM_ACCENT_RGB_KEY, DEFAULT_CUSTOM_ACCENT_RGB)
+
+    fun saveCustomAccentRgb(value: Int) {
+        preferences.edit { putInt(CUSTOM_ACCENT_RGB_KEY, value and 0x00FFFFFF) }
+    }
 
     fun saveLanguage(value: AppLanguage) {
         preferences.edit { putString(LANGUAGE_KEY, value.name) }

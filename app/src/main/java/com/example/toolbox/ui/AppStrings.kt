@@ -298,14 +298,18 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "动态" else "Dynamic"
     val everforest: String
         get() = "Everforest"
-    val blue: String
-        get() = if (chinese) "蓝色" else "Blue"
-    val green: String
-        get() = if (chinese) "绿色" else "Green"
-    val orange: String
-        get() = if (chinese) "橙色" else "Orange"
-    val purple: String
-        get() = if (chinese) "紫色" else "Purple"
+    val custom: String
+        get() = if (chinese) "自定义" else "Custom"
+    val accentDynamicHint: String
+        get() = if (chinese) {
+            "跟随系统壁纸取色（需要 Android 12+）"
+        } else {
+            "Colors follow your wallpaper (requires Android 12+)"
+        }
+    val accentHexLabel: String
+        get() = if (chinese) "色值" else "Hex color"
+    val accentHexError: String
+        get() = if (chinese) "请输入 6 位十六进制色值" else "Enter 6 hex digits"
 
     val aboutTitle: String
         get() = if (chinese) "轻量 Android Toolbox" else "A lightweight Android Toolbox"

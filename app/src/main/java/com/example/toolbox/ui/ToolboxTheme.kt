@@ -26,16 +26,14 @@ enum class ThemeMode {
 enum class AccentColor {
     DYNAMIC,
     EVERFOREST,
-    BLUE,
-    GREEN,
-    ORANGE,
-    PURPLE,
+    CUSTOM,
 }
 
 @Composable
 fun ToolboxTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     accentColor: AccentColor = AccentColor.DYNAMIC,
+    customAccentRgb: Int = DEFAULT_CUSTOM_ACCENT_RGB,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -63,16 +61,49 @@ fun ToolboxTheme(
         accentColor == AccentColor.EVERFOREST && darkTheme -> everforestDarkColorScheme()
         accentColor == AccentColor.EVERFOREST -> everforestLightColorScheme()
 
+        accentColor == AccentColor.CUSTOM -> {
+            val palette = accentPalette(customAccentRgb, darkTheme)
+            if (darkTheme) {
+                darkColorScheme(
+                    primary = Color(palette.primary),
+                    onPrimary = Color(palette.onPrimary),
+                    primaryContainer = Color(palette.primaryContainer),
+                    onPrimaryContainer = Color(palette.onPrimaryContainer),
+                    secondary = Color(palette.secondary),
+                    onSecondary = Color(palette.onSecondary),
+                    secondaryContainer = Color(palette.secondaryContainer),
+                    onSecondaryContainer = Color(palette.onSecondaryContainer),
+                    tertiary = Color(palette.tertiary),
+                    onTertiary = Color(palette.onTertiary),
+                    tertiaryContainer = Color(palette.tertiaryContainer),
+                    onTertiaryContainer = Color(palette.onTertiaryContainer),
+                )
+            } else {
+                lightColorScheme(
+                    primary = Color(palette.primary),
+                    onPrimary = Color(palette.onPrimary),
+                    primaryContainer = Color(palette.primaryContainer),
+                    onPrimaryContainer = Color(palette.onPrimaryContainer),
+                    secondary = Color(palette.secondary),
+                    onSecondary = Color(palette.onSecondary),
+                    secondaryContainer = Color(palette.secondaryContainer),
+                    onSecondaryContainer = Color(palette.onSecondaryContainer),
+                    tertiary = Color(palette.tertiary),
+                    onTertiary = Color(palette.onTertiary),
+                    tertiaryContainer = Color(palette.tertiaryContainer),
+                    onTertiaryContainer = Color(palette.onTertiaryContainer),
+                )
+            }
+        }
+
         accentColor == AccentColor.DYNAMIC && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && darkTheme ->
             dynamicDarkColorScheme(context)
 
         accentColor == AccentColor.DYNAMIC && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             dynamicLightColorScheme(context)
 
-        accentColor == AccentColor.DYNAMIC && darkTheme -> darkColorScheme()
-        accentColor == AccentColor.DYNAMIC -> lightColorScheme()
-        darkTheme -> darkColorScheme(primary = accentColor.primary(true))
-        else -> lightColorScheme(primary = accentColor.primary(false))
+        darkTheme -> darkColorScheme()
+        else -> lightColorScheme()
     }
 
     MaterialTheme(
@@ -82,22 +113,10 @@ fun ToolboxTheme(
     )
 }
 
-fun AccentColor.swatch(): Color = when (this) {
+fun AccentColor.swatch(customRgb: Int = DEFAULT_CUSTOM_ACCENT_RGB): Color = when (this) {
     AccentColor.DYNAMIC -> Color(0xFF6750A4)
     AccentColor.EVERFOREST -> Color(0xFFA7C080)
-    AccentColor.BLUE -> Color(0xFF415F91)
-    AccentColor.GREEN -> Color(0xFF386A3F)
-    AccentColor.ORANGE -> Color(0xFF8B5000)
-    AccentColor.PURPLE -> Color(0xFF735184)
-}
-
-private fun AccentColor.primary(dark: Boolean): Color = when (this) {
-    AccentColor.DYNAMIC -> if (dark) Color(0xFFD0BCFF) else Color(0xFF6750A4)
-    AccentColor.EVERFOREST -> if (dark) Color(0xFFA7C080) else Color(0xFF4F6452)
-    AccentColor.BLUE -> if (dark) Color(0xFFAAC7FF) else Color(0xFF415F91)
-    AccentColor.GREEN -> if (dark) Color(0xFFA0D5A2) else Color(0xFF386A3F)
-    AccentColor.ORANGE -> if (dark) Color(0xFFFFB95A) else Color(0xFF8B5000)
-    AccentColor.PURPLE -> if (dark) Color(0xFFE5B9F2) else Color(0xFF735184)
+    AccentColor.CUSTOM -> Color(customRgb or (0xFF shl 24))
 }
 
 private fun everforestDarkColorScheme() = darkColorScheme(

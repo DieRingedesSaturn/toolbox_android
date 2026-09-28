@@ -89,6 +89,7 @@ import kotlinx.coroutines.withContext
 fun MonitorScreen(
     strings: ToolboxStrings,
     accentColor: AccentColor,
+    customAccentRgb: Int,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -162,7 +163,7 @@ fun MonitorScreen(
             cpuDisplayMode = displayMode,
             fixedPosition = fixedPosition,
             chinese = strings.language == AppLanguage.CHINESE,
-            accentColor = accentColor.swatch().toArgb(),
+            accentColor = accentColor.swatch(customAccentRgb).toArgb(),
             overlayTheme = theme,
             overlayCustomColor = customColor,
             overlayOpacity = opacity,
@@ -317,6 +318,7 @@ fun MonitorScreen(
                 OverlayAppearanceCard(
                     strings = strings,
                     accentColor = accentColor,
+                    customAccentRgb = customAccentRgb,
                     selectedTheme = overlayTheme,
                     customColor = overlayCustomColor,
                     opacity = overlayOpacity,
@@ -875,6 +877,7 @@ private fun CpuCoreGrid(
 private fun OverlayAppearanceCard(
     strings: ToolboxStrings,
     accentColor: AccentColor,
+    customAccentRgb: Int,
     selectedTheme: MonitorOverlayTheme,
     customColor: Int,
     opacity: Float,
@@ -1061,7 +1064,7 @@ private fun OverlayAppearanceCard(
                             end = androidx.compose.ui.geometry.Offset(w, h / 2f),
                             strokeWidth = 1.dp.toPx(),
                         )
-                        val strokeColor = accentColor.swatch()
+                        val strokeColor = accentColor.swatch(customAccentRgb)
                         val path = Path().apply {
                             moveTo(0f, h * 0.7f)
                             lineTo(w * 0.2f, h * 0.5f)
