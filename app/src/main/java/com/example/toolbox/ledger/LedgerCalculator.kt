@@ -136,6 +136,7 @@ object LedgerCalculator {
             BillingCycle.WEEKLY -> BillingCycle.WEEKLY.averageDays
             BillingCycle.MONTHLY -> BillingCycle.MONTHLY.averageDays
             BillingCycle.QUARTERLY -> BillingCycle.QUARTERLY.averageDays
+            BillingCycle.SEMI_ANNUAL -> BillingCycle.SEMI_ANNUAL.averageDays
             BillingCycle.YEARLY -> BillingCycle.YEARLY.averageDays
             BillingCycle.CUSTOM_DAYS -> {
                 val count = entry.customCycleDays.coerceAtLeast(1).toDouble()
@@ -152,11 +153,13 @@ object LedgerCalculator {
         val monthlyCostYuan = when (entry.billingCycle) {
             BillingCycle.MONTHLY -> cyclePriceYuan
             BillingCycle.QUARTERLY -> cyclePriceYuan / 3.0
+            BillingCycle.SEMI_ANNUAL -> cyclePriceYuan / 6.0
             BillingCycle.YEARLY -> cyclePriceYuan / 12.0
             else -> dailyCostYuan * DAYS_PER_MONTH
         }
         val yearlyCostYuan = when (entry.billingCycle) {
             BillingCycle.YEARLY -> cyclePriceYuan
+            BillingCycle.SEMI_ANNUAL -> cyclePriceYuan * 2.0
             BillingCycle.QUARTERLY -> cyclePriceYuan * 4.0
             BillingCycle.MONTHLY -> cyclePriceYuan * 12.0
             else -> dailyCostYuan * DAYS_PER_YEAR

@@ -29,6 +29,7 @@ enum class BillingCycle(val averageDays: Double) {
     WEEKLY(7.0),
     MONTHLY(30.4375),
     QUARTERLY(91.3125),
+    SEMI_ANNUAL(182.625),
     YEARLY(365.25),
     /** count × [LedgerEntry.customCycleUnit]; name kept for compat. */
     CUSTOM_DAYS(30.0),

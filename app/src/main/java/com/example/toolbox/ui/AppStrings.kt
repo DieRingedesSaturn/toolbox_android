@@ -738,12 +738,14 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "按月" else "Monthly"
     val cycleQuarterly: String
         get() = if (chinese) "按季（3个月）" else "Quarterly"
+    val cycleSemiAnnual: String
+        get() = if (chinese) "每半年（6个月）" else "Semi-annual (6 mo)"
     val cycleYearly: String
         get() = if (chinese) "按年（12个月）" else "Yearly"
-    val cycleCustomDays: String
-        get() = if (chinese) "自定义天数" else "Custom days"
+    val cycleCustomChip: String
+        get() = if (chinese) "自定义" else "Custom"
     val customDaysInputLabel: String
-        get() = if (chinese) "自定义周期天数" else "Custom cycle days"
+        get() = if (chinese) "周期数" else "Interval count"
     val entryNoteLabel: String
         get() = if (chinese) "备注（选填）" else "Note (optional)"
     val expenseTypeLabel: String
@@ -1103,6 +1105,7 @@ class ToolboxStrings(val language: AppLanguage) {
         BillingCycle.WEEKLY -> cycleWeekly
         BillingCycle.MONTHLY -> cycleMonthly
         BillingCycle.QUARTERLY -> cycleQuarterly
+        BillingCycle.SEMI_ANNUAL -> cycleSemiAnnual
         BillingCycle.YEARLY -> cycleYearly
         BillingCycle.CUSTOM_DAYS -> if (chinese) {
             "每 $customDays${cycleUnitName(customUnit)}"

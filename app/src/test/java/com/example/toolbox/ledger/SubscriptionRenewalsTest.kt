@@ -82,6 +82,10 @@ class SubscriptionRenewalsTest {
             SubscriptionRenewals.scheduleDate(start, BillingCycle.QUARTERLY, 30, CycleUnit.DAYS, 2),
         )
         assertEquals(
+            LocalDate.of(2027, 1, 5),
+            SubscriptionRenewals.scheduleDate(start, BillingCycle.SEMI_ANNUAL, 30, CycleUnit.DAYS, 2),
+        )
+        assertEquals(
             LocalDate.of(2028, 1, 5),
             SubscriptionRenewals.scheduleDate(start, BillingCycle.YEARLY, 30, CycleUnit.DAYS, 2),
         )

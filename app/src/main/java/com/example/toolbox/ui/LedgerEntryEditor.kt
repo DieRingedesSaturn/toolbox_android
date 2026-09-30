@@ -1288,8 +1288,9 @@ private fun LedgerCycleChips(
     ) {
         listOf(
             BillingCycle.MONTHLY,
-            BillingCycle.YEARLY,
             BillingCycle.QUARTERLY,
+            BillingCycle.SEMI_ANNUAL,
+            BillingCycle.YEARLY,
             BillingCycle.WEEKLY,
             BillingCycle.CUSTOM_DAYS,
         ).forEach { cycle ->
@@ -1298,12 +1299,32 @@ private fun LedgerCycleChips(
                 onClick = { onCycle(cycle) },
                 label = {
                     Text(
-                        strings.cycleName(
-                            cycle,
-                            customCycleDaysText.toIntOrNull() ?: 30,
-                            runCatching { CycleUnit.valueOf(customCycleUnit) }
-                                .getOrDefault(CycleUnit.DAYS),
-                        ),
+                        if (cycle == BillingCycle.CUSTOM_DAYS) {
+                            // Reads "自定义" up front — the configured
+                            // interval shows below once selected.
+                            buildString {
+                                append(strings.cycleCustomChip)
+                                if (billingCycle == BillingCycle.CUSTOM_DAYS) {
+                                    append(" · ")
+                                    append(
+                                        strings.cycleName(
+                                            cycle,
+                                            customCycleDaysText.toIntOrNull() ?: 30,
+                                            runCatching {
+                                                CycleUnit.valueOf(customCycleUnit)
+                                            }.getOrDefault(CycleUnit.DAYS),
+                                        ),
+                                    )
+                                }
+                            }
+                        } else {
+                            strings.cycleName(
+                                cycle,
+                                customCycleDaysText.toIntOrNull() ?: 30,
+                                runCatching { CycleUnit.valueOf(customCycleUnit) }
+                                    .getOrDefault(CycleUnit.DAYS),
+                            )
+                        },
                     )
                 },
             )

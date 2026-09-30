@@ -41,6 +41,7 @@ object SubscriptionRenewals {
         BillingCycle.WEEKLY -> start.plusWeeks(index.toLong())
         BillingCycle.MONTHLY -> start.plusMonths(index.toLong())
         BillingCycle.QUARTERLY -> start.plusMonths(3L * index)
+        BillingCycle.SEMI_ANNUAL -> start.plusMonths(6L * index)
         BillingCycle.YEARLY -> start.plusYears(index.toLong())
         BillingCycle.CUSTOM_DAYS -> {
             val count = customDays.coerceAtLeast(1).toLong() * index
