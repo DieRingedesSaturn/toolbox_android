@@ -314,6 +314,7 @@ fun LocationScreen(
                     context = context,
                     strings = strings,
                     info = locationInfo?.positioningSystems ?: positioningSystems,
+                    gnssStatus = gnssStatus,
                 )
             }
             item {
@@ -445,19 +446,24 @@ private fun PositioningSystemsCard(
     context: Context,
     strings: ToolboxStrings,
     info: PositioningSystemInfo?,
+    gnssStatus: GnssSkyViewStatus?,
 ) {
     InfoCard(strings.positioningSystemsTitle) {
-        val hardware = if (info?.isGnssHardwareAvailable == true) {
-            strings.gnssHardwareAvailable
-        } else {
-            strings.gnssHardwareUnavailable
+        val hardware = when (info?.isGnssHardwareAvailable) {
+            true -> strings.gnssHardwareAvailable
+            false -> strings.gnssHardwareUnavailable
+            null -> strings.notAvailable
         }
         CopyableLocationRow(context, strings, strings.gnssHardwareStatus, hardware)
         val available = info?.availableProviders?.takeUnless { it.isEmpty() }?.joinToString(", ") ?: strings.notAvailable
         CopyableLocationRow(context, strings, strings.availableProviders, available)
         val enabled = info?.enabledProviders?.takeUnless { it.isEmpty() }?.joinToString(", ") ?: strings.notAvailable
         CopyableLocationRow(context, strings, strings.enabledProviders, enabled)
-        val constellations = info?.supportedConstellations?.takeUnless { it.isEmpty() }?.joinToString("\n") ?: strings.notAvailable
+        val constellations = gnssStatus?.constellationCounts?.keys
+            ?.filter { it != GnssConstellation.UNKNOWN }
+            ?.takeUnless { it.isEmpty() }
+            ?.joinToString("\n") { it.displayName(strings.language == AppLanguage.CHINESE) }
+            ?: strings.notAvailable
         CopyableLocationRow(context, strings, strings.gnssConstellations, constellations)
     }
 }

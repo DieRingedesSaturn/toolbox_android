@@ -12,7 +12,6 @@ enum class LocationReadStatus {
 data class PositioningSystemInfo(
     val availableProviders: List<String>,
     val enabledProviders: List<String>,
-    val supportedConstellations: List<String>,
     val isGnssHardwareAvailable: Boolean,
 )
 

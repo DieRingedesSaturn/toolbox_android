@@ -160,7 +160,7 @@ Prefer splitting files before adding layers or Gradle modules. Reconsider the st
 - Multiple screens share the same non-UI business rules.
 - Build time, independent delivery, or team ownership genuinely requires modules.
 
-Until then, do not add Repository/UseCase interfaces, a DI container, a database, or pass-through wrappers.
+Until then, do not add Repository/UseCase interfaces, a DI container, a third-party ORM, or pass-through wrappers.
 
 ## File naming
 

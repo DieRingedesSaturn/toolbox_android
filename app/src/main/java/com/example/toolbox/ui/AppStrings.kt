@@ -403,7 +403,7 @@ class ToolboxStrings(val language: AppLanguage) {
     val enabledProviders: String
         get() = if (chinese) "已启用提供方" else "Enabled providers"
     val gnssConstellations: String
-        get() = if (chinese) "支持的卫星导航系统" else "Supported GNSS constellations"
+        get() = if (chinese) "已观测的卫星导航系统" else "Observed GNSS constellations"
     val gnssHardwareStatus: String
         get() = if (chinese) "GNSS 芯片硬件" else "GNSS hardware"
     val gnssHardwareAvailable: String
@@ -1000,6 +1000,12 @@ class ToolboxStrings(val language: AppLanguage) {
             } else {
                 "Remote file is being changed by another device; try again"
             }
+        WebDavFailure.VERSION_UNAVAILABLE ->
+            if (chinese) {
+                "服务器没有提供可用于安全同步的强 ETag，已停止写入"
+            } else {
+                "Server did not provide a strong ETag; sync stopped before writing"
+            }
         WebDavFailure.HTTP_ERROR ->
             if (chinese) {
                 "服务器返回错误${httpCode?.let { " $it" } ?: ""}"
@@ -1141,6 +1147,14 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "WLAN 流量" else "Wi-Fi Data"
     val totalTraffic: String
         get() = if (chinese) "总消耗流量" else "Total Traffic"
+    val sharedUidTraffic: String
+        get() = if (chinese) "共享 UID，无法归属" else "Shared UID: cannot attribute"
+    val sharedUidTrafficNote: String
+        get() = if (chinese) {
+            "总流量包含无法归属到单个应用的 UID 流量；这些流量不计入应用和分类明细。"
+        } else {
+            "Totals include UID traffic that cannot be assigned to one app; app and category details exclude it."
+        }
     val categoryBreakdown: String
         get() = if (chinese) "分类时间分布" else "Category Breakdown"
     val noUsageData: String

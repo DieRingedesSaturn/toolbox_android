@@ -10,6 +10,7 @@ enum class WebDavFailure {
     UNAUTHORIZED,
     FOLDER_MISSING,
     PRECONDITION_FAILED,
+    VERSION_UNAVAILABLE,
     HTTP_ERROR,
     NETWORK,
     TLS,
@@ -58,10 +59,16 @@ class WebDavClient(
         }
     }
 
-    fun put(name: String, body: String, ifMatch: String? = null) {
+    fun put(
+        name: String,
+        body: String,
+        ifMatch: String? = null,
+        ifNoneMatch: String? = null,
+    ) {
         execute(name, "PUT") { conn ->
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             ifMatch?.let { conn.setRequestProperty("If-Match", it) }
+            ifNoneMatch?.let { conn.setRequestProperty("If-None-Match", it) }
             conn.doOutput = true
             conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             throwForStatus(conn.responseCode, "PUT")
@@ -117,8 +124,11 @@ class WebDavClient(
             else -> WebDavFailure.HTTP_ERROR
         }
 
-        /** Weak etags (W/...) fail If-Match strong comparison, so drop them. */
+        /** Only a quoted strong ETag is safe for conditional writes. */
         fun ifMatchValue(etag: String?): String? =
-            etag?.trim()?.takeIf { it.isNotEmpty() && !it.startsWith("W/", ignoreCase = true) }
+            etag?.trim()?.takeIf {
+                it.length >= 2 && it.first() == '"' && it.last() == '"' &&
+                    '"' !in it.substring(1, it.lastIndex)
+            }
     }
 }

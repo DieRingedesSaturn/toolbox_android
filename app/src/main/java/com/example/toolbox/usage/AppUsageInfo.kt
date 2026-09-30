@@ -20,25 +20,27 @@ data class AppUsageItem(
     val category: AppCategory,
     val foregroundDurationMillis: Long,
     val lastTimeUsedMillis: Long,
-    val wifiRxBytes: Long,
-    val wifiTxBytes: Long,
-    val cellularRxBytes: Long,
-    val cellularTxBytes: Long,
+    val wifiRxBytes: Long?,
+    val wifiTxBytes: Long?,
+    val cellularRxBytes: Long?,
+    val cellularTxBytes: Long?,
+    val sharedUidTraffic: Boolean = false,
 ) {
-    val totalWifiBytes: Long get() = wifiRxBytes + wifiTxBytes
-    val totalCellularBytes: Long get() = cellularRxBytes + cellularTxBytes
-    val totalBytes: Long get() = totalWifiBytes + totalCellularBytes
-    val hasUsage: Boolean get() = foregroundDurationMillis > 0 || totalBytes > 0
+    val totalWifiBytes: Long? get() = wifiRxBytes?.let { rx -> wifiTxBytes?.let { rx + it } }
+    val totalCellularBytes: Long? get() = cellularRxBytes?.let { rx -> cellularTxBytes?.let { rx + it } }
+    val totalBytes: Long? get() = totalWifiBytes?.let { wifi -> totalCellularBytes?.let { wifi + it } }
+    val hasUsage: Boolean get() = foregroundDurationMillis > 0 ||
+        (totalWifiBytes ?: 0L) > 0L || (totalCellularBytes ?: 0L) > 0L
 }
 
 data class CategoryUsageSummary(
     val category: AppCategory,
     val totalDurationMillis: Long,
-    val totalWifiBytes: Long,
-    val totalCellularBytes: Long,
+    val totalWifiBytes: Long?,
+    val totalCellularBytes: Long?,
     val appCount: Int,
 ) {
-    val totalBytes: Long get() = totalWifiBytes + totalCellularBytes
+    val totalBytes: Long? get() = totalWifiBytes?.let { wifi -> totalCellularBytes?.let { wifi + it } }
 }
 
 data class UsageReport(
@@ -46,12 +48,13 @@ data class UsageReport(
     val startTimeMillis: Long,
     val endTimeMillis: Long,
     val totalScreenDurationMillis: Long,
-    val totalWifiBytes: Long,
-    val totalCellularBytes: Long,
+    val totalWifiBytes: Long?,
+    val totalCellularBytes: Long?,
+    val hasUnattributedTraffic: Boolean,
     val items: List<AppUsageItem>,
     val categorySummaries: List<CategoryUsageSummary>,
 ) {
-    val totalBytes: Long get() = totalWifiBytes + totalCellularBytes
+    val totalBytes: Long? get() = totalWifiBytes?.let { wifi -> totalCellularBytes?.let { wifi + it } }
 }
 
 data class UsageEventRecord(
@@ -65,4 +68,3 @@ data class ProcessedUsageEvents(
     val appDurations: Map<String, Long>,
     val appLastUsed: Map<String, Long>,
 )
-

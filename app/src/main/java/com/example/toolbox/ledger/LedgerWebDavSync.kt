@@ -169,6 +169,10 @@ class LedgerWebDavSync(
         while (true) {
             attempt++
             val remote = client.get(LEDGER_FILE)
+            val etag = remote?.let { WebDavClient.ifMatchValue(it.etag) }
+            if (remote != null && etag == null) {
+                throw WebDavException(WebDavFailure.VERSION_UNAVAILABLE)
+            }
             val remotePayload = remote?.let { file ->
                 try {
                     LedgerSyncSerializer.fromJsonString(file.body)
@@ -205,7 +209,8 @@ class LedgerWebDavSync(
                 client.put(
                     LEDGER_FILE,
                     body,
-                    ifMatch = WebDavClient.ifMatchValue(remote?.etag),
+                    ifMatch = etag,
+                    ifNoneMatch = if (remote == null) "*" else null,
                 )
                 break
             } catch (e: WebDavException) {

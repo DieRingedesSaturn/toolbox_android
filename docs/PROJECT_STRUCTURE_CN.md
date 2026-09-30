@@ -160,7 +160,7 @@ com/example/toolbox/
 - 多个页面共享同一组非 UI 业务规则。
 - 构建时间、独立发布或团队边界确实需要多模块。
 
-在此之前，不添加 Repository/UseCase 接口、DI 容器、数据库或仅作转发的包装层。
+在此之前，不添加 Repository/UseCase 接口、DI 容器、第三方 ORM 或仅作转发的包装层。
 
 ## 文件命名
 

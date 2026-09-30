@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -74,7 +75,7 @@ internal fun LedgerWebDavDialog(
 
     var urlText by rememberSaveable { mutableStateOf(initialConfig?.folderUrl ?: "") }
     var usernameText by rememberSaveable { mutableStateOf(initialConfig?.username ?: "") }
-    var passwordText by rememberSaveable { mutableStateOf(initialConfig?.password ?: "") }
+    var passwordText by remember { mutableStateOf(initialConfig?.password ?: "") }
     var userEdited by rememberSaveable { mutableStateOf(false) }
     var showPassword by rememberSaveable { mutableStateOf(false) }
     var urlError by rememberSaveable { mutableStateOf(false) }

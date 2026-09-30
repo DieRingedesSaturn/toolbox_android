@@ -15,7 +15,8 @@ import android.os.Process
 import android.provider.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Calendar
+import java.time.Instant
+import java.time.ZoneId
 
 object AppUsageReader {
 
@@ -93,10 +94,15 @@ object AppUsageReader {
         val wifiTraffic = mutableMapOf<Int, Pair<Long, Long>>() // uid -> (rxBytes, txBytes)
         val cellularTraffic = mutableMapOf<Int, Pair<Long, Long>>() // uid -> (rxBytes, txBytes)
 
-        if (networkStatsManager != null && hasUsagePermission(context)) {
-            readNetworkBuckets(networkStatsManager, NetworkCapabilities.TRANSPORT_WIFI, startTime, endTime, wifiTraffic)
-            readNetworkBuckets(networkStatsManager, NetworkCapabilities.TRANSPORT_CELLULAR, startTime, endTime, cellularTraffic)
-        }
+        val canReadTraffic = networkStatsManager != null && hasUsagePermission(context)
+        val wifiAvailable = canReadTraffic && readNetworkBuckets(
+            networkStatsManager, NetworkCapabilities.TRANSPORT_WIFI,
+            startTime, endTime, wifiTraffic,
+        )
+        val cellularAvailable = canReadTraffic && readNetworkBuckets(
+            networkStatsManager, NetworkCapabilities.TRANSPORT_CELLULAR,
+            startTime, endTime, cellularTraffic,
+        )
 
         // 3. Resolve Installed Applications metadata
         val installedApps = runCatching {
@@ -109,26 +115,39 @@ object AppUsageReader {
 
         val appInfoByPkg = installedApps.associateBy { it.packageName }
         val allPackages = (usageMap.keys + installedApps.map { it.packageName }).toSet()
-
-        val items = mutableListOf<AppUsageItem>()
-
-        for (pkg in allPackages) {
-            val appInfo: ApplicationInfo? = appInfoByPkg[pkg] ?: runCatching {
+        val resolvedApps = allPackages.associateWith { pkg ->
+            appInfoByPkg[pkg] ?: runCatching {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     packageManager.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0))
                 } else {
                     packageManager.getApplicationInfo(pkg, 0)
                 }
             }.getOrNull()
+        }
+        val sharedUids = resolvedApps.values.filterNotNull().groupingBy { it.uid }
+            .eachCount().filterValues { it > 1 }.keys
+
+        val items = mutableListOf<AppUsageItem>()
+
+        for (pkg in allPackages) {
+            val appInfo: ApplicationInfo? = resolvedApps[pkg]
 
             val label = appInfo?.let { runCatching { it.loadLabel(packageManager).toString() }.getOrNull() } ?: pkg
             val category = if (appInfo != null) AppCategoryResolver.resolve(appInfo) else AppCategory.OTHER
 
             val (duration, lastUsed) = usageMap[pkg] ?: Pair(0L, 0L)
             val uid = appInfo?.uid ?: -1
-
-            val (wifiRx, wifiTx) = if (uid > 0) wifiTraffic[uid] ?: Pair(0L, 0L) else Pair(0L, 0L)
-            val (cellRx, cellTx) = if (uid > 0) cellularTraffic[uid] ?: Pair(0L, 0L) else Pair(0L, 0L)
+            val sharedUid = uid in sharedUids
+            val wifi = if (wifiAvailable && uid > 0 && !sharedUid) {
+                wifiTraffic[uid] ?: Pair(0L, 0L)
+            } else {
+                null
+            }
+            val cellular = if (cellularAvailable && uid > 0 && !sharedUid) {
+                cellularTraffic[uid] ?: Pair(0L, 0L)
+            } else {
+                null
+            }
 
             val item = AppUsageItem(
                 packageName = pkg,
@@ -136,10 +155,11 @@ object AppUsageReader {
                 category = category,
                 foregroundDurationMillis = duration,
                 lastTimeUsedMillis = lastUsed,
-                wifiRxBytes = wifiRx,
-                wifiTxBytes = wifiTx,
-                cellularRxBytes = cellRx,
-                cellularTxBytes = cellTx,
+                wifiRxBytes = wifi?.first,
+                wifiTxBytes = wifi?.second,
+                cellularRxBytes = cellular?.first,
+                cellularTxBytes = cellular?.second,
+                sharedUidTraffic = sharedUid,
             )
 
             if (item.hasUsage) {
@@ -153,15 +173,29 @@ object AppUsageReader {
         } else {
             items.sumOf { it.foregroundDurationMillis }
         }
-        val totalWifi = items.sumOf { it.totalWifiBytes }
-        val totalCellular = items.sumOf { it.totalCellularBytes }
+        val totalWifi = if (wifiAvailable) wifiTraffic.values.sumOf { it.first + it.second } else null
+        val totalCellular = if (cellularAvailable) {
+            cellularTraffic.values.sumOf { it.first + it.second }
+        } else {
+            null
+        }
+        val installedUids = resolvedApps.values.filterNotNull().mapTo(HashSet()) { it.uid }
+        val unattributedUids = (wifiTraffic.keys + cellularTraffic.keys).any { uid ->
+            (uid in sharedUids || uid !in installedUids) &&
+                ((wifiTraffic[uid]?.let { it.first + it.second } ?: 0L) > 0L ||
+                    (cellularTraffic[uid]?.let { it.first + it.second } ?: 0L) > 0L)
+        }
 
         val categorySummaries = items.groupBy { it.category }.map { (category, list) ->
             CategoryUsageSummary(
                 category = category,
                 totalDurationMillis = list.sumOf { it.foregroundDurationMillis },
-                totalWifiBytes = list.sumOf { it.totalWifiBytes },
-                totalCellularBytes = list.sumOf { it.totalCellularBytes },
+                totalWifiBytes = if (wifiAvailable) list.sumOf { it.totalWifiBytes ?: 0L } else null,
+                totalCellularBytes = if (cellularAvailable) {
+                    list.sumOf { it.totalCellularBytes ?: 0L }
+                } else {
+                    null
+                },
                 appCount = list.size,
             )
         }.sortedByDescending { it.totalDurationMillis }
@@ -173,6 +207,7 @@ object AppUsageReader {
             totalScreenDurationMillis = totalScreenDuration,
             totalWifiBytes = totalWifi,
             totalCellularBytes = totalCellular,
+            hasUnattributedTraffic = unattributedUids,
             items = items,
             categorySummaries = categorySummaries,
         )
@@ -184,49 +219,55 @@ object AppUsageReader {
         startTime: Long,
         endTime: Long,
         outMap: MutableMap<Int, Pair<Long, Long>>,
-    ) {
-        runCatching {
+    ): Boolean {
+        return try {
             val stats = manager.querySummary(transport, null, startTime, endTime)
             val bucket = NetworkStats.Bucket()
-            while (stats.hasNextBucket()) {
-                stats.getNextBucket(bucket)
-                val uid = bucket.uid
-                if (uid > 0) {
-                    val prev = outMap[uid] ?: Pair(0L, 0L)
-                    outMap[uid] = Pair(
-                        prev.first + bucket.rxBytes,
-                        prev.second + bucket.txBytes,
-                    )
+            try {
+                while (stats.hasNextBucket()) {
+                    stats.getNextBucket(bucket)
+                    val uid = bucket.uid
+                    if (uid > 0) {
+                        val prev = outMap[uid] ?: Pair(0L, 0L)
+                        outMap[uid] = Pair(
+                            prev.first + bucket.rxBytes,
+                            prev.second + bucket.txBytes,
+                        )
+                    }
                 }
+            } finally {
+                stats.close()
             }
-            stats.close()
+            true
+        } catch (_: Exception) {
+            outMap.clear()
+            false
         }
     }
 
-    private fun calculateTimeWindow(timeRange: UsageTimeRange): Pair<Long, Long> {
-        val now = System.currentTimeMillis()
-        val cal = Calendar.getInstance().apply {
-            timeInMillis = now
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        val startOfToday = cal.timeInMillis
+    internal fun calculateTimeWindow(
+        timeRange: UsageTimeRange,
+        now: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Pair<Long, Long> {
+        val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        fun startOfDay(daysBefore: Long): Long =
+            today.minusDays(daysBefore).atStartOfDay(zone).toInstant().toEpochMilli()
+        val startOfToday = startOfDay(0)
 
         return when (timeRange) {
             UsageTimeRange.TODAY -> Pair(startOfToday, now)
             UsageTimeRange.YESTERDAY -> {
-                val startOfYesterday = startOfToday - 86400000L
+                val startOfYesterday = startOfDay(1)
                 val endOfYesterday = startOfToday - 1L
                 Pair(startOfYesterday, endOfYesterday)
             }
             UsageTimeRange.PAST_7_DAYS -> {
-                val start7DaysAgo = startOfToday - (6 * 86400000L)
+                val start7DaysAgo = startOfDay(6)
                 Pair(start7DaysAgo, now)
             }
             UsageTimeRange.PAST_30_DAYS -> {
-                val start30DaysAgo = startOfToday - (29 * 86400000L)
+                val start30DaysAgo = startOfDay(29)
                 Pair(start30DaysAgo, now)
             }
         }

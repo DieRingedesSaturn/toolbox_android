@@ -1,10 +1,29 @@
 package com.example.toolbox.usage
 
+import java.time.LocalDate
+import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppUsageReaderTest {
+
+    @Test
+    fun testYesterdayUsesLocalMidnightAcrossDaylightSavingChange() {
+        val zone = ZoneId.of("America/New_York")
+        val todayStart = LocalDate.of(2026, 3, 9).atStartOfDay(zone).toInstant().toEpochMilli()
+        val yesterdayStart = LocalDate.of(2026, 3, 8).atStartOfDay(zone).toInstant().toEpochMilli()
+
+        val (start, end) = AppUsageReader.calculateTimeWindow(
+            UsageTimeRange.YESTERDAY,
+            todayStart + 12 * 60 * 60 * 1000L,
+            zone,
+        )
+
+        assertEquals(yesterdayStart, start)
+        assertEquals(todayStart - 1L, end)
+        assertEquals(23 * 60 * 60 * 1000L, todayStart - yesterdayStart)
+    }
 
     @Test
     fun testScreenInteractiveTimeCalculation() {

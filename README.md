@@ -2,7 +2,7 @@
 
 [中文说明](README_CN.md)
 
-Toolbox is a lightweight Android utility app that reads information on demand. The current v0.1 has no account or database. The live monitor is an explicit opt-in exception: it starts only after the user requests it and uses a visible foreground service.
+Toolbox is a lightweight Android utility app that reads information on demand. The local ledger uses SQLite and optional, manually triggered WebDAV sync; the app has no sign-in account or fixed server. The live monitor starts only after the user requests it and uses a visible foreground service.
 
 Read [AGENTS.md](AGENTS.md) before development. See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for the canonical directory layout and rules for adding future features.
 
@@ -11,7 +11,7 @@ Read [AGENTS.md](AGENTS.md) before development. See [docs/PROJECT_STRUCTURE.md](
 - `Device`: device identity, Android/API, kernel, SoC/CPU, ABI, core count, memory, storage, display, battery, and a basic GPU capability summary.
 - `Live monitor`: an optional compact, translucent floating line-chart overlay for CPU, GPU, memory, battery, and an FPS reference. The visible metrics are configurable. The monitor page shows current frequency for each CPU core, GPU/display details, and thermal details; the overlay can switch between per-core frequencies and CPU usage weighted by peak frequency. CPU/GPU usage is preferred; when Android exposes only frequency, the overlay marks a frequency-ratio estimate with `≈`, and restricted sources are shown as unavailable.
 - The monitor page reports battery temperature, Android thermal status, thermal headroom, current display refresh rate, and supported display modes when the public APIs provide them. The entire application and overlay support the Everforest theme palette in dark and light modes, plus a dynamic wallpaper-based scheme (Android 12+) and a custom accent color, with automatic contrast adaptation for text and charts. The overlay position can be locked; in locked mode it is touch-through and its last position is saved when it is moved.
-- `Location`: on-demand current location with decimal/DMS coordinates, accuracy, provider, GPS provider altitude, timestamp, phone-supported GNSS constellations (GPS, BeiDou, GLONASS, Galileo, QZSS, etc.), available/enabled providers, and on-demand terrain elevation (DEM) query. Foreground location permission is requested only after the user starts a location read.
+- `Location`: on-demand current location with decimal/DMS coordinates, accuracy, provider, GPS provider altitude, timestamp, GNSS constellations observed during an on-demand satellite scan, available/enabled providers, and on-demand terrain elevation (DEM) query. Foreground location permission is requested only after the user starts a location read.
 - `Network`: on-demand connection details including transport, interface, local addresses, DNS, gateways, and metered state. Public IP, approximate location, and ISP lookup is a separate explicit action.
 - `Ledger & Cost Amortization`: bookkeeping organized into Overview (month totals, expense categories, recent entries), Transactions (per-day history with a month switcher), and Costs (asset amortization and subscription burn rate) tabs, with built-in expense/income categories and an optional average-cost tracker for one-time long-term assets (e.g. phones, laptops with daily/monthly depreciated cost) and periodic subscriptions (weekly, monthly, quarterly, semi-annual, yearly, or a custom every-N days/weeks/months/years cycle). Persisted locally via Android SDK `SQLiteOpenHelper` with `uuid`, millisecond timestamps, and soft-delete tombstones for Last-Write-Wins merge; the app has no dependency on any fixed server. A home-screen widget shows the daily cost and this month's spending with a quick add button; it needs no extra permissions, refreshes whenever entries change and about every 3 hours via the system widget scheduler, and runs no background service. Local backup uses the system file picker — JSON export writes a full re-importable backup (deletions included), CSV export produces a spreadsheet — and imports offer Merge or Replace, all without a storage permission. Manual WebDAV backup/sync is also available from the ledger overflow menu: it runs only on an explicit tap, uses HTTPS only, and writes solely to a WebDAV folder you create yourself (`ledger.json`, dated `ledger-backup-*.json` snapshots — the newest 10 are kept, and a snapshot can be restored by downloading it and importing it with Replace — and a `ledger-backups.json` index). The password is stored locally, encrypted with Android Keystore, and the feature adds no permission, dependency, or background work. Entries carry custom multi-tags (the 12 built-in categories become editable tags only where old entries referenced them; new installs start tagless). Tags can be renamed, recolored, emoji-picked from presets, reordered, merged, and bulk-applied to selected entries; a per-tag detail screen shows counts and totals. Transactions and Costs can be filtered by tags in Any/All mode, and the Overview breaks spending down by tag. Periodic subscriptions and recurring fixed income are confirmed per cycle: a pending card lists due renewals on their calendar dates, each recorded renewal becomes its own transaction locking that day's rate (skipped renewals stay skipped), and stopping a subscription on a date means a renewal on that exact date is not charged. One-time assets can be ended by selling or scrapping on a chosen date — selling records the proceeds as a linked income entry and the final cost is price minus sale; sold or scrapped assets leave the active burn rate, and the disposal can be undone. Entries can be recorded in CNY, JPY, USD, or EUR: the CNY-per-unit rate is locked into each foreign entry when it is saved, so every total, summary, widget figure, and cost computation stays in CNY and never drifts. Rates come from an explicit on-demand fallback chain — Frankfurter (api.frankfurter.dev), then the ECB daily/history feed (www.ecb.europa.eu), then the community currency-api mirror (cdn.jsdelivr.net, then *.currency-api.pages.dev) — each request carries only a date or date range, and the source used is recorded on the entry (or "manual" for a typed rate); if every source fails you can pick the nearest cached rate or enter one manually. Every entry posts to a ledger account — multiple accounts (name, currency, opening balance and date, color, emoji) are managed in the Accounts tab, which shows each balance and a CNY-converted total-assets figure (foreign balances use the cached rate table; accounts missing a rate are excluded and flagged). Entries can be expenses, income, or account-to-account transfers; transfers are excluded from spending/income totals, and a reconcile action in an account's detail writes a signed balance-adjustment entry when the computed balance differs from the real one (adjustments appear only in that account's own entry list, never in Transactions or income/expense totals). Accounts ride the same LWW backup/WebDAV payload as entries and tags.
 - `Currency converter`: EUR-base reference rates with a source fallback chain and no API key — Frankfurter (api.frankfurter.dev), then the ECB eurofxref feed (www.ecb.europa.eu), then the community currency-api (cdn.jsdelivr.net, then *.currency-api.pages.dev); the converter labels the source actually used and flags community-source values as potentially differing slightly from the ECB. Enter an amount, pick a source currency (the four ledger currencies up front, plus a "More" list of every published currency with localized names), and read conversions with each currency's own fraction digits. Rates are fetched only when you tap refresh or the first-use "Get rates" button, are cached locally (latest + recent dated rates) for offline use, and always display their rate date and source; the only data ever sent to these hosts is the requested date.
@@ -41,6 +41,15 @@ after an explicit user action. Network status uses normal
 action sends a single request to public address services upon explicit user tap
 and is never polled automatically.
 
+System automatic backup is disabled because the local ledger contains financial
+records. Use the ledger's manual JSON export or WebDAV sync for backup. WebDAV
+sync requires a server that supplies strong ETags for existing `ledger.json`
+files and honors conditional writes; otherwise it stops before overwriting data.
+App traffic totals count each UID once. Traffic from shared or unidentified UIDs
+cannot be assigned to a single app or category, and unavailable traffic reads
+are shown as unavailable. GNSS constellations are listed only after an actual
+satellite observation.
+
 ## Development environment
 
 - Android Studio Quail 3 (2026.1.3 Patch 1)
@@ -61,40 +70,6 @@ If JDK 17 and the Android SDK are not already configured in the shell, set `JAVA
 
 ## Package structure
 
-```text
-app/src/main/java/com/example/toolbox/
-├── MainActivity.kt
-├── monitor/
-│   ├── MonitorOverlayService.kt
-│   ├── MonitorOverlayView.kt
-│   ├── MonitorReader.kt
-│   └── MonitorSample.kt
-├── location/
-│   ├── CoordinateFormatter.kt
-│   ├── LocationInfo.kt
-│   └── LocationInfoReader.kt
-├── network/
-│   ├── NetworkInfo.kt
-│   └── NetworkInfoReader.kt
-├── device/
-│   ├── DeviceInfo.kt
-│   └── DeviceInfoReader.kt
-└── ui/
-    ├── AboutScreen.kt
-    ├── AppPreferences.kt
-    ├── AppStrings.kt
-    ├── Components.kt
-    ├── DeviceScreen.kt
-    ├── HomeScreen.kt
-    ├── LocationScreen.kt
-    ├── MonitorScreen.kt
-    ├── NetworkScreen.kt
-    ├── PlaceholderScreen.kt
-    ├── SettingsScreen.kt
-    ├── ToolboxApp.kt
-    └── ToolboxTheme.kt
-```
+See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for the current package layout.
 
-Version 0.1 remains a single `app` module. Screens live in `ui/`; device, monitor, location, and network models and Android API readers live in their capability packages. Create a new directory only when implementation begins, and do not pre-create empty architecture layers.
-
-See [docs/REFERENCES.md](docs/REFERENCES.md) for the project reference list.
+See [docs/REFERENCES.md](docs/REFERENCES.md) for project references and licenses.

@@ -21,7 +21,7 @@ class LedgerWebDavSyncTest {
     /**
      * Minimal in-process WebDAV-like file server on a raw ServerSocket
      * (com.sun.net.httpserver is not on the unit-test classpath): GET/PUT/DELETE
-     * backed by a map, strong quoted ETags, If-Match handling, basic-auth check,
+     * backed by a map, strong quoted ETags, conditional writes, basic-auth check,
      * and injectable failures (missing folder, one-shot 412 via etag bump,
      * snapshot PUT 503).
      */
@@ -37,6 +37,12 @@ class LedgerWebDavSyncTest {
 
         @Volatile
         var bumpEtagAfterNextGet = false
+
+        @Volatile
+        var createLedgerAfterNextMissingGet: String? = null
+
+        @Volatile
+        var omitEtagOnGet = false
 
         @Volatile
         var failSnapshotPuts = false
@@ -121,8 +127,14 @@ class LedgerWebDavSyncTest {
                         val file = files[name]
                         if (file == null) {
                             respond(socket, 404)
+                            if (name == LedgerWebDavSync.LEDGER_FILE) {
+                                createLedgerAfterNextMissingGet?.let { body ->
+                                    createLedgerAfterNextMissingGet = null
+                                    putRaw(name, body)
+                                }
+                            }
                         } else {
-                            respond(socket, 200, file.first, etag = file.second)
+                            respond(socket, 200, file.first, etag = if (omitEtagOnGet) null else file.second)
                             if (bumpEtagAfterNextGet) {
                                 bumpEtagAfterNextGet = false
                                 files[name] = file.first to "\"etag-${++etagCounter}\""
@@ -131,12 +143,15 @@ class LedgerWebDavSyncTest {
                     }
                     "PUT" -> {
                         val ifMatch = headers["if-match"]
+                        val ifNoneMatch = headers["if-none-match"]
                         when {
                             folderMissing -> respond(socket, 409)
                             failSnapshotPuts &&
                                 WebDavSnapshots.NAME_REGEX.matches(name) ->
                                 respond(socket, 503)
                             ifMatch != null && files[name]?.second != ifMatch ->
+                                respond(socket, 412)
+                            ifNoneMatch == "*" && files.containsKey(name) ->
                                 respond(socket, 412)
                             else -> {
                                 files[name] = body.toString(Charsets.UTF_8) to
@@ -296,6 +311,40 @@ class LedgerWebDavSyncTest {
             server.bodyOf(LedgerWebDavSync.LEDGER_FILE)!!,
         )
         assertEquals(setOf("a", "c"), remote.entries.map { it.uuid }.toSet())
+    }
+
+    @Test
+    fun testFirstSyncRetriesWhenAnotherDeviceCreatesRemoteFile() {
+        val remoteBody = LedgerSyncSerializer.toJsonString(
+            LedgerSyncPayload(entries = listOf(entry("remote", 200L))),
+        )
+        server.createLedgerAfterNextMissingGet = remoteBody
+        val local = mutableListOf(entry("local", 100L))
+
+        val result = newSync(local).sync(nowMillis = 1_700_000_000_000L)
+
+        assertEquals(2, result.totalEntries)
+        assertEquals(setOf("local", "remote"), local.map { it.uuid }.toSet())
+        val remote = LedgerSyncSerializer.fromJsonString(
+            server.bodyOf(LedgerWebDavSync.LEDGER_FILE)!!,
+        )
+        assertEquals(setOf("local", "remote"), remote.entries.map { it.uuid }.toSet())
+    }
+
+    @Test
+    fun testMissingStrongEtagStopsBeforeOverwritingRemote() {
+        val remoteBody = LedgerSyncSerializer.toJsonString(
+            LedgerSyncPayload(entries = listOf(entry("remote", 200L))),
+        )
+        server.putRaw(LedgerWebDavSync.LEDGER_FILE, remoteBody)
+        server.omitEtagOnGet = true
+        val local = mutableListOf(entry("local", 100L))
+
+        assertSyncFails(WebDavFailure.VERSION_UNAVAILABLE) {
+            newSync(local).sync()
+        }
+        assertEquals(remoteBody, server.bodyOf(LedgerWebDavSync.LEDGER_FILE))
+        assertEquals(listOf("local"), local.map { it.uuid })
     }
 
     @Test

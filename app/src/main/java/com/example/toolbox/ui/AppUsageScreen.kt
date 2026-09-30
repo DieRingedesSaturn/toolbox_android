@@ -83,6 +83,7 @@ fun AppUsageScreen(
     var selectedCategory by remember { mutableStateOf(AppCategory.ALL) }
     var report by remember { mutableStateOf<UsageReport?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+    var loadFailed by remember { mutableStateOf(false) }
     var refreshCounter by remember { mutableIntStateOf(0) }
 
     // Re-check permission when app resumes from system settings
@@ -104,9 +105,10 @@ fun AppUsageScreen(
     LaunchedEffect(hasPermission, timeRange, refreshCounter) {
         if (hasPermission) {
             isLoading = true
+            loadFailed = false
             report = runCatching {
                 AppUsageReader.queryUsageReport(context, timeRange)
-            }.getOrNull()
+            }.onFailure { loadFailed = true }.getOrNull()
             isLoading = false
         }
     }
@@ -149,18 +151,18 @@ fun AppUsageScreen(
                 }
                 when (sortMode) {
                     UsageSortMode.DURATION -> byCategory.sortedByDescending { it.foregroundDurationMillis }
-                    UsageSortMode.TOTAL_DATA -> byCategory.sortedByDescending { it.totalBytes }
-                    UsageSortMode.CELLULAR_DATA -> byCategory.sortedByDescending { it.totalCellularBytes }
-                    UsageSortMode.WIFI_DATA -> byCategory.sortedByDescending { it.totalWifiBytes }
+                    UsageSortMode.TOTAL_DATA -> byCategory.sortedByDescending { it.totalBytes ?: -1L }
+                    UsageSortMode.CELLULAR_DATA -> byCategory.sortedByDescending { it.totalCellularBytes ?: -1L }
+                    UsageSortMode.WIFI_DATA -> byCategory.sortedByDescending { it.totalWifiBytes ?: -1L }
                 }
             }
 
             val maxMetricValue = remember(filteredItems, sortMode) {
                 when (sortMode) {
                     UsageSortMode.DURATION -> filteredItems.maxOfOrNull { it.foregroundDurationMillis } ?: 1L
-                    UsageSortMode.TOTAL_DATA -> filteredItems.maxOfOrNull { it.totalBytes } ?: 1L
-                    UsageSortMode.CELLULAR_DATA -> filteredItems.maxOfOrNull { it.totalCellularBytes } ?: 1L
-                    UsageSortMode.WIFI_DATA -> filteredItems.maxOfOrNull { it.totalWifiBytes } ?: 1L
+                    UsageSortMode.TOTAL_DATA -> filteredItems.maxOfOrNull { it.totalBytes ?: 0L } ?: 1L
+                    UsageSortMode.CELLULAR_DATA -> filteredItems.maxOfOrNull { it.totalCellularBytes ?: 0L } ?: 1L
+                    UsageSortMode.WIFI_DATA -> filteredItems.maxOfOrNull { it.totalWifiBytes ?: 0L } ?: 1L
                 }.coerceAtLeast(1L)
             }
 
@@ -230,7 +232,7 @@ fun AppUsageScreen(
                             ),
                         ) {
                             Text(
-                                text = strings.noUsageData,
+                                text = if (loadFailed) strings.notAvailable else strings.noUsageData,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(24.dp),
@@ -371,15 +373,23 @@ private fun UsageOverviewCard(
                 )
                 OverviewMetricItem(
                     label = strings.totalCellularData,
-                    value = formatDataBytes(report.totalCellularBytes),
+                    value = formatUsageBytes(report.totalCellularBytes, strings),
                     color = Color(0xFFFF9800),
                     modifier = Modifier.weight(1f),
                 )
                 OverviewMetricItem(
                     label = strings.totalWifiData,
-                    value = formatDataBytes(report.totalWifiBytes),
+                    value = formatUsageBytes(report.totalWifiBytes, strings),
                     color = Color(0xFF2196F3),
                     modifier = Modifier.weight(1f),
+                )
+            }
+
+            if (report.hasUnattributedTraffic) {
+                Text(
+                    text = strings.sharedUidTrafficNote,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -553,19 +563,21 @@ private fun AppUsageListItem(
 
     val primaryText = when (sortMode) {
         UsageSortMode.DURATION -> strings.duration(item.foregroundDurationMillis)
-        UsageSortMode.TOTAL_DATA -> formatDataBytes(item.totalBytes)
-        UsageSortMode.CELLULAR_DATA -> formatDataBytes(item.totalCellularBytes)
-        UsageSortMode.WIFI_DATA -> formatDataBytes(item.totalWifiBytes)
+        UsageSortMode.TOTAL_DATA -> formatUsageBytes(item.totalBytes, strings, item.sharedUidTraffic)
+        UsageSortMode.CELLULAR_DATA -> formatUsageBytes(item.totalCellularBytes, strings, item.sharedUidTraffic)
+        UsageSortMode.WIFI_DATA -> formatUsageBytes(item.totalWifiBytes, strings, item.sharedUidTraffic)
     }
 
-    val currentMetric = when (sortMode) {
+    val currentMetric: Long? = when (sortMode) {
         UsageSortMode.DURATION -> item.foregroundDurationMillis
         UsageSortMode.TOTAL_DATA -> item.totalBytes
         UsageSortMode.CELLULAR_DATA -> item.totalCellularBytes
         UsageSortMode.WIFI_DATA -> item.totalWifiBytes
     }
 
-    val fraction = (currentMetric.toFloat() / maxMetricValue.toFloat()).coerceIn(0.01f, 1f)
+    val fraction = currentMetric?.let {
+        (it.toFloat() / maxMetricValue.toFloat()).coerceIn(0f, 1f)
+    }
 
     Card(
         modifier = Modifier
@@ -578,9 +590,9 @@ private fun AppUsageListItem(
                     packageName = item.packageName,
                     category = item.category,
                     screenDuration = strings.duration(item.foregroundDurationMillis),
-                    cellular = formatDataBytes(item.totalCellularBytes),
-                    wifi = formatDataBytes(item.totalWifiBytes),
-                    total = formatDataBytes(item.totalBytes),
+                    cellular = formatUsageBytes(item.totalCellularBytes, strings, item.sharedUidTraffic),
+                    wifi = formatUsageBytes(item.totalWifiBytes, strings, item.sharedUidTraffic),
+                    total = formatUsageBytes(item.totalBytes, strings, item.sharedUidTraffic),
                     lastUsed = lastUsed,
                 )
                 copyToClipboard(context, item.label, copyText, strings.copied(item.label))
@@ -658,7 +670,7 @@ private fun AppUsageListItem(
 
                     // Secondary info (Cellular vs Wi-Fi)
                     Text(
-                        text = "${strings.totalCellularData}: ${formatDataBytes(item.totalCellularBytes)}  ·  ${strings.totalWifiData}: ${formatDataBytes(item.totalWifiBytes)}",
+                        text = "${strings.totalCellularData}: ${formatUsageBytes(item.totalCellularBytes, strings, item.sharedUidTraffic)}  ·  ${strings.totalWifiData}: ${formatUsageBytes(item.totalWifiBytes, strings, item.sharedUidTraffic)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -674,25 +686,37 @@ private fun AppUsageListItem(
             }
 
             // Relative Usage Progress Track
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            ) {
+            if (fraction != null) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(fraction)
-                        .fillMaxHeight()
-                        .background(
-                            color = Color(item.category.colorRgb),
-                            shape = RoundedCornerShape(2.dp),
-                        ),
-                )
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction)
+                            .fillMaxHeight()
+                            .background(
+                                color = Color(item.category.colorRgb),
+                                shape = RoundedCornerShape(2.dp),
+                            ),
+                    )
+                }
             }
         }
     }
+}
+
+private fun formatUsageBytes(
+    bytes: Long?,
+    strings: ToolboxStrings,
+    sharedUid: Boolean = false,
+): String = when {
+    bytes != null -> formatDataBytes(bytes)
+    sharedUid -> strings.sharedUidTraffic
+    else -> strings.notAvailable
 }
 
 private fun formatDataBytes(bytes: Long): String {

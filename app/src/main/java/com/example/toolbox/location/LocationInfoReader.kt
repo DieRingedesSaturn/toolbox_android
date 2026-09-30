@@ -110,21 +110,9 @@ class LocationInfoReader(context: Context) {
             runCatching { manager?.isProviderEnabled(provider) == true }.getOrDefault(false)
         }
 
-        val constellations = mutableListOf<String>()
-        if (hasGpsFeature || allProviders.any { it.equals(LocationManager.GPS_PROVIDER, ignoreCase = true) }) {
-            constellations.add("GPS (美国)")
-            constellations.add("BDS 北斗 (中国)")
-            constellations.add("GLONASS (俄罗斯)")
-            constellations.add("Galileo (欧洲)")
-            constellations.add("QZSS (日本)")
-            constellations.add("NavIC (印度)")
-            constellations.add("SBAS (增强系统)")
-        }
-
         return PositioningSystemInfo(
             availableProviders = allProviders.map(::formatProviderName),
             enabledProviders = enabledProviders.map(::formatProviderName),
-            supportedConstellations = constellations,
             isGnssHardwareAvailable = hasGpsFeature,
         )
     }
