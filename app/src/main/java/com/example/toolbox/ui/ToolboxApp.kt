@@ -5,6 +5,15 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.example.toolbox.device.DeviceInfo
 import com.example.toolbox.device.DeviceInfoReader
@@ -138,83 +148,102 @@ fun ToolboxApp(
             BackHandler { moduleName = ToolboxModule.HOME.name }
         }
 
-        when (module) {
-            ToolboxModule.HOME -> HomeScreen(
-                strings = strings,
-                deviceInfo = deviceInfo,
-                onOpen = { moduleName = it.name },
-                onOpenLedgerAccounts = {
-                    ledgerInitialTab = 3
-                    moduleName = ToolboxModule.LEDGER.name
-                },
-            )
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+        AnimatedContent(
+            targetState = module,
+            transitionSpec = {
+                val entering = targetState != ToolboxModule.HOME
+                (
+                    fadeIn(tween(240)) + slideInHorizontally(tween(240)) {
+                        if (entering) it / 16 else -it / 16
+                    }
+                ).togetherWith(fadeOut(tween(160)))
+            },
+            label = "moduleTransition",
+            modifier = Modifier.fillMaxSize(),
+        ) { target ->
+            when (target) {
+                ToolboxModule.HOME -> HomeScreen(
+                    strings = strings,
+                    deviceInfo = deviceInfo,
+                    onOpen = { moduleName = it.name },
+                    onOpenLedgerAccounts = {
+                        ledgerInitialTab = 3
+                        moduleName = ToolboxModule.LEDGER.name
+                    },
+                )
 
-            ToolboxModule.DEVICE -> DeviceScreen(
-                strings = strings,
-                deviceInfo = deviceInfo,
-                isLoading = isDeviceInfoLoading,
-                lastUpdated = lastDeviceInfoUpdate,
-                onRefresh = ::refreshDeviceInfo,
-                onBack = { moduleName = ToolboxModule.HOME.name },
-            )
+                ToolboxModule.DEVICE -> DeviceScreen(
+                    strings = strings,
+                    deviceInfo = deviceInfo,
+                    isLoading = isDeviceInfoLoading,
+                    lastUpdated = lastDeviceInfoUpdate,
+                    onRefresh = ::refreshDeviceInfo,
+                    onBack = { moduleName = ToolboxModule.HOME.name },
+                )
 
-            ToolboxModule.LOCATION -> LocationScreen(
-                strings = strings,
-                onBack = { moduleName = ToolboxModule.HOME.name },
-            )
+                ToolboxModule.LOCATION -> LocationScreen(
+                    strings = strings,
+                    onBack = { moduleName = ToolboxModule.HOME.name },
+                )
 
-            ToolboxModule.NETWORK -> NetworkScreen(
-                strings = strings,
-                onBack = { moduleName = ToolboxModule.HOME.name },
-            )
+                ToolboxModule.NETWORK -> NetworkScreen(
+                    strings = strings,
+                    onBack = { moduleName = ToolboxModule.HOME.name },
+                )
 
-            ToolboxModule.MONITOR -> MonitorScreen(
-                strings = strings,
-                accentColor = accentColor,
-                customAccentRgb = customAccentRgb,
-                onBack = { moduleName = ToolboxModule.HOME.name },
-            )
+                ToolboxModule.MONITOR -> MonitorScreen(
+                    strings = strings,
+                    accentColor = accentColor,
+                    customAccentRgb = customAccentRgb,
+                    onBack = { moduleName = ToolboxModule.HOME.name },
+                )
 
-            ToolboxModule.ASTRONOMY -> AstronomyScreen(
-                strings = strings,
-                onBack = { moduleName = ToolboxModule.HOME.name },
-            )
+                ToolboxModule.ASTRONOMY -> AstronomyScreen(
+                    strings = strings,
+                    onBack = { moduleName = ToolboxModule.HOME.name },
+                )
 
-            ToolboxModule.USAGE -> AppUsageScreen(
-                strings = strings,
-                onBack = { moduleName = ToolboxModule.HOME.name },
-            )
+                ToolboxModule.USAGE -> AppUsageScreen(
+                    strings = strings,
+                    onBack = { moduleName = ToolboxModule.HOME.name },
+                )
 
-            ToolboxModule.LEDGER -> LedgerScreen(
-                strings = strings,
-                onBack = { moduleName = ToolboxModule.HOME.name },
-                openEditorRequested = ledgerEditorRequested,
-                onEditorRequestHandled = { ledgerEditorRequested = false },
-                initialTab = ledgerInitialTab,
-            )
+                ToolboxModule.LEDGER -> LedgerScreen(
+                    strings = strings,
+                    onBack = { moduleName = ToolboxModule.HOME.name },
+                    openEditorRequested = ledgerEditorRequested,
+                    onEditorRequestHandled = { ledgerEditorRequested = false },
+                    initialTab = ledgerInitialTab,
+                )
 
-            ToolboxModule.FX -> FxScreen(
-                strings = strings,
-                onBack = { moduleName = ToolboxModule.HOME.name },
-            )
+                ToolboxModule.FX -> FxScreen(
+                    strings = strings,
+                    onBack = { moduleName = ToolboxModule.HOME.name },
+                )
 
-            ToolboxModule.SETTINGS -> SettingsScreen(
-                strings = strings,
-                language = language,
-                themeMode = themeMode,
-                accentColor = accentColor,
-                customAccentRgb = customAccentRgb,
-                onLanguageChange = ::updateLanguage,
-                onThemeModeChange = ::updateTheme,
-                onAccentColorChange = ::updateAccent,
-                onCustomAccentChange = ::updateCustomAccent,
-                onBack = { moduleName = ToolboxModule.HOME.name },
-            )
+                ToolboxModule.SETTINGS -> SettingsScreen(
+                    strings = strings,
+                    language = language,
+                    themeMode = themeMode,
+                    accentColor = accentColor,
+                    customAccentRgb = customAccentRgb,
+                    onLanguageChange = ::updateLanguage,
+                    onThemeModeChange = ::updateTheme,
+                    onAccentColorChange = ::updateAccent,
+                    onCustomAccentChange = ::updateCustomAccent,
+                    onBack = { moduleName = ToolboxModule.HOME.name },
+                )
 
-            ToolboxModule.ABOUT -> AboutScreen(
-                strings = strings,
-                onBack = { moduleName = ToolboxModule.HOME.name },
-            )
+                ToolboxModule.ABOUT -> AboutScreen(
+                    strings = strings,
+                    onBack = { moduleName = ToolboxModule.HOME.name },
+                )
+            }
+        }
         }
     }
 }
