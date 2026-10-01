@@ -23,6 +23,18 @@ android {
         }
     }
 
+    signingConfigs {
+        getByName("debug") {
+            val projectDebugKey = rootProject.file("signing/toolbox-debug.keystore")
+            if (projectDebugKey.exists()) {
+                storeFile = projectDebugKey
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
