@@ -72,6 +72,8 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerWebDavConfig.kt
 │   ├── LedgerWebDavClient.kt
 │   ├── LedgerWebDavSync.kt
+│   ├── NotificationLedger.kt
+│   ├── LedgerNotificationListener.kt
 │   └── LedgerWidget.kt
 ├── fx/
 │   ├── FxRates.kt
@@ -103,6 +105,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerDatePicker.kt
 │   ├── LedgerBackupDialogs.kt
 │   ├── LedgerWebDavDialog.kt
+│   ├── NotificationLedgerDialog.kt
 │   ├── FxScreen.kt
 │   ├── SettingsScreen.kt
 │   └── AboutScreen.kt

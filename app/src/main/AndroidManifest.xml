@@ -44,6 +44,16 @@
                 android:value="User-requested floating system performance monitor with visible CPU, GPU, memory, and battery metrics" />
         </service>
 
+        <service
+            android:name=".ledger.LedgerNotificationListener"
+            android:exported="false"
+            android:label="@string/ledger_notification_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".ledger.LedgerWidgetProvider"
             android:exported="false"

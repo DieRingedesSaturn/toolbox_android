@@ -83,6 +83,8 @@ import com.example.toolbox.ledger.LedgerSyncStatus
 import com.example.toolbox.ledger.LedgerTag
 import com.example.toolbox.ledger.LedgerTags
 import com.example.toolbox.ledger.LedgerWebDavSync
+import com.example.toolbox.ledger.NotificationLedgerCandidate
+import com.example.toolbox.ledger.NotificationLedgerStore
 import com.example.toolbox.ledger.SubscriptionRenewals
 import com.example.toolbox.ledger.TagFilterMode
 import com.example.toolbox.ledger.WebDavClient
@@ -130,6 +132,10 @@ fun LedgerScreen(
         mutableStateOf(YearMonth.now().toString())
     }
     var showWebDavDialog by rememberSaveable { mutableStateOf(false) }
+    var showNotificationLedgerDialog by remember { mutableStateOf(false) }
+    var notificationDraft by remember {
+        mutableStateOf<Pair<NotificationLedgerCandidate, Long>?>(null)
+    }
     val webDavStore = remember(context) { WebDavConfigStore(context) }
     var webDavConfigVersion by remember { mutableIntStateOf(0) }
     var webDavConfig by remember { mutableStateOf<WebDavConfig?>(null) }
@@ -208,6 +214,7 @@ fun LedgerScreen(
     LaunchedEffect(openEditorRequested) {
         if (openEditorRequested) {
             editingUuid = null
+            notificationDraft = null
             showEditor = true
             onEditorRequestHandled()
         }
@@ -215,6 +222,7 @@ fun LedgerScreen(
 
     fun openEditor(entry: LedgerEntry?) {
         editingUuid = entry?.uuid
+        notificationDraft = null
         showEditor = true
     }
 
@@ -978,6 +986,13 @@ fun LedgerScreen(
                                             showWebDavDialog = true
                                         },
                                     )
+                                    DropdownMenuItem(
+                                        text = { Text(strings.notificationLedgerTitle) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            showNotificationLedgerDialog = true
+                                        },
+                                    )
                                     webDavConfig?.takeIf { it.isComplete }
                                         ?.let { config ->
                                             DropdownMenuItem(
@@ -1227,10 +1242,12 @@ fun LedgerScreen(
     }
 
     if (showEditor && (editingUuid == null || editingEntry != null)) {
-        key(editingUuid ?: "new") {
+        key(editingUuid ?: notificationDraft?.let { "${it.first.id}:${it.second}" } ?: "new") {
             LedgerEntryEditor(
                 strings = strings,
                 initialEntry = editingEntry,
+                draftAmountCents = notificationDraft?.second,
+                draftOccurredAtMillis = notificationDraft?.first?.occurredAtMillis,
                 tags = tags,
                 accounts = accounts,
                 defaultAccountUuid = AppPreferences(context)
@@ -1253,16 +1270,22 @@ fun LedgerScreen(
                 onDismiss = {
                     showEditor = false
                     editingUuid = null
+                    notificationDraft = null
                 },
                 onSave = { newEntry ->
+                    val candidateToRemove = notificationDraft?.first?.id
                     showEditor = false
                     editingUuid = null
+                    notificationDraft = null
                     newEntry.accountUuid?.let {
                         AppPreferences(context).saveLedgerLastAccount(it)
                     }
                     scope.launch {
                         withContext(Dispatchers.IO) {
                             store.upsert(newEntry)
+                            candidateToRemove?.let {
+                                NotificationLedgerStore(context).removeCandidate(it)
+                            }
                         }
                         reloadEntries()
                     }
@@ -1272,6 +1295,19 @@ fun LedgerScreen(
                 },
             )
         }
+    }
+
+    if (showNotificationLedgerDialog) {
+        NotificationLedgerDialog(
+            strings = strings,
+            onSelectAmount = { candidate, amount ->
+                showNotificationLedgerDialog = false
+                editingUuid = null
+                notificationDraft = candidate to amount
+                showEditor = true
+            },
+            onDismiss = { showNotificationLedgerDialog = false },
+        )
     }
 
     if (showWebDavDialog) {

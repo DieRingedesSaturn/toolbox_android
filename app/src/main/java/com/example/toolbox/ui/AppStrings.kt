@@ -708,6 +708,48 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "确定" else "OK"
     val addLedgerEntry: String
         get() = if (chinese) "记一笔" else "Add entry"
+    val notificationLedgerTitle: String
+        get() = if (chinese) "通知快速记账" else "Quick entry from notifications"
+    val notificationLedgerEnable: String
+        get() = if (chinese) "读取通知中的金额" else "Read amounts from notifications"
+    val notificationLedgerHint: String
+        get() = if (chinese) {
+            "系统会授权读取通知，Toolbox 收到后只处理下方选中的应用。提取金额留在本机，点选后仍需确认保存；不保存通知正文。关闭时清除候选项；系统授权需在设置中撤销。"
+        } else {
+            "Android grants notification access; Toolbox processes only selected apps after receipt. Amounts stay on this device and require confirmation; text is not saved. Turning this off clears suggestions; revoke access in Settings."
+        }
+    val notificationLedgerGrantAccess: String
+        get() = if (chinese) "前往系统设置授权通知读取" else "Grant notification access in Settings"
+    val notificationLedgerManageAccess: String
+        get() = if (chinese) "在系统设置中管理通知读取" else "Manage notification access in Settings"
+    val notificationLedgerCandidatesTab: String
+        get() = if (chinese) "待记账" else "Suggestions"
+    val notificationLedgerSourcesTab: String
+        get() = if (chinese) "来源应用" else "Source apps"
+    val notificationLedgerStatusOff: String
+        get() = if (chinese) "已关闭，候选项已清空" else "Off; suggestions cleared"
+    val notificationLedgerStatusNeedsAccess: String
+        get() = if (chinese) "还需授予系统通知读取权限" else "Notification access required"
+    val notificationLedgerStatusNeedsSources: String
+        get() = if (chinese) "请选择来源应用" else "Choose source apps"
+    fun notificationLedgerStatusReady(count: Int): String =
+        if (chinese) "已开启 · $count 个来源应用" else "On · $count source app${if (count == 1) "" else "s"}"
+    val notificationLedgerCandidateHint: String
+        get() = if (chinese) "点选金额后检查并保存" else "Choose an amount, then review and save"
+    val notificationLedgerEmpty: String
+        get() = if (chinese) "暂无候选金额" else "No suggested amounts"
+    val notificationLedgerEmptyHint: String
+        get() = if (chinese) "等待所选应用发来新通知。" else "Waiting for a new notification from a selected app."
+    val notificationLedgerSources: String
+        get() = if (chinese) "选择来源应用" else "Choose source apps"
+    val notificationLedgerAppSearch: String
+        get() = if (chinese) "搜索应用名称或包名" else "Search app or package"
+    val notificationLedgerSelectedOnly: String
+        get() = if (chinese) "只看已选" else "Selected only"
+    val notificationLedgerNoApps: String
+        get() = if (chinese) "没有匹配的应用" else "No matching apps"
+    val notificationLedgerDiscard: String
+        get() = if (chinese) "忽略" else "Dismiss"
     val editLedgerEntry: String
         get() = if (chinese) "编辑账目" else "Edit entry"
     val trackAverageCostOption: String

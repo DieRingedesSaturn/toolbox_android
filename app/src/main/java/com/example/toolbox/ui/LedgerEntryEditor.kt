@@ -94,6 +94,8 @@ import kotlinx.coroutines.withContext
 internal fun LedgerEntryEditor(
     strings: ToolboxStrings,
     initialEntry: LedgerEntry?,
+    draftAmountCents: Long? = null,
+    draftOccurredAtMillis: Long? = null,
     tags: List<LedgerTag>,
     accounts: List<LedgerAccount> = emptyList(),
     defaultAccountUuid: String = LedgerAccounts.DEFAULT_ACCOUNT_UUID,
@@ -117,7 +119,10 @@ internal fun LedgerEntryEditor(
     }
     var amountText by rememberSaveable {
         mutableStateOf(
-            initialEntry?.let { "%.2f".format(Locale.US, it.amountValue).removeSuffix(".00") } ?: "",
+            initialEntry?.let { "%.2f".format(Locale.US, it.amountValue).removeSuffix(".00") }
+                ?: draftAmountCents?.let {
+                    "%.2f".format(Locale.US, it / 100.0).removeSuffix(".00")
+                } ?: "",
         )
     }
     var tagUuidsText by rememberSaveable {
@@ -130,8 +135,8 @@ internal fun LedgerEntryEditor(
     val selectedTags = liveTags.filter { it.uuid in selectedTagUuids }
     var showTagCreate by rememberSaveable { mutableStateOf(false) }
 
-    val initialDate = remember(initialEntry) {
-        initialEntry?.occurredAtMillis
+    val initialDate = remember(initialEntry, draftOccurredAtMillis) {
+        (initialEntry?.occurredAtMillis ?: draftOccurredAtMillis)
             ?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
     }
     var selectedEpochDay by rememberSaveable {
@@ -266,10 +271,11 @@ internal fun LedgerEntryEditor(
     val amountValid = if (isAdjustment) previewAmountCents != 0L else previewAmountCents > 0L
     val previewSalvageCents = ((salvageText.replace(',', '.').toDoubleOrNull() ?: 0.0) * 100.0)
         .roundToLong().coerceAtLeast(0L)
-    val occurredAtMillis = if (initialEntry != null && selectedDate == initialDate) {
-        initialEntry.occurredAtMillis
+    val originalOccurredAtMillis = initialEntry?.occurredAtMillis ?: draftOccurredAtMillis
+    val occurredAtMillis = if (originalOccurredAtMillis != null && selectedDate == initialDate) {
+        originalOccurredAtMillis
     } else {
-        val timeOfDay = Instant.ofEpochMilli(initialEntry?.occurredAtMillis ?: nowMillis)
+        val timeOfDay = Instant.ofEpochMilli(originalOccurredAtMillis ?: nowMillis)
             .atZone(zone).toLocalTime()
         selectedDate.atTime(timeOfDay).atZone(zone).toInstant().toEpochMilli()
     }

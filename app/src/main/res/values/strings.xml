@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="ledger_notification_listener_label">Toolbox quick ledger</string>
     <string name="app_name">Toolbox</string>
     <string name="ledger_widget_label">Ledger</string>
     <string name="ledger_widget_description">Daily cost and this month\'s spending at a glance</string>
