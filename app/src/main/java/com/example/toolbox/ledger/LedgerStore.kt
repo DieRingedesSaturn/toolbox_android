@@ -41,6 +41,7 @@ class LedgerStore(context: Context) : SQLiteOpenHelper(
                 salvage_value_cents INTEGER NOT NULL,
                 target_days INTEGER,
                 retired_at INTEGER,
+                cost_ends_at INTEGER,
                 billing_cycle TEXT NOT NULL,
                 custom_cycle_days INTEGER NOT NULL,
                 custom_cycle_unit TEXT NOT NULL DEFAULT 'DAYS',
@@ -204,6 +205,11 @@ class LedgerStore(context: Context) : SQLiteOpenHelper(
                     )
                 }
             }
+        }
+        if (oldVersion < 5) {
+            db.execSQL(
+                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN cost_ends_at INTEGER",
+            )
         }
     }
 
@@ -559,6 +565,11 @@ class LedgerStore(context: Context) : SQLiteOpenHelper(
         put("salvage_value_cents", entry.salvageValueCents)
         if (entry.targetDays != null) put("target_days", entry.targetDays) else putNull("target_days")
         if (entry.retiredAtMillis != null) put("retired_at", entry.retiredAtMillis) else putNull("retired_at")
+        if (entry.costEndsAtMillis != null) {
+            put("cost_ends_at", entry.costEndsAtMillis)
+        } else {
+            putNull("cost_ends_at")
+        }
         put("billing_cycle", entry.billingCycle.name)
         put("custom_cycle_days", entry.customCycleDays)
         put("custom_cycle_unit", entry.customCycleUnit.name)
@@ -956,6 +967,7 @@ class LedgerStore(context: Context) : SQLiteOpenHelper(
             salvageValueCents = cursor.getLong(cursor.getColumnIndexOrThrow("salvage_value_cents")),
             targetDays = if (cursor.isNull(targetDaysIdx)) null else cursor.getInt(targetDaysIdx),
             retiredAtMillis = if (cursor.isNull(retiredAtIdx)) null else cursor.getLong(retiredAtIdx),
+            costEndsAtMillis = nullableLong(cursor, "cost_ends_at"),
             billingCycle = runCatching {
                 BillingCycle.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("billing_cycle")))
             }.getOrDefault(BillingCycle.MONTHLY),
@@ -981,7 +993,7 @@ class LedgerStore(context: Context) : SQLiteOpenHelper(
 
     companion object {
         private const val DATABASE_NAME = "toolbox_ledger.db"
-        private const val DATABASE_VERSION = 4
+        private const val DATABASE_VERSION = 5
         private const val TABLE_ENTRIES = "ledger_entries"
         private const val TABLE_TAGS = "ledger_tags"
         private const val TABLE_ACCOUNTS = "ledger_accounts"

@@ -127,6 +127,83 @@ class LedgerCalculatorTest {
     }
 
     @Test
+    fun testOneTimeScheduledEndActsAsHorizon() {
+        val zone = ZoneId.of("UTC")
+        val occurred = LocalDate.of(2026, 1, 1)
+            .atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
+        val end = LocalDate.of(2027, 1, 1)
+            .atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
+        // 3650 RMB asset planned to last until 2027-01-01 (365-day horizon).
+        val entry = LedgerEntry(
+            title = "Laptop",
+            amountCents = 365_000L,
+            occurredAtMillis = occurred,
+            costTrackingMode = CostTrackingMode.ONE_TIME_AMORTIZED,
+            costEndsAtMillis = end,
+        )
+
+        val during = LocalDate.of(2026, 7, 1)
+            .atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
+        val breakdown = LedgerCalculator.calculateCostBreakdown(
+            entry, during, emptyList(), zone,
+        )!!
+        assertTrue(breakdown.isActive)
+        assertEquals(365, breakdown.targetDays)
+        assertEquals(10.0, breakdown.dailyCostYuan, 0.001)
+
+        // Past the end date the item is fully amortized and counts as ended.
+        val after = end + 10 * LedgerCalculator.MILLIS_PER_DAY
+        val ended = LedgerCalculator.calculateCostBreakdown(
+            entry, after, emptyList(), zone,
+        )!!
+        assertFalse(ended.isActive)
+        assertEquals(365, ended.daysHeld)
+        assertEquals(10.0, ended.dailyCostYuan, 0.001)
+    }
+
+    @Test
+    fun testSubscriptionScheduledEndStopsBurnAndRenewal() {
+        val zone = ZoneId.of("UTC")
+        val occurred = LocalDate.of(2026, 8, 22)
+            .atTime(9, 30).atZone(zone).toInstant().toEpochMilli()
+        val end = LocalDate.of(2026, 12, 22)
+            .atTime(9, 30).atZone(zone).toInstant().toEpochMilli()
+        val entry = LedgerEntry(
+            title = "Year plan",
+            amountCents = 3_000L,
+            occurredAtMillis = occurred,
+            costTrackingMode = CostTrackingMode.PERIODIC_SUBSCRIPTION,
+            billingCycle = BillingCycle.MONTHLY,
+            isActiveCost = true,
+            costEndsAtMillis = end,
+        )
+
+        // Before the end: still active, next renewal is inside the term.
+        val during = LocalDate.of(2026, 9, 25)
+            .atTime(9, 30).atZone(zone).toInstant().toEpochMilli()
+        val active = LedgerCalculator.calculateCostBreakdown(
+            entry, during, emptyList(), zone,
+        )!!
+        assertTrue(active.isActive)
+        assertNotNull(active.nextRenewalMillis)
+
+        // After the end date: ended even though isActiveCost stays set —
+        // no next renewal, excluded from the burn-rate summary.
+        val after = end + 5 * LedgerCalculator.MILLIS_PER_DAY
+        val ended = LedgerCalculator.calculateCostBreakdown(
+            entry, after, emptyList(), zone,
+        )!!
+        assertFalse(ended.isActive)
+        assertNull(ended.nextRenewalMillis)
+
+        val summary = LedgerCalculator.summarize(
+            listOf(entry), after, zone = zone,
+        )
+        assertEquals(0.0, summary.activePeriodicDailyYuan, 0.001)
+        assertEquals(0, summary.activeSubscriptionCount)
+    }
+
+    @Test
     fun testSummaryAggregatesActiveBurnRateAndExcludesSoftDeleted() {
         val now = 1_700_000_000_000L
         val entries = listOf(
@@ -187,6 +264,7 @@ class LedgerCalculatorTest {
             occurredAtMillis = now - 60 * LedgerCalculator.MILLIS_PER_DAY,
             costTrackingMode = CostTrackingMode.ONE_TIME_AMORTIZED,
             targetDays = 1000,
+            costEndsAtMillis = now + 300 * LedgerCalculator.MILLIS_PER_DAY,
             syncStatus = LedgerSyncStatus.PENDING_PUSH,
             serverRevision = 42L,
         )
@@ -210,6 +288,10 @@ class LedgerCalculatorTest {
         assertEquals(150_000L, restored.salvageValueCents)
         assertEquals(CostTrackingMode.ONE_TIME_AMORTIZED, restored.costTrackingMode)
         assertEquals(1000, restored.targetDays)
+        assertEquals(
+            now + 300 * LedgerCalculator.MILLIS_PER_DAY,
+            restored.costEndsAtMillis,
+        )
         assertNull(restored.deletedAtMillis)
     }
 

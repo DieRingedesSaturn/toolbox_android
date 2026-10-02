@@ -19,6 +19,7 @@ class SubscriptionRenewalsTest {
         customDays: Int = 30,
         active: Boolean = true,
         retiredAt: LocalDate? = null,
+        endsAt: LocalDate? = null,
         type: LedgerEntryType = LedgerEntryType.EXPENSE,
         mode: CostTrackingMode = CostTrackingMode.PERIODIC_SUBSCRIPTION,
     ) = LedgerEntry(
@@ -35,6 +36,8 @@ class SubscriptionRenewalsTest {
         customCycleDays = customDays,
         isActiveCost = active,
         retiredAtMillis = retiredAt?.atTime(9, 30)
+            ?.atZone(zone)?.toInstant()?.toEpochMilli(),
+        costEndsAtMillis = endsAt?.atTime(9, 30)
             ?.atZone(zone)?.toInstant()?.toEpochMilli(),
     )
 
@@ -309,6 +312,69 @@ class SubscriptionRenewalsTest {
         assertEquals(
             listOf(LocalDate.of(2026, 1, 19), LocalDate.of(2026, 2, 2), LocalDate.of(2026, 2, 16)),
             dues.map { it.date },
+        )
+    }
+
+    @Test
+    fun testDueRenewalsCappedAtScheduledEnd() {
+        // Monthly on the 22nd, scheduled to end on 2026-12-22 — a renewal
+        // landing exactly on the end date is never charged.
+        val subscription = sub(
+            start = LocalDate.of(2026, 8, 22),
+            endsAt = LocalDate.of(2026, 12, 22),
+        )
+        val due = SubscriptionRenewals.dueRenewals(
+            listOf(subscription),
+            today = LocalDate.of(2027, 3, 1),
+            zone = zone,
+        )
+        assertEquals(
+            listOf(
+                LocalDate.of(2026, 9, 22),
+                LocalDate.of(2026, 10, 22),
+                LocalDate.of(2026, 11, 22),
+            ),
+            due.map { it.date },
+        )
+    }
+
+    @Test
+    fun testScheduledEndBeforeFirstRenewalYieldsNothing() {
+        val subscription = sub(
+            start = LocalDate.of(2026, 8, 22),
+            endsAt = LocalDate.of(2026, 9, 20),
+        )
+        val due = SubscriptionRenewals.dueRenewals(
+            listOf(subscription),
+            today = LocalDate.of(2026, 10, 1),
+            zone = zone,
+        )
+        assertTrue(due.isEmpty())
+    }
+
+    @Test
+    fun testNextRenewalDateRespectsScheduledEnd() {
+        val subscription = sub(
+            start = LocalDate.of(2026, 8, 22),
+            endsAt = LocalDate.of(2026, 12, 22),
+        )
+        // Next renewal 10-22 is before the end date.
+        assertEquals(
+            LocalDate.of(2026, 10, 22),
+            SubscriptionRenewals.nextRenewalDate(
+                subscription,
+                LocalDate.of(2026, 9, 25),
+                zone,
+            ),
+        )
+        // After the last in-term renewal, the next candidate lands on the
+        // end date itself — never charged, so no next renewal.
+        assertNull(
+            SubscriptionRenewals.nextRenewalDate(
+                subscription,
+                LocalDate.of(2026, 11, 23),
+                zone,
+            ),
         )
     }
 

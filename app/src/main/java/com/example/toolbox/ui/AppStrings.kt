@@ -808,6 +808,20 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "订阅中" else "Active"
     val statusSubStopped: String
         get() = if (chinese) "已停订" else "Stopped"
+    val statusEnded: String
+        get() = if (chinese) "已到期" else "Ended"
+    val costEndDateLabel: String
+        get() = if (chinese) {
+            "到期日期（选填，到期后自动停止计入）"
+        } else {
+            "End date (optional — stops counting after)"
+        }
+    val costEndDateNone: String
+        get() = if (chinese) "无到期" else "No end date"
+    fun costEndsOn(date: String): String =
+        if (chinese) "到期 $date" else "Ends $date"
+    fun costEndedOn(date: String): String =
+        if (chinese) "已于 $date 到期" else "Ended $date"
     val perDayUnit: String
         get() = if (chinese) "/天" else "/day"
     val perMonthUnit: String

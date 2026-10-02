@@ -61,7 +61,9 @@ object SubscriptionRenewals {
      * End rule: an active subscription is due up to `today` inclusive; a
      * stopped subscription (isActiveCost=false with a retired date) is due
      * only for dates strictly before the stop date — cancelling on the
-     * renewal day means that renewal was never charged.
+     * renewal day means that renewal was never charged. A scheduled end
+     * date caps the series the same way: a renewal on or after that day
+     * is never charged.
      */
     fun dueRenewals(
         entries: List<LedgerEntry>,
@@ -86,6 +88,9 @@ object SubscriptionRenewals {
             } else {
                 null
             }
+            val scheduledEnd = sub.costEndsAtMillis?.let {
+                Instant.ofEpochMilli(it).atZone(zone).toLocalDate()
+            }
             var index = 1
             var count = 0
             while (count < maxPerSubscription) {
@@ -93,10 +98,10 @@ object SubscriptionRenewals {
                     start, sub.billingCycle, sub.customCycleDays,
                     sub.customCycleUnit, index,
                 )
-                val due = if (stoppedDate != null) {
-                    dueDate < stoppedDate
-                } else {
-                    dueDate <= today
+                val due = when {
+                    scheduledEnd != null && dueDate >= scheduledEnd -> false
+                    stoppedDate != null -> dueDate < stoppedDate
+                    else -> dueDate <= today
                 }
                 if (!due) break
                 val uuid = renewalUuid(sub.uuid, index)
@@ -180,13 +185,20 @@ object SubscriptionRenewals {
         syncStatus = LedgerSyncStatus.PENDING_PUSH,
     )
 
-    /** The first renewal strictly after [today]; null when stopped. */
+    /**
+     * The first renewal strictly after [today]; null when stopped or when
+     * the remaining scheduled term is over (renewals on or after the end
+     * date are never charged).
+     */
     fun nextRenewalDate(
         sub: LedgerEntry,
         today: LocalDate,
         zone: ZoneId,
     ): LocalDate? {
         if (!sub.isActiveCost) return null
+        val endDate = sub.costEndsAtMillis?.let {
+            Instant.ofEpochMilli(it).atZone(zone).toLocalDate()
+        }
         val start = Instant.ofEpochMilli(sub.occurredAtMillis)
             .atZone(zone).toLocalDate()
         var index = 1
@@ -195,6 +207,7 @@ object SubscriptionRenewals {
                 start, sub.billingCycle, sub.customCycleDays,
                 sub.customCycleUnit, index,
             )
+            if (endDate != null && date >= endDate) return null
             if (date > today) return date
             index++
         }

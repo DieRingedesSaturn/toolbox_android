@@ -76,6 +76,10 @@ data class LedgerEntry(
     val salvageValueCents: Long = 0L,
     val targetDays: Int? = null,
     val retiredAtMillis: Long? = null,
+    // Scheduled end date for the cost item (either tracking mode): the item
+    // is live through that day — a subscription stops renewing and an asset
+    // is fully amortized; afterwards the item counts as ended.
+    val costEndsAtMillis: Long? = null,
     // Periodic / Subscription fields
     val billingCycle: BillingCycle = BillingCycle.MONTHLY,
     /** For CUSTOM_DAYS: the count of `customCycleUnit` per cycle. */
