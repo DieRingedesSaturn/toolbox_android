@@ -48,6 +48,8 @@ adb logcat
 
 Debug 构建没有 R8 优化，也用不上随包的 baseline profile，Compose 界面明显更慢；日常使用请安装 release 构建。项目根目录下存在不提交的 `signing/toolbox-debug.keystore` 时，debug 和 release 都用它签名，两者可以互相覆盖安装，数据不丢；没有这个文件时，debug 回落到默认调试密钥，release 不签名。release 构建不可调试，`adb shell run-as` 读不到应用文件，备份请用 App 内的 JSON 导出或 WebDAV。
 
+单元测试包含通过 Robolectric 在 JVM 上运行的 SQLite 数据库升级测试。Robolectric 只用于测试（Apache-2.0），不会打包进 App；第一次运行 `./gradlew testDebugUnitTest` 时会从 Maven Central 下载它的 Android 框架包。
+
 如果当前 shell 尚未配置 JDK 17 和 Android SDK，请将 `JAVA_HOME` 与 `ANDROID_SDK_ROOT` 指向本机安装位置。SDK 路径保存在不提交的 `local.properties` 中。
 
 ## 包结构

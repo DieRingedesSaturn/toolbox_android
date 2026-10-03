@@ -101,6 +101,8 @@ Verify in proportion to the change:
 
 A successful build confirms the compilation path only. It does not prove permissions, hardware fields, location accuracy, network results, or vendor compatibility.
 
+Any schema change must keep `LedgerStoreMigrationTest` (Robolectric, JVM-only) passing and should add a case for the new version; migration steps must read only the columns that exist at their own version, never through the current row mapper. Never run instrumented tests (`connectedAndroidTest`) against a device that holds real ledger data: they uninstall the app afterwards, which deletes the ledger.
+
 ## 7. Change discipline
 
 Before editing:
