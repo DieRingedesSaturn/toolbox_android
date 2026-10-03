@@ -935,6 +935,24 @@ class ToolboxStrings(val language: AppLanguage) {
 
     fun backupExported(count: Int): String =
         if (chinese) "已导出 $count 条记录" else "Exported $count entries"
+    val backupReminderNever: String
+        get() = if (chinese) {
+            "账本还没有备份过。系统自动备份已关闭，卸载或换手机前请先备份。"
+        } else {
+            "This ledger has never been backed up. System backup is off, so back up before uninstalling or switching phones."
+        }
+    fun backupReminderDays(days: Long): String =
+        if (chinese) {
+            "已经 $days 天没有备份了，这期间账本有改动。"
+        } else {
+            "No backup for $days days, and the ledger has changed since."
+        }
+    val backupReminderExport: String
+        get() = if (chinese) "导出 JSON" else "Export JSON"
+    val backupReminderWebDav: String
+        get() = if (chinese) "WebDAV 同步" else "WebDAV sync"
+    val backupReminderLater: String
+        get() = if (chinese) "稍后" else "Later"
 
     fun backupMergePreview(added: Int, updated: Int, unchanged: Int): String =
         if (chinese) {

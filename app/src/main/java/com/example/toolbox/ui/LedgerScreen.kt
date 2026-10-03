@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +73,8 @@ import com.example.toolbox.ledger.LINK_TYPE_SALE
 import com.example.toolbox.ledger.LedgerAccount
 import com.example.toolbox.ledger.LedgerAccounts
 import com.example.toolbox.ledger.LedgerBackup
+import com.example.toolbox.ledger.LedgerBackupReminder
+import com.example.toolbox.ledger.LedgerBackupStatusStore
 import com.example.toolbox.ledger.LedgerCalculator
 import com.example.toolbox.ledger.LedgerCategory
 import com.example.toolbox.ledger.LedgerCsv
@@ -154,6 +157,11 @@ internal fun LedgerScreen(
     var webDavConfig by remember { mutableStateOf<WebDavConfig?>(null) }
     var webDavPasswordUnavailable by remember { mutableStateOf(false) }
     var webDavLastSyncAt by remember { mutableStateOf<Long?>(null) }
+    var webDavStatusLoaded by remember { mutableStateOf(false) }
+    val backupStatusStore = remember(context) { LedgerBackupStatusStore(context) }
+    var lastFileExportAt by remember { mutableStateOf<Long?>(null) }
+    var backupSnoozedUntil by remember { mutableStateOf<Long?>(null) }
+    var backupStatusLoaded by remember { mutableStateOf(false) }
     var webDavBusyAction by remember { mutableStateOf<WebDavBusyAction?>(null) }
     var webDavLastResult by remember { mutableStateOf<String?>(null) }
     var tags by remember { mutableStateOf(cachedSnapshot?.tags.orEmpty()) }
@@ -200,6 +208,16 @@ internal fun LedgerScreen(
         webDavConfig = loaded.first
         webDavPasswordUnavailable = loaded.second
         webDavLastSyncAt = loaded.third
+        webDavStatusLoaded = true
+    }
+
+    LaunchedEffect(backupStatusStore) {
+        val loaded = withContext(Dispatchers.IO) {
+            backupStatusStore.lastFileExportAtMillis() to backupStatusStore.snoozedUntilMillis()
+        }
+        lastFileExportAt = loaded.first
+        backupSnoozedUntil = loaded.second
+        backupStatusLoaded = true
     }
 
     fun reloadEntries() {
@@ -702,6 +720,7 @@ internal fun LedgerScreen(
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
+                    val exportedAt = System.currentTimeMillis()
                     val allRows = store.queryAllEntriesForSync()
                     writeTextToUri(
                         uri,
@@ -713,13 +732,15 @@ internal fun LedgerScreen(
                             ),
                         ),
                     )
-                    allRows.count { it.deletedAtMillis == null }
+                    backupStatusStore.saveFileExport(exportedAt)
+                    exportedAt to allRows.count { it.deletedAtMillis == null }
                 }
             }
+            outcome.onSuccess { lastFileExportAt = it.first }
             Toast.makeText(
                 context,
                 outcome.fold(
-                    onSuccess = { strings.backupExported(it) },
+                    onSuccess = { strings.backupExported(it.second) },
                     onFailure = { strings.backupExportFailed },
                 ),
                 Toast.LENGTH_LONG,
@@ -917,6 +938,25 @@ internal fun LedgerScreen(
         }
     }
 
+    val lastBackupAt = listOfNotNull(lastFileExportAt, webDavLastSyncAt).maxOrNull()
+    val backupReminderDue = remember(allEntries, tags, accounts, lastBackupAt, backupSnoozedUntil) {
+        LedgerBackupReminder.isDue(
+            lastBackupAtMillis = lastBackupAt,
+            earliestDataAtMillis = allEntries.minOfOrNull { it.createdAtMillis },
+            latestChangeAtMillis = (
+                allEntries.map { it.updatedAtMillis } +
+                    tags.map { it.updatedAtMillis } +
+                    accounts.map { it.updatedAtMillis }
+                ).filter { it > 0L }.maxOrNull(),
+            snoozedUntilMillis = backupSnoozedUntil,
+            nowMillis = System.currentTimeMillis(),
+        )
+    }
+    val showBackupReminder = backupReminderDue &&
+        entriesLoaded &&
+        backupStatusLoaded &&
+        webDavStatusLoaded
+
     Scaffold(
         topBar = {
             Column {
@@ -1106,6 +1146,34 @@ internal fun LedgerScreen(
                                 },
                             )
                         }
+                    }
+                    AnimatedVisibility(visible = showBackupReminder) {
+                        LedgerBackupReminderCard(
+                            strings = strings,
+                            daysSinceBackup = lastBackupAt?.let {
+                                LedgerBackupReminder.daysSince(it, System.currentTimeMillis())
+                            },
+                            webDavAvailable = webDavConfig?.isComplete == true,
+                            onExport = {
+                                exportJsonLauncher.launch(
+                                    backupFileName("yyyyMMdd-HHmmss", ".json"),
+                                )
+                            },
+                            onWebDavSync = {
+                                webDavConfig?.takeIf { it.isComplete }?.let {
+                                    runWebDavSync(it, toastResult = true)
+                                }
+                            },
+                            onLater = {
+                                val until = LedgerBackupReminder.snoozeUntil(
+                                    System.currentTimeMillis(),
+                                )
+                                backupSnoozedUntil = until
+                                scope.launch(Dispatchers.IO) {
+                                    backupStatusStore.saveSnoozedUntil(until)
+                                }
+                            },
+                        )
                     }
                 }
             }
