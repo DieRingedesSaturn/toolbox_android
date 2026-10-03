@@ -67,4 +67,56 @@ class LedgerDbSnapshotsTest {
         assertEquals(expected, remaining)
         assertTrue(unrelated.exists())
     }
+
+    @Test
+    fun testListParsesNamesAndSortsNewestFirst() {
+        val dir = File(temp.root, LedgerDbSnapshots.DIR_NAME).apply { mkdirs() }
+        File(dir, "toolbox_ledger-20261003-153000-v4.db").writeText("a")
+        File(dir, "toolbox_ledger-20261005-093000-v5.db").writeText("b")
+        File(dir, "toolbox_ledger-20261004-123000-v4.db").writeText("c")
+        File(dir, "toolbox_ledger-20261005-093000-v5.db-wal").writeText("wal")
+        File(dir, "notes.txt").writeText("keep")
+        File(dir, "toolbox_ledger-badname.db").writeText("junk")
+
+        val snapshots = LedgerDbSnapshots.list(dir, utc)
+
+        assertEquals(3, snapshots.size)
+        assertEquals(millis(5, 9), snapshots[0].takenAtMillis)
+        assertEquals(5, snapshots[0].schemaVersion)
+        assertEquals(millis(4, 12), snapshots[1].takenAtMillis)
+        assertEquals(4, snapshots[1].schemaVersion)
+        assertEquals(millis(3, 15), snapshots[2].takenAtMillis)
+    }
+
+    @Test
+    fun testRestoreReplacesDatabaseAndWal() {
+        val db = temp.newFile("toolbox_ledger.db").apply { writeText("current") }
+        File(db.path + "-wal").writeText("old wal")
+        File(db.path + "-shm").writeText("old shm")
+        val dir = File(temp.root, LedgerDbSnapshots.DIR_NAME)
+        val source = temp.newFile("src.db").apply { writeText("v4 data") }
+        File(source.path + "-wal").writeText("snap wal")
+        val snapshot = LedgerDbSnapshots.save(source, dir, 4, millis(3, 15), utc)
+
+        LedgerDbSnapshots.restore(snapshot, db)
+
+        assertEquals("v4 data", db.readText())
+        assertEquals("snap wal", File(db.path + "-wal").readText())
+        assertFalse(File(db.path + "-shm").exists())
+        assertFalse(File(db.path + ".restore-tmp").exists())
+    }
+
+    @Test
+    fun testRestoreDropsWalWhenSnapshotHasNone() {
+        val db = temp.newFile("toolbox_ledger.db").apply { writeText("current") }
+        File(db.path + "-wal").writeText("old wal")
+        val dir = File(temp.root, LedgerDbSnapshots.DIR_NAME)
+        val source = temp.newFile("src.db").apply { writeText("v4 data") }
+        val snapshot = LedgerDbSnapshots.save(source, dir, 4, millis(3, 15), utc)
+
+        LedgerDbSnapshots.restore(snapshot, db)
+
+        assertEquals("v4 data", db.readText())
+        assertFalse(File(db.path + "-wal").exists())
+    }
 }

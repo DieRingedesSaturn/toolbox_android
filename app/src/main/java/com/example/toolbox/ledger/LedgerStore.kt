@@ -1028,7 +1028,7 @@ class LedgerStore(context: Context) : SQLiteOpenHelper(
     }
 
     companion object {
-        private const val DATABASE_NAME = "toolbox_ledger.db"
+        internal const val DATABASE_NAME = "toolbox_ledger.db"
         private const val DATABASE_VERSION = 5
         private const val TABLE_ENTRIES = "ledger_entries"
         private const val TABLE_TAGS = "ledger_tags"

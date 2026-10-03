@@ -7,11 +7,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -31,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -51,6 +55,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -83,6 +88,7 @@ import com.example.toolbox.ledger.LedgerBudgets
 import com.example.toolbox.ledger.LedgerCalculator
 import com.example.toolbox.ledger.LedgerCategory
 import com.example.toolbox.ledger.LedgerCsv
+import com.example.toolbox.ledger.LedgerDbSnapshots
 import com.example.toolbox.ledger.LedgerEntry
 import com.example.toolbox.ledger.LedgerEntryType
 import com.example.toolbox.ledger.LedgerQuickPicks
@@ -103,6 +109,7 @@ import com.example.toolbox.ledger.WebDavConfigStore
 import com.example.toolbox.ledger.WebDavException
 import com.example.toolbox.ledger.WebDavFailure
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
@@ -138,7 +145,8 @@ internal fun LedgerScreen(
     onSnapshot: (LedgerSnapshot) -> Unit = {},
 ) {
     val context = LocalContext.current
-    val store = remember(context) { LedgerStore(context) }
+    var storeGeneration by remember { mutableIntStateOf(0) }
+    val store = remember(context, storeGeneration) { LedgerStore(context) }
     val scope = rememberCoroutineScope()
     val currentOnSnapshot by rememberUpdatedState(onSnapshot)
 
@@ -196,6 +204,20 @@ internal fun LedgerScreen(
     val budgetStore = remember(context) { LedgerBudgetStore(context) }
     var budgets by remember { mutableStateOf(LedgerBudgets()) }
     var showBudgetDialog by remember { mutableStateOf(false) }
+    var showSnapshotDialog by rememberSaveable { mutableStateOf(false) }
+    var snapshots by remember {
+        mutableStateOf<List<LedgerDbSnapshots.Snapshot>?>(null)
+    }
+    var selectedSnapshot by remember {
+        mutableStateOf<LedgerDbSnapshots.Snapshot?>(null)
+    }
+    var restoreBusy by remember { mutableStateOf(false) }
+    val snapshotDir = remember(context) {
+        File(context.noBackupFilesDir, LedgerDbSnapshots.DIR_NAME)
+    }
+    val snapshotTimeFormat = remember {
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+    }
     var filterTagCsv by rememberSaveable { mutableStateOf("") }
     var filterModeName by rememberSaveable {
         mutableStateOf(TagFilterMode.ANY.name)
@@ -288,6 +310,46 @@ internal fun LedgerScreen(
             notificationDraft = null
             showEditor = true
             onEditorRequestHandled()
+        }
+    }
+
+    fun restoreSnapshot(snapshot: LedgerDbSnapshots.Snapshot) {
+        if (restoreBusy) return
+        restoreBusy = true
+        scope.launch {
+            val restored = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dbFile = context.getDatabasePath(LedgerStore.DATABASE_NAME)
+                    store.writableDatabase
+                        .rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null)
+                        .use { it.moveToFirst() }
+                    LedgerDbSnapshots.save(
+                        dbFile = dbFile,
+                        dir = snapshotDir,
+                        fromVersion = store.readableDatabase.version,
+                        nowMillis = System.currentTimeMillis(),
+                    )
+                    store.close()
+                    LedgerDbSnapshots.restore(snapshot.file, dbFile)
+                }.isSuccess
+            }
+            restoreBusy = false
+            if (restored) {
+                selectedSnapshot = null
+                showSnapshotDialog = false
+                Toast.makeText(
+                    context,
+                    strings.snapshotRestored,
+                    Toast.LENGTH_LONG,
+                ).show()
+                storeGeneration++
+            } else {
+                Toast.makeText(
+                    context,
+                    strings.snapshotRestoreFailed,
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
         }
     }
 
@@ -1153,6 +1215,20 @@ internal fun LedgerScreen(
                                             )
                                         },
                                     )
+                                    DropdownMenuItem(
+                                        text = { Text(strings.snapshotRestoreMenu) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            snapshots = null
+                                            selectedSnapshot = null
+                                            showSnapshotDialog = true
+                                            scope.launch {
+                                                snapshots = withContext(Dispatchers.IO) {
+                                                    LedgerDbSnapshots.list(snapshotDir)
+                                                }
+                                            }
+                                        },
+                                    )
                                 }
                             }
                         },
@@ -1566,6 +1642,89 @@ internal fun LedgerScreen(
             },
             dismissButton = {
                 TextButton(onClick = { confirmSkipDues = null }) {
+                    Text(strings.cancelAction)
+                }
+            },
+        )
+    }
+
+    if (showSnapshotDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!restoreBusy) showSnapshotDialog = false },
+            title = { Text(strings.snapshotRestoreTitle) },
+            text = {
+                Column {
+                    Text(
+                        strings.snapshotRestoreHint,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    val current = snapshots
+                    when {
+                        current == null -> Text(
+                            strings.loading,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        current.isEmpty() -> Text(
+                            strings.snapshotRestoreEmpty,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        else -> Column(
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            current.forEach { snapshot ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { selectedSnapshot = snapshot }
+                                        .padding(vertical = 4.dp),
+                                ) {
+                                    RadioButton(
+                                        selected = selectedSnapshot == snapshot,
+                                        onClick = { selectedSnapshot = snapshot },
+                                    )
+                                    Column {
+                                        Text(
+                                            LocalDateTime.ofInstant(
+                                                Instant.ofEpochMilli(
+                                                    snapshot.takenAtMillis,
+                                                ),
+                                                zone,
+                                            ).format(snapshotTimeFormat),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                        )
+                                        Text(
+                                            strings.snapshotSchemaVersion(
+                                                snapshot.schemaVersion,
+                                            ) + " · " + formatBytes(snapshot.file.length()),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme
+                                                .onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = selectedSnapshot != null && !restoreBusy,
+                    onClick = { selectedSnapshot?.let { restoreSnapshot(it) } },
+                ) {
+                    Text(strings.snapshotRestoreAction)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !restoreBusy,
+                    onClick = { showSnapshotDialog = false },
+                ) {
                     Text(strings.cancelAction)
                 }
             },
