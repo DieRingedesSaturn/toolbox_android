@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -48,6 +50,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -108,6 +111,8 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val LEDGER_TAB_COUNT = 4
 
 internal data class LedgerSnapshot(
     val entries: List<LedgerEntry>,
@@ -249,6 +254,21 @@ internal fun LedgerScreen(
         if (tabRequest != null) {
             selectedTab = tabRequest
             onTabRequestHandled()
+        }
+    }
+
+    val pagerState = rememberPagerState(initialPage = selectedTab) { LEDGER_TAB_COUNT }
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage != selectedTab) {
+            pagerState.animateScrollToPage(selectedTab)
+        }
+    }
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            if (page != selectedTab) {
+                selectedTab = page
+                selectedEntryUuids = emptySet()
+            }
         }
     }
 
@@ -1122,7 +1142,7 @@ internal fun LedgerScreen(
                 }
                 if (!searching) {
                     PrimaryTabRow(
-                        selectedTabIndex = selectedTab,
+                        selectedTabIndex = pagerState.currentPage,
                         containerColor = MaterialTheme.colorScheme.background,
                     ) {
                         listOf(
@@ -1132,7 +1152,7 @@ internal fun LedgerScreen(
                             strings.accountsTabLabel,
                         ).forEachIndexed { index, tabTitle ->
                             Tab(
-                                selected = selectedTab == index,
+                                selected = pagerState.currentPage == index,
                                 onClick = {
                                     selectedTab = index
                                     selectedEntryUuids = emptySet()
@@ -1207,127 +1227,136 @@ internal fun LedgerScreen(
                     onOpenEntry = ::openEditor,
                     onCopyEntry = ::copyEntry,
                 )
-            } else when (selectedTab) {
-                0 -> LedgerOverviewTab(
-                    strings = strings,
-                    entries = entries,
-                    summary = summary,
-                    monthSummary = overviewMonthSummary,
-                    tags = tags,
-                    accounts = accounts.filter { it.deletedAtMillis == null },
-                    pendingRenewals = pendingRenewals,
-                    renewalBusy = renewalBusy,
-                    onRecordRenewals = ::recordRenewals,
-                    onSkipRenewals = { confirmSkipDues = it },
-                    onOpenEntry = ::openEditor,
-                    onCopyEntry = ::copyEntry,
-                    onSeeAll = { selectedTab = 1 },
-                    onShowCosts = { selectedTab = 2 },
-                )
-
-                1 -> LedgerTransactionsTab(
-                    strings = strings,
-                    entries = filteredEntries,
-                    tags = tags,
-                    accounts = accounts.filter { it.deletedAtMillis == null },
-                    selectedMonth = selectedMonth,
-                    filterSelected = filterSelected,
-                    filterMode = filterMode,
-                    onOpenFilter = { showFilterDialog = true },
-                    onClearFilter = { filterTagCsv = "" },
-                    onMonthChange = {
-                        selectedMonthName = it.toString()
-                        selectedEntryUuids = emptySet()
-                    },
-                    onOpenEntry = ::openEditor,
-                    onCopyEntry = ::copyEntry,
-                    selectedUuids = selectedEntryUuids,
-                    onToggleSelect = { entry ->
-                        selectedEntryUuids = if (entry.uuid in selectedEntryUuids) {
-                            selectedEntryUuids - entry.uuid
-                        } else {
-                            selectedEntryUuids + entry.uuid
-                        }
-                    },
-                    onClearSelection = { selectedEntryUuids = emptySet() },
-                    onBulkAddTag = { bulkTagPickAdd = true },
-                    onBulkRemoveTag = { bulkTagPickRemove = true },
-                    onBulkCopy = {
-                        val picked = entries
-                            .filter { it.uuid in selectedEntryUuids }
-                            .sortedBy { it.occurredAtMillis }
-                        if (picked.isNotEmpty()) {
-                            copyToClipboard(
-                                context = context,
-                                label = strings.appName,
-                                value = picked.joinToString("\n\n") {
-                                    ledgerEntryLine(
-                                        strings,
-                                        it,
-                                        it.tagUuids.mapNotNull { uuid ->
-                                            tags.firstOrNull { tag ->
-                                                tag.uuid == uuid &&
-                                                    tag.deletedAtMillis == null
-                                            }?.name
-                                        },
-                                        accounts.associate { a -> a.uuid to a.name },
-                                    )
-                                },
-                            )
-                        }
-                    },
-                    onManageTags = {
-                        tagsDialogEntryNav = true
-                        showTagsDialog = true
-                    },
-                )
-
-                2 -> LedgerCostTab(
-                    strings = strings,
-                    costItems = costItems,
-                    summary = summary,
-                    tags = tags,
-                    pendingRenewals = pendingRenewals,
-                    renewalBusy = renewalBusy,
-                    isFiltered = filterSelected.isNotEmpty(),
-                    onOpenFilter = { showFilterDialog = true },
-                    onClearFilter = { filterTagCsv = "" },
-                    onManageTags = {
-                        tagsDialogEntryNav = true
-                        showTagsDialog = true
-                    },
-                    onRecordRenewals = ::recordRenewals,
-                    onSkipRenewals = { confirmSkipDues = it },
-                    onDispose = { disposalTarget = it },
-                    onUndoDisposal = { undoDisposalTarget = it },
-                    onStopSubscription = { stopSubTarget = it },
-                    onResume = ::toggleActive,
-                    onOpenEntry = ::openEditor,
-                    onCopyEntry = ::copyEntry,
-                )
-
-                3 -> LedgerAccountsTab(
-                    strings = strings,
-                    accounts = accounts,
-                    entries = entries,
-                    fxRates = latestFxRates,
-                    onOpenAccount = { detailAccount = it },
-                    onNewAccount = {
-                        val fresh = LedgerAccount(
-                            uuid = UUID.randomUUID().toString(),
-                            name = "",
-                            currency = "CNY",
-                            openingBalanceCents = 0L,
-                            openingAtMillis = System.currentTimeMillis(),
-                            colorArgb = TAG_COLOR_PALETTE[
-                                (accounts.size) % TAG_COLOR_PALETTE.size
-                            ],
-                            sortOrder = accounts.maxOfOrNull { it.sortOrder }
-                                ?.plus(1) ?: 0,
+            } else {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = 1,
+                    userScrollEnabled = selectedEntryUuids.isEmpty(),
+                ) { page ->
+                    when (page) {
+                        0 -> LedgerOverviewTab(
+                            strings = strings,
+                            entries = entries,
+                            summary = summary,
+                            monthSummary = overviewMonthSummary,
+                            tags = tags,
+                            accounts = accounts.filter { it.deletedAtMillis == null },
+                            pendingRenewals = pendingRenewals,
+                            renewalBusy = renewalBusy,
+                            onRecordRenewals = ::recordRenewals,
+                            onSkipRenewals = { confirmSkipDues = it },
+                            onOpenEntry = ::openEditor,
+                            onCopyEntry = ::copyEntry,
+                            onSeeAll = { selectedTab = 1 },
+                            onShowCosts = { selectedTab = 2 },
                         )
-                        detailAccount = fresh
-                    },
-                )
+
+                        1 -> LedgerTransactionsTab(
+                            strings = strings,
+                            entries = filteredEntries,
+                            tags = tags,
+                            accounts = accounts.filter { it.deletedAtMillis == null },
+                            selectedMonth = selectedMonth,
+                            filterSelected = filterSelected,
+                            filterMode = filterMode,
+                            onOpenFilter = { showFilterDialog = true },
+                            onClearFilter = { filterTagCsv = "" },
+                            onMonthChange = {
+                                selectedMonthName = it.toString()
+                                selectedEntryUuids = emptySet()
+                            },
+                            onOpenEntry = ::openEditor,
+                            onCopyEntry = ::copyEntry,
+                            selectedUuids = selectedEntryUuids,
+                            onToggleSelect = { entry ->
+                                selectedEntryUuids = if (entry.uuid in selectedEntryUuids) {
+                                    selectedEntryUuids - entry.uuid
+                                } else {
+                                    selectedEntryUuids + entry.uuid
+                                }
+                            },
+                            onClearSelection = { selectedEntryUuids = emptySet() },
+                            onBulkAddTag = { bulkTagPickAdd = true },
+                            onBulkRemoveTag = { bulkTagPickRemove = true },
+                            onBulkCopy = {
+                                val picked = entries
+                                    .filter { it.uuid in selectedEntryUuids }
+                                    .sortedBy { it.occurredAtMillis }
+                                if (picked.isNotEmpty()) {
+                                    copyToClipboard(
+                                        context = context,
+                                        label = strings.appName,
+                                        value = picked.joinToString("\n\n") {
+                                            ledgerEntryLine(
+                                                strings,
+                                                it,
+                                                it.tagUuids.mapNotNull { uuid ->
+                                                    tags.firstOrNull { tag ->
+                                                        tag.uuid == uuid &&
+                                                            tag.deletedAtMillis == null
+                                                    }?.name
+                                                },
+                                                accounts.associate { a -> a.uuid to a.name },
+                                            )
+                                        },
+                                    )
+                                }
+                            },
+                            onManageTags = {
+                                tagsDialogEntryNav = true
+                                showTagsDialog = true
+                            },
+                        )
+
+                        2 -> LedgerCostTab(
+                            strings = strings,
+                            costItems = costItems,
+                            summary = summary,
+                            tags = tags,
+                            pendingRenewals = pendingRenewals,
+                            renewalBusy = renewalBusy,
+                            isFiltered = filterSelected.isNotEmpty(),
+                            onOpenFilter = { showFilterDialog = true },
+                            onClearFilter = { filterTagCsv = "" },
+                            onManageTags = {
+                                tagsDialogEntryNav = true
+                                showTagsDialog = true
+                            },
+                            onRecordRenewals = ::recordRenewals,
+                            onSkipRenewals = { confirmSkipDues = it },
+                            onDispose = { disposalTarget = it },
+                            onUndoDisposal = { undoDisposalTarget = it },
+                            onStopSubscription = { stopSubTarget = it },
+                            onResume = ::toggleActive,
+                            onOpenEntry = ::openEditor,
+                            onCopyEntry = ::copyEntry,
+                        )
+
+                        3 -> LedgerAccountsTab(
+                            strings = strings,
+                            accounts = accounts,
+                            entries = entries,
+                            fxRates = latestFxRates,
+                            onOpenAccount = { detailAccount = it },
+                            onNewAccount = {
+                                val fresh = LedgerAccount(
+                                    uuid = UUID.randomUUID().toString(),
+                                    name = "",
+                                    currency = "CNY",
+                                    openingBalanceCents = 0L,
+                                    openingAtMillis = System.currentTimeMillis(),
+                                    colorArgb = TAG_COLOR_PALETTE[
+                                        (accounts.size) % TAG_COLOR_PALETTE.size
+                                    ],
+                                    sortOrder = accounts.maxOfOrNull { it.sortOrder }
+                                        ?.plus(1) ?: 0,
+                                )
+                                detailAccount = fresh
+                            },
+                        )
+                    }
+                }
             }
         }
     }
