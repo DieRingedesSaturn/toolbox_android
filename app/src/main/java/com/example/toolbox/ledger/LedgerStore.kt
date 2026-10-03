@@ -206,7 +206,7 @@ class LedgerStore(context: Context) : SQLiteOpenHelper(
             ).mapTo(HashSet()) { it.uuid }
             val tags = queryTags(db, includeDeleted = false)
             val unused = tags.filter { it.uuid in defaultUuids }.let { defaults ->
-                LedgerTags.unusedDefaultTagUuids(defaults, queryLiveEntriesFor(db))
+                LedgerTags.unusedDefaultTagUuids(defaults, liveEntryTagUuids(db))
             }
             if (unused.isNotEmpty()) {
                 val now = System.currentTimeMillis()
@@ -669,7 +669,25 @@ class LedgerStore(context: Context) : SQLiteOpenHelper(
         return result
     }
 
-    /** All live entries — used by the v4 migration and tag merge paths. */
+    private fun liveEntryTagUuids(db: SQLiteDatabase): Set<String> {
+        val used = HashSet<String>()
+        db.query(
+            TABLE_ENTRIES,
+            arrayOf("tag_uuids"),
+            "deleted_at IS NULL",
+            null,
+            null,
+            null,
+            null,
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                used += parseTagUuids(cursor.getString(0))
+            }
+        }
+        return used
+    }
+
+    /** All live entries — used by the tag merge paths. */
     private fun queryLiveEntriesFor(db: SQLiteDatabase): List<LedgerEntry> {
         val result = mutableListOf<LedgerEntry>()
         db.query(

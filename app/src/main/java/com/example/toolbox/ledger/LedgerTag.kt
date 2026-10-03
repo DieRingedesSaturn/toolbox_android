@@ -79,10 +79,17 @@ object LedgerTags {
     fun unusedDefaultTagUuids(
         tags: List<LedgerTag>,
         liveEntries: List<LedgerEntry>,
-    ): Set<String> {
-        val used = liveEntries
+    ): Set<String> = unusedDefaultTagUuids(
+        tags,
+        liveEntries
             .filter { it.deletedAtMillis == null }
-            .flatMapTo(HashSet()) { it.tagUuids }
+            .flatMapTo(HashSet()) { it.tagUuids },
+    )
+
+    fun unusedDefaultTagUuids(
+        tags: List<LedgerTag>,
+        used: Set<String>,
+    ): Set<String> {
         return tags.filter {
             it.updatedAtMillis == 0L &&
                 it.deletedAtMillis == null &&
