@@ -162,6 +162,26 @@ class LedgerCalculatorTest {
     }
 
     @Test
+    fun testScheduledEndFreezesDaysHeldAcrossDstShift() {
+        val zone = ZoneId.of("America/New_York")
+        val entry = LedgerEntry(
+            title = "Tablet",
+            amountCents = 31_000L,
+            occurredAtMillis = at(2026, 3, 1, 10, 0, zone),
+            costTrackingMode = CostTrackingMode.ONE_TIME_AMORTIZED,
+            costEndsAtMillis = at(2026, 4, 1, 10, 0, zone),
+        )
+
+        val ended = LedgerCalculator.calculateCostBreakdown(
+            entry, at(2026, 4, 20, 10, 0, zone), emptyList(), zone,
+        )!!
+        assertFalse(ended.isActive)
+        assertEquals(31, ended.targetDays)
+        assertEquals(31, ended.daysHeld)
+        assertEquals(10.0, ended.dailyCostYuan, 0.001)
+    }
+
+    @Test
     fun testSubscriptionScheduledEndStopsBurnAndRenewal() {
         val zone = ZoneId.of("UTC")
         val occurred = LocalDate.of(2026, 8, 22)

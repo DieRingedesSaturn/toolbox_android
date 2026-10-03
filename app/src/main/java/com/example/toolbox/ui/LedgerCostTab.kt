@@ -324,7 +324,7 @@ private fun CostAssetCard(
                 )
                 LedgerStatusChip(
                     text = when {
-                        entry.isActiveCost && !breakdown.isActive -> strings.statusEnded
+                        entry.isActiveCost && !breakdown.isActive -> strings.statusAmortized
                         entry.isActiveCost -> strings.statusActiveInUse
                         else -> strings.statusRetired
                     },
@@ -392,9 +392,9 @@ private fun CostAssetCard(
                         .atZone(zone).toLocalDate().toString()
                     Text(
                         text = if (breakdown.isActive) {
-                            strings.costEndsOn(endDate)
+                            strings.amortizesUntil(endDate)
                         } else {
-                            strings.costEndedOn(endDate)
+                            strings.amortizedOn(endDate)
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

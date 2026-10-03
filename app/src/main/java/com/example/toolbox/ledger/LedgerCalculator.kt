@@ -65,17 +65,28 @@ object LedgerCalculator {
         }
 
     /**
-     * Effective measurement end for a cost item: the recorded stop wins,
-     * then the scheduled end date once it has passed, otherwise `now`.
+     * Whole days a cost item has been held (at least 1): up to the recorded
+     * stop, then up to the scheduled end date once it has passed — counted
+     * in calendar days so it matches the end-date horizon across DST
+     * shifts — otherwise up to `now`.
      */
-    private fun effectiveEndMillis(
+    private fun heldDays(
         entry: LedgerEntry,
         nowMillis: Long,
+        endDate: LocalDate?,
         endedBySchedule: Boolean,
-    ): Long = when {
-        !entry.isActiveCost && entry.retiredAtMillis != null -> entry.retiredAtMillis
-        endedBySchedule -> entry.costEndsAtMillis ?: nowMillis
-        else -> nowMillis
+        zone: ZoneId,
+    ): Int {
+        val stoppedAt = entry.retiredAtMillis?.takeIf { !entry.isActiveCost }
+        val days = when {
+            stoppedAt != null -> (stoppedAt - entry.occurredAtMillis) / MILLIS_PER_DAY
+            endedBySchedule && endDate != null -> ChronoUnit.DAYS.between(
+                Instant.ofEpochMilli(entry.occurredAtMillis).atZone(zone).toLocalDate(),
+                endDate,
+            )
+            else -> (nowMillis - entry.occurredAtMillis) / MILLIS_PER_DAY
+        }
+        return days.toInt().coerceAtLeast(1)
     }
 
     private fun calculateOneTimeBreakdown(
@@ -99,9 +110,7 @@ object LedgerCalculator {
         val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
         val endDate = scheduledEndDate(entry, zone)
         val endedBySchedule = endDate != null && today > endDate
-        val effectiveEnd = effectiveEndMillis(entry, nowMillis, endedBySchedule)
-        val elapsedDays = ((effectiveEnd - entry.occurredAtMillis) / MILLIS_PER_DAY).toInt()
-        val daysHeld = elapsedDays.coerceAtLeast(1)
+        val daysHeld = heldDays(entry, nowMillis, endDate, endedBySchedule, zone)
 
         val actualDailyYuan = netCostYuan / daysHeld
         val actualMonthlyYuan = actualDailyYuan * DAYS_PER_MONTH
@@ -194,10 +203,9 @@ object LedgerCalculator {
         }
 
         val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
-        val endedBySchedule = scheduledEndDate(entry, zone)?.let { today > it } == true
-        val effectiveEnd = effectiveEndMillis(entry, nowMillis, endedBySchedule)
-        val elapsedMillis = (effectiveEnd - entry.occurredAtMillis).coerceAtLeast(0L)
-        val daysHeld = ((elapsedMillis / MILLIS_PER_DAY).toInt()).coerceAtLeast(1)
+        val endDate = scheduledEndDate(entry, zone)
+        val endedBySchedule = endDate != null && today > endDate
+        val daysHeld = heldDays(entry, nowMillis, endDate, endedBySchedule, zone)
         val nextRenewal = SubscriptionRenewals.nextRenewalDate(entry, today, zone)
             ?.let { date ->
                 date.atTime(

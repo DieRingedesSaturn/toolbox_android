@@ -822,6 +822,22 @@ class ToolboxStrings(val language: AppLanguage) {
         if (chinese) "到期 $date" else "Ends $date"
     fun costEndedOn(date: String): String =
         if (chinese) "已于 $date 到期" else "Ended $date"
+    val costEndBeforeStartError: String
+        get() = if (chinese) "结束日期必须晚于记账日期" else "The end date must be after the entry date"
+    val amortizeUntilLabel: String
+        get() = if (chinese) {
+            "摊销结束日期（选填，填写后代替预计使用天数）"
+        } else {
+            "Amortize until (optional, replaces lifespan days)"
+        }
+    val lifespanFromEndDate: String
+        get() = if (chinese) "按摊销结束日期计算" else "Set by the amortization end date"
+    val statusAmortized: String
+        get() = if (chinese) "已摊销完" else "Amortized"
+    fun amortizesUntil(date: String): String =
+        if (chinese) "摊销至 $date" else "Amortizing until $date"
+    fun amortizedOn(date: String): String =
+        if (chinese) "已于 $date 摊销完" else "Fully amortized $date"
     val perDayUnit: String
         get() = if (chinese) "/天" else "/day"
     val perMonthUnit: String

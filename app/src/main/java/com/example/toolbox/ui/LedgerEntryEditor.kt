@@ -294,6 +294,13 @@ internal fun LedgerEntryEditor(
         trackCost -> selectedCostMode
         else -> CostTrackingMode.NONE
     }
+    val costEndDate = costEndsEpochDay.takeIf { it >= 0L }?.let(LocalDate::ofEpochDay)
+    val costEndInvalid = effectiveMode != CostTrackingMode.NONE &&
+        costEndDate != null &&
+        costEndsEpochDay <= selectedEpochDay
+    val costEndError = if (costEndInvalid) strings.costEndBeforeStartError else null
+    val endDateLifespanDays = (costEndsEpochDay - selectedEpochDay)
+        .takeIf { costEndDate != null && it > 0L }
 
     val liveAccounts = accounts.filter { it.deletedAtMillis == null }
     val pickedAccount = liveAccounts.firstOrNull { it.uuid == accountUuid }
@@ -511,6 +518,7 @@ internal fun LedgerEntryEditor(
                                     rateError = null
                                     if (amountValid &&
                                         !decimalsForbidden &&
+                                        !costEndInvalid &&
                                         !rateFetching
                                     ) {
                                         when {
@@ -1066,8 +1074,9 @@ internal fun LedgerEntryEditor(
                             }
                             CostEndDateRow(
                                 strings = strings,
-                                endDate = costEndsEpochDay.takeIf { it >= 0L }
-                                    ?.let(LocalDate::ofEpochDay),
+                                label = strings.costEndDateLabel,
+                                endDate = costEndDate,
+                                error = costEndError,
                                 onPick = { showCostEndPicker = true },
                                 onClear = { costEndsEpochDay = -1L },
                             )
@@ -1135,20 +1144,35 @@ internal fun LedgerEntryEditor(
                                     )
                                     presets.forEach { (daysVal, label) ->
                                         FilterChip(
-                                            selected = targetDaysText == daysVal,
+                                            selected = endDateLifespanDays == null &&
+                                                targetDaysText == daysVal,
                                             onClick = { targetDaysText = daysVal },
                                             label = { Text(label) },
+                                            enabled = endDateLifespanDays == null,
                                         )
                                     }
                                 }
 
                                 OutlinedTextField(
-                                    value = targetDaysText,
+                                    value = endDateLifespanDays?.toString() ?: targetDaysText,
                                     onValueChange = { targetDaysText = it },
                                     label = { Text(strings.targetDaysLabel) },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     singleLine = true,
+                                    enabled = endDateLifespanDays == null,
+                                    supportingText = endDateLifespanDays?.let {
+                                        { Text(strings.lifespanFromEndDate) }
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
+                                )
+
+                                CostEndDateRow(
+                                    strings = strings,
+                                    label = strings.amortizeUntilLabel,
+                                    endDate = costEndDate,
+                                    error = costEndError,
+                                    onPick = { showCostEndPicker = true },
+                                    onClear = { costEndsEpochDay = -1L },
                                 )
 
                                 OutlinedTextField(
@@ -1158,14 +1182,6 @@ internal fun LedgerEntryEditor(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth(),
-                                )
-
-                                CostEndDateRow(
-                                    strings = strings,
-                                    endDate = costEndsEpochDay.takeIf { it >= 0L }
-                                        ?.let(LocalDate::ofEpochDay),
-                                    onPick = { showCostEndPicker = true },
-                                    onClear = { costEndsEpochDay = -1L },
                                 )
                             } else {
                                 Text(
@@ -1192,8 +1208,9 @@ internal fun LedgerEntryEditor(
 
                                 CostEndDateRow(
                                     strings = strings,
-                                    endDate = costEndsEpochDay.takeIf { it >= 0L }
-                                        ?.let(LocalDate::ofEpochDay),
+                                    label = strings.costEndDateLabel,
+                                    endDate = costEndDate,
+                                    error = costEndError,
                                     onPick = { showCostEndPicker = true },
                                     onClear = { costEndsEpochDay = -1L },
                                 )
@@ -1255,10 +1272,9 @@ internal fun LedgerEntryEditor(
 
     if (showCostEndPicker) {
         ToolboxDatePickerDialog(
-            initial = costEndsEpochDay.takeIf { it >= 0L }
-                ?.let(LocalDate::ofEpochDay)
+            initial = costEndDate?.takeIf { it > selectedDate }
                 ?: selectedDate.plusYears(1),
-            minDate = selectedDate,
+            minDate = selectedDate.plusDays(1),
             maxDate = null,
             strings = strings,
             onConfirm = { day ->
@@ -1402,7 +1418,9 @@ private fun LedgerCycleChips(
 @Composable
 private fun CostEndDateRow(
     strings: ToolboxStrings,
+    label: String,
     endDate: LocalDate?,
+    error: String?,
     onPick: () -> Unit,
     onClear: () -> Unit,
 ) {
@@ -1414,9 +1432,11 @@ private fun CostEndDateRow(
             OutlinedTextField(
                 value = endDate?.toString() ?: strings.costEndDateNone,
                 onValueChange = {},
-                label = { Text(strings.costEndDateLabel) },
+                label = { Text(label) },
                 readOnly = true,
                 singleLine = true,
+                isError = error != null,
+                supportingText = error?.let { { Text(it) } },
                 modifier = Modifier.fillMaxWidth(),
             )
             Box(
