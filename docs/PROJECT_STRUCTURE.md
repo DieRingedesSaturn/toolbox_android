@@ -40,6 +40,7 @@ app/src/main/java/com/example/toolbox/
 ├── MainActivity.kt
 ├── monitor/
 │   ├── MonitorOverlayService.kt
+│   ├── MonitorOverlayTheme.kt
 │   ├── MonitorOverlayView.kt
 │   ├── MonitorReader.kt
 │   └── MonitorSample.kt
@@ -49,6 +50,7 @@ app/src/main/java/com/example/toolbox/
 │   └── LocationInfoReader.kt
 ├── astronomy/
 │   ├── AstronomyCalculator.kt
+│   ├── AstronomyImageExporter.kt
 │   └── AstronomyInfo.kt
 ├── network/
 │   ├── NetworkInfo.kt
@@ -66,6 +68,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerCalculator.kt
 │   ├── SubscriptionRenewals.kt
 │   ├── LedgerBackup.kt
+│   ├── LedgerBackupReminder.kt
 │   ├── LedgerCsv.kt
 │   ├── LedgerSyncContract.kt
 │   ├── LedgerStore.kt
@@ -76,13 +79,16 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerNotificationListener.kt
 │   └── LedgerWidget.kt
 ├── fx/
+│   ├── CurrencySearch.kt
 │   ├── FxRates.kt
 │   ├── FxRateReader.kt
 │   └── FxRateStore.kt
 ├── ui/
 │   ├── ToolboxApp.kt
 │   ├── ToolboxTheme.kt
+│   ├── AccentScheme.kt
 │   ├── Components.kt
+│   ├── WindowSize.kt
 │   ├── AppStrings.kt
 │   ├── AppPreferences.kt
 │   ├── HomeScreen.kt
@@ -104,6 +110,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerTagsDialog.kt
 │   ├── LedgerDatePicker.kt
 │   ├── LedgerBackupDialogs.kt
+│   ├── LedgerBackupReminderCard.kt
 │   ├── LedgerWebDavDialog.kt
 │   ├── NotificationLedgerDialog.kt
 │   ├── FxScreen.kt
