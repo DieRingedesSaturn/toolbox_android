@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,14 +42,17 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.toolbox.ledger.BudgetProgress
 import com.example.toolbox.ledger.DueRenewal
 import com.example.toolbox.ledger.LedgerAccount
+import com.example.toolbox.ledger.LedgerBudgets
 import com.example.toolbox.ledger.LedgerCalculator
 import com.example.toolbox.ledger.LedgerEntry
 import com.example.toolbox.ledger.LedgerEntryType
 import com.example.toolbox.ledger.LedgerSummary
 import com.example.toolbox.ledger.LedgerTag
 import java.time.Instant
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.Locale
@@ -70,6 +74,8 @@ internal fun LedgerOverviewTab(
     onSeeAll: () -> Unit,
     onShowCosts: () -> Unit,
     onOpenMonth: (YearMonth) -> Unit,
+    budgets: LedgerBudgets,
+    onEditBudgets: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -142,6 +148,47 @@ internal fun LedgerOverviewTab(
                             )
                         },
                     )
+                    val monthlyBudget = budgets.monthlyCents
+                    if (monthlyBudget != null) {
+                        val progress = BudgetProgress(monthlyBudget, monthSummary.expenseCents)
+                        val budgetText = LedgerCalculator.formatCurrency(monthlyBudget / 100.0)
+                        BudgetBar(progress, Modifier.fillMaxWidth())
+                        Text(
+                            text = if (progress.isOver) {
+                                strings.budgetOver(
+                                    budgetText,
+                                    LedgerCalculator.formatCurrency(-progress.remainingCents / 100.0),
+                                )
+                            } else {
+                                strings.budgetRemaining(
+                                    budgetText,
+                                    LedgerCalculator.formatCurrency(progress.remainingCents / 100.0),
+                                    progress.dailyAllowanceCents(LocalDate.now(zone), monthSummary.month)
+                                        ?.let { LedgerCalculator.formatCurrency(it / 100.0) },
+                                )
+                            },
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable(onClick = onEditBudgets)
+                                .padding(vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (progress.isOver) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    } else {
+                        Text(
+                            text = strings.budgetSetAction,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable(onClick = onEditBudgets)
+                                .padding(vertical = 2.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -219,7 +266,15 @@ internal fun LedgerOverviewTab(
         // 2. Tag breakdown for the current month's expenses
         item {
             InfoCard(strings.breakdownByTags) {
-                if (tagRows.isEmpty()) {
+                val budgetOnlyRows = tags
+                    .filter { tag ->
+                        tag.deletedAtMillis == null &&
+                            tag.uuid in budgets.tagCents &&
+                            tagRows.none { it.first?.uuid == tag.uuid }
+                    }
+                    .map { it to 0L }
+                val displayRows = tagRows + budgetOnlyRows
+                if (displayRows.isEmpty()) {
                     Text(
                         text = strings.noExpenseThisMonth,
                         style = MaterialTheme.typography.bodySmall,
@@ -227,25 +282,28 @@ internal fun LedgerOverviewTab(
                     )
                 } else {
                     val totalCents = tagRows.sumOf { it.second }.coerceAtLeast(1L)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(10.dp)
-                            .clip(RoundedCornerShape(10.dp)),
-                    ) {
-                        tagRows.forEach { (tag, cents) ->
-                            Box(
-                                modifier = Modifier
-                                    .weight(cents.toFloat())
-                                    .fillMaxHeight()
-                                    .background(
-                                        Color(tag?.colorArgb ?: 0xFF9DA9A0.toInt()),
-                                    ),
-                            )
+                    if (tagRows.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(10.dp)
+                                .clip(RoundedCornerShape(10.dp)),
+                        ) {
+                            tagRows.forEach { (tag, cents) ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(cents.toFloat())
+                                        .fillMaxHeight()
+                                        .background(
+                                            Color(tag?.colorArgb ?: 0xFF9DA9A0.toInt()),
+                                        ),
+                                )
+                            }
                         }
+                        Spacer(modifier = Modifier.height(10.dp))
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    tagRows.forEach { (tag, cents) ->
+                    displayRows.forEach { (tag, cents) ->
+                        val tagBudget = tag?.let { budgets.tagCents[it.uuid] }
                         val percent = "%.0f%%".format(Locale.US, cents * 100.0 / totalCents)
                         Row(
                             modifier = Modifier
@@ -272,14 +330,34 @@ internal fun LedgerOverviewTab(
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             Text(
-                                text = LedgerCalculator.formatCurrency(cents / 100.0),
+                                text = if (tagBudget != null) {
+                                    strings.budgetOfTotal(
+                                        LedgerCalculator.formatCurrency(cents / 100.0),
+                                        LedgerCalculator.formatCurrency(tagBudget / 100.0),
+                                    )
+                                } else {
+                                    LedgerCalculator.formatCurrency(cents / 100.0)
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
+                                color = if (tagBudget != null && cents > tagBudget) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
                             )
                             Text(
                                 text = percent,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (tagBudget != null) {
+                            BudgetBar(
+                                BudgetProgress(tagBudget, cents),
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 38.dp, bottom = 4.dp),
                             )
                         }
                     }
@@ -527,4 +605,22 @@ private fun TrendLegend(color: Color, label: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+@Composable
+private fun BudgetBar(progress: BudgetProgress, modifier: Modifier) {
+    LinearProgressIndicator(
+        progress = { progress.fraction.coerceIn(0f, 1f) },
+        modifier = modifier
+            .height(6.dp)
+            .clip(RoundedCornerShape(3.dp)),
+        color = if (progress.isOver) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.primary
+        },
+        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        gapSize = 0.dp,
+        drawStopIndicator = {},
+    )
 }

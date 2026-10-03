@@ -78,6 +78,8 @@ import com.example.toolbox.ledger.LedgerAccounts
 import com.example.toolbox.ledger.LedgerBackup
 import com.example.toolbox.ledger.LedgerBackupReminder
 import com.example.toolbox.ledger.LedgerBackupStatusStore
+import com.example.toolbox.ledger.LedgerBudgetStore
+import com.example.toolbox.ledger.LedgerBudgets
 import com.example.toolbox.ledger.LedgerCalculator
 import com.example.toolbox.ledger.LedgerCategory
 import com.example.toolbox.ledger.LedgerCsv
@@ -191,6 +193,9 @@ internal fun LedgerScreen(
     var stopSubTarget by remember { mutableStateOf<LedgerEntry?>(null) }
     var showTagsDialog by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
+    val budgetStore = remember(context) { LedgerBudgetStore(context) }
+    var budgets by remember { mutableStateOf(LedgerBudgets()) }
+    var showBudgetDialog by remember { mutableStateOf(false) }
     var filterTagCsv by rememberSaveable { mutableStateOf("") }
     var filterModeName by rememberSaveable {
         mutableStateOf(TagFilterMode.ANY.name)
@@ -215,6 +220,10 @@ internal fun LedgerScreen(
         webDavPasswordUnavailable = loaded.second
         webDavLastSyncAt = loaded.third
         webDavStatusLoaded = true
+    }
+
+    LaunchedEffect(budgetStore) {
+        budgets = withContext(Dispatchers.IO) { budgetStore.load() }
     }
 
     LaunchedEffect(backupStatusStore) {
@@ -1102,6 +1111,13 @@ internal fun LedgerScreen(
                                             showTagsDialog = true
                                         },
                                     )
+                                    DropdownMenuItem(
+                                        text = { Text(strings.budgetMenu) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            showBudgetDialog = true
+                                        },
+                                    )
                                     HorizontalDivider()
                                     DropdownMenuItem(
                                         text = { Text(strings.backupExportJson) },
@@ -1257,6 +1273,8 @@ internal fun LedgerScreen(
                                 selectedEntryUuids = emptySet()
                                 selectedTab = 1
                             },
+                            budgets = budgets,
+                            onEditBudgets = { showBudgetDialog = true },
                         )
 
                         1 -> LedgerTransactionsTab(
@@ -1596,6 +1614,20 @@ internal fun LedgerScreen(
             strings = strings,
             onConfirm = { stopSubscription(entry, it) },
             onDismiss = { stopSubTarget = null },
+        )
+    }
+
+    if (showBudgetDialog) {
+        LedgerBudgetDialog(
+            strings = strings,
+            budgets = budgets,
+            tags = tags.filter { it.deletedAtMillis == null },
+            onSave = { updated ->
+                budgets = updated
+                showBudgetDialog = false
+                scope.launch(Dispatchers.IO) { budgetStore.save(updated) }
+            },
+            onDismiss = { showBudgetDialog = false },
         )
     }
 

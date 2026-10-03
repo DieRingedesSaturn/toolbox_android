@@ -679,6 +679,33 @@ class ToolboxStrings(val language: AppLanguage) {
         }
     val trendTapHint: String
         get() = if (chinese) "点月份查看当月明细，长按复制" else "Tap a month to open its entries; long-press to copy"
+    val budgetTitle: String
+        get() = if (chinese) "预算" else "Budgets"
+    val budgetMenu: String
+        get() = if (chinese) "预算设置" else "Budgets"
+    val budgetMonthlyLabel: String
+        get() = if (chinese) "每月总预算" else "Monthly budget"
+    val budgetByTagLabel: String
+        get() = if (chinese) "按标签（每月）" else "Per tag (monthly)"
+    val budgetNonePlaceholder: String
+        get() = if (chinese) "不设置" else "None"
+    val budgetLocalOnlyNote: String
+        get() = if (chinese) {
+            "金额按人民币计算，留空表示不设置。预算只保存在本机，不包含在 JSON 备份和 WebDAV 同步中。"
+        } else {
+            "Amounts are in CNY; leave blank for none. Budgets stay on this device and are not part of JSON backups or WebDAV sync."
+        }
+    val budgetSetAction: String
+        get() = if (chinese) "设置月度预算" else "Set a monthly budget"
+    fun budgetRemaining(budget: String, remaining: String, perDay: String?): String =
+        if (chinese) {
+            "预算 $budget · 还剩 $remaining" + perDay?.let { " · 每天可用 $it" }.orEmpty()
+        } else {
+            "Budget $budget · $remaining left" + perDay?.let { " · $it/day" }.orEmpty()
+        }
+    fun budgetOver(budget: String, over: String): String =
+        if (chinese) "预算 $budget · 已超支 $over" else "Budget $budget · over by $over"
+    fun budgetOfTotal(spent: String, budget: String): String = "$spent / $budget"
     val categoryBreakdownMonthTitle: String
         get() = if (chinese) "本月支出分类" else "Spending by category"
     val noExpenseThisMonth: String
