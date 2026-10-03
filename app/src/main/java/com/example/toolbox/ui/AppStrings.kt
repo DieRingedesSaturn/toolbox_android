@@ -918,6 +918,16 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "更多…" else "More…"
     val fxPickCurrency: String
         get() = if (chinese) "选择币种" else "Pick currency"
+    val fxPinHint: String
+        get() = if (chinese) {
+            "点星标把常用货币固定到币种按钮和换算列表里"
+        } else {
+            "Star a currency to keep it in the chips and the result list"
+        }
+    fun fxPinAction(code: String): String =
+        if (chinese) "固定 $code" else "Pin $code"
+    fun fxUnpinAction(code: String): String =
+        if (chinese) "取消固定 $code" else "Unpin $code"
     val csvHeaders: List<String>
         get() = if (chinese) {
             listOf(

@@ -2,6 +2,7 @@ package com.example.toolbox.ui
 
 import android.content.Context
 import androidx.core.content.edit
+import com.example.toolbox.fx.FxPinnedCurrencies
 import com.example.toolbox.monitor.MonitorCpuDisplayMode
 import com.example.toolbox.monitor.MonitorMetric
 import com.example.toolbox.monitor.MonitorOverlayTheme
@@ -18,6 +19,7 @@ private const val MONITOR_OVERLAY_THEME_KEY = "monitor_overlay_theme"
 private const val MONITOR_OVERLAY_CUSTOM_COLOR_KEY = "monitor_overlay_custom_color"
 private const val MONITOR_OVERLAY_OPACITY_KEY = "monitor_overlay_opacity"
 private const val LEDGER_LAST_ACCOUNT_KEY = "ledger_last_account"
+private const val FX_PINNED_CURRENCIES_KEY = "fx_pinned_currencies"
 
 /** Retired accent presets seed the custom accent instead of reverting. */
 private val LEGACY_ACCENT_SEEDS = mapOf(
@@ -137,5 +139,12 @@ class AppPreferences(context: Context) {
 
     fun saveLedgerLastAccount(value: String) {
         preferences.edit { putString(LEDGER_LAST_ACCOUNT_KEY, value) }
+    }
+
+    fun fxPinnedCurrencies(): List<String> =
+        FxPinnedCurrencies.parse(preferences.getString(FX_PINNED_CURRENCIES_KEY, null))
+
+    fun saveFxPinnedCurrencies(value: List<String>) {
+        preferences.edit { putString(FX_PINNED_CURRENCIES_KEY, FxPinnedCurrencies.format(value)) }
     }
 }

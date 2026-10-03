@@ -81,6 +81,7 @@ app/src/main/java/com/example/toolbox/
 │   └── LedgerWidget.kt
 ├── fx/
 │   ├── CurrencySearch.kt
+│   ├── FxPinnedCurrencies.kt
 │   ├── FxRates.kt
 │   ├── FxRateReader.kt
 │   └── FxRateStore.kt

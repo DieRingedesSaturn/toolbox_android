@@ -3,6 +3,7 @@ package com.example.toolbox.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -42,6 +44,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.toolbox.R
 import com.example.toolbox.fx.CurrencySearch
+import com.example.toolbox.fx.FxPinnedCurrencies
 import com.example.toolbox.fx.LEDGER_CURRENCIES
 import com.example.toolbox.fx.FxException
 import com.example.toolbox.fx.FxFailure
@@ -90,6 +93,14 @@ internal fun FxScreen(
     var showCurrencyPicker by remember { mutableStateOf(false) }
     var currencyQuery by rememberSaveable { mutableStateOf("") }
     var pickerQuery by rememberSaveable { mutableStateOf("") }
+    val preferences = remember(context) { AppPreferences(context) }
+    var pinnedCodes by remember { mutableStateOf(preferences.fxPinnedCurrencies()) }
+    val featuredCodes = FxPinnedCurrencies.featured(pinnedCodes)
+
+    fun togglePin(code: String) {
+        pinnedCodes = FxPinnedCurrencies.toggle(pinnedCodes, code)
+        preferences.saveFxPinnedCurrencies(pinnedCodes)
+    }
     var lastAttempts by remember { mutableStateOf<List<Pair<FxSource, FxFailure>>>(emptyList()) }
 
     LaunchedEffect(Unit) {
@@ -189,7 +200,7 @@ internal fun FxScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(LEDGER_CURRENCIES) { code ->
+                    items(featuredCodes) { code ->
                         FilterChip(
                             selected = sourceCurrency == code,
                             onClick = { sourceCurrency = code },
@@ -198,14 +209,14 @@ internal fun FxScreen(
                     }
                     item {
                         FilterChip(
-                            selected = sourceCurrency !in LEDGER_CURRENCIES,
+                            selected = sourceCurrency !in featuredCodes,
                             onClick = {
                                 pickerQuery = ""
                                 showCurrencyPicker = true
                             },
                             label = {
                                 Text(
-                                    if (sourceCurrency !in LEDGER_CURRENCIES) {
+                                    if (sourceCurrency !in featuredCodes) {
                                         sourceCurrency
                                     } else {
                                         strings.fxMoreChip
@@ -252,12 +263,12 @@ internal fun FxScreen(
                         val currencyKeys = remember(currentRates) {
                             CurrencySearch.keys(currentRates.currencies)
                         }
-                        val ledgerCodes = LEDGER_CURRENCIES
+                        val ledgerCodes = featuredCodes
                             .filter { it != sourceCurrency }
                             .filter { it in currentRates.eurRates }
                         val otherCodes = currentRates.currencies
                             .filter { it != sourceCurrency }
-                            .filter { it !in LEDGER_CURRENCIES }
+                            .filter { it !in featuredCodes }
                         val searching = currencyQuery.isNotBlank()
                         val shown = if (searching) {
                             CurrencySearch.filter(
@@ -322,11 +333,11 @@ internal fun FxScreen(
         val pickerKeys = remember(rates) {
             CurrencySearch.keys(rates?.currencies.orEmpty())
         }
-        val pickerShown = CurrencySearch.filter(
-            rates!!.currencies,
-            pickerQuery,
-            pickerKeys,
-        )
+        val pickerOrder = remember(rates) {
+            featuredCodes.filter { it in rates!!.eurRates } +
+                rates!!.currencies.filter { it !in featuredCodes }
+        }
+        val pickerShown = CurrencySearch.filter(pickerOrder, pickerQuery, pickerKeys)
         AlertDialog(
             onDismissRequest = { showCurrencyPicker = false },
             title = { Text(strings.fxPickCurrency) },
@@ -347,6 +358,12 @@ internal fun FxScreen(
                         },
                         singleLine = true,
                     )
+                    Text(
+                        text = strings.fxPinHint,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     LazyColumn {
                         if (pickerShown.isEmpty()) {
                             item {
@@ -360,19 +377,46 @@ internal fun FxScreen(
                             }
                         }
                         items(pickerShown) { code ->
-                            TextButton(
-                                onClick = {
-                                    sourceCurrency = code
-                                    showCurrencyPicker = false
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    text = "$code · " + currencyDisplayName(
-                                        code,
-                                        displayLocale,
-                                    ),
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(
+                                    onClick = {
+                                        sourceCurrency = code
+                                        showCurrencyPicker = false
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text(
+                                        text = "$code · " + currencyDisplayName(
+                                            code,
+                                            displayLocale,
+                                        ),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
+                                if (code !in LEDGER_CURRENCIES) {
+                                    val pinned = code in pinnedCodes
+                                    IconButton(onClick = { togglePin(code) }) {
+                                        Icon(
+                                            painter = painterResource(
+                                                if (pinned) {
+                                                    R.drawable.ic_star
+                                                } else {
+                                                    R.drawable.ic_star_outline
+                                                },
+                                            ),
+                                            contentDescription = if (pinned) {
+                                                strings.fxUnpinAction(code)
+                                            } else {
+                                                strings.fxPinAction(code)
+                                            },
+                                            tint = if (pinned) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
