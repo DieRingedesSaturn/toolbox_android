@@ -414,6 +414,56 @@ class LedgerCalculatorTest {
     }
 
     @Test
+    fun testMonthlyTrendCoversTrailingMonthsAndSkipsTransfers() {
+        val zone = ZoneId.of("UTC")
+        val entries = listOf(
+            LedgerEntry(title = "Jan", amountCents = 1_000L, occurredAtMillis = at(2026, 1, 5, 9, 0, zone)),
+            LedgerEntry(title = "Mar", amountCents = 3_000L, occurredAtMillis = at(2026, 3, 5, 9, 0, zone)),
+            LedgerEntry(
+                title = "Pay",
+                amountCents = 9_000L,
+                type = LedgerEntryType.INCOME,
+                occurredAtMillis = at(2026, 3, 25, 9, 0, zone),
+            ),
+            LedgerEntry(
+                title = "Move",
+                amountCents = 5_000L,
+                type = LedgerEntryType.TRANSFER,
+                occurredAtMillis = at(2026, 3, 26, 9, 0, zone),
+            ),
+            LedgerEntry(title = "Old", amountCents = 7_000L, occurredAtMillis = at(2025, 12, 31, 9, 0, zone)),
+        )
+
+        val trend = LedgerCalculator.monthlyTrend(entries, YearMonth.of(2026, 3), 3, zone)
+
+        assertEquals(
+            listOf(YearMonth.of(2026, 1), YearMonth.of(2026, 2), YearMonth.of(2026, 3)),
+            trend.map { it.month },
+        )
+        assertEquals(listOf(1_000L, 0L, 3_000L), trend.map { it.expenseCents })
+        assertEquals(listOf(0L, 0L, 9_000L), trend.map { it.incomeCents })
+    }
+
+    @Test
+    fun testAverageUsesFullMonthsSinceFirstActivity() {
+        fun month(m: Int, expense: Long, income: Long = 0L) = LedgerCalculator.MonthSummary(
+            month = YearMonth.of(2026, m),
+            expenseCents = expense,
+            incomeCents = income,
+            expenseByCategory = emptyList(),
+        )
+
+        assertNull(LedgerCalculator.averageFullMonthExpense(listOf(month(1, 0), month(2, 0))))
+        assertNull(LedgerCalculator.averageFullMonthExpense(listOf(month(1, 0), month(2, 500))))
+        assertEquals(
+            2 to 1_500L,
+            LedgerCalculator.averageFullMonthExpense(
+                listOf(month(1, 0), month(2, 0, 800), month(3, 3_000), month(4, 99)),
+            ),
+        )
+    }
+
+    @Test
     fun testGroupByDayOrdersDaysAndEntriesDescending() {
         val zone = ZoneId.of("UTC")
         val month = YearMonth.of(2024, 3)

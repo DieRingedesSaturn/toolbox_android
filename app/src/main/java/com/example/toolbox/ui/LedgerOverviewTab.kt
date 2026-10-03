@@ -1,7 +1,11 @@
 package com.example.toolbox.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,12 +29,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,12 +69,16 @@ internal fun LedgerOverviewTab(
     onCopyEntry: (LedgerEntry) -> Unit,
     onSeeAll: () -> Unit,
     onShowCosts: () -> Unit,
+    onOpenMonth: (YearMonth) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     // Reconcile adjustments stay out of record lists (account detail only).
     val recent = entries.filter { it.type != LedgerEntryType.ADJUSTMENT }.take(5)
     val zone = ZoneId.systemDefault()
+    val trend = remember(entries) {
+        LedgerCalculator.monthlyTrend(entries, YearMonth.now(zone), TREND_MONTHS, zone)
+    }
     val tagRows = remember(entries, tags) {
         LedgerCalculator.tagBreakdown(
             entries,
@@ -282,6 +294,14 @@ internal fun LedgerOverviewTab(
             }
         }
 
+        item {
+            LedgerTrendCard(
+                strings = strings,
+                trend = trend,
+                onOpenMonth = onOpenMonth,
+            )
+        }
+
         // 3. Daily cost card -> Costs tab
         item {
             Card(
@@ -380,5 +400,131 @@ internal fun LedgerOverviewTab(
                 }
             }
         }
+    }
+}
+
+private const val TREND_MONTHS = 6
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun LedgerTrendCard(
+    strings: ToolboxStrings,
+    trend: List<LedgerCalculator.MonthSummary>,
+    onOpenMonth: (YearMonth) -> Unit,
+) {
+    val context = LocalContext.current
+    val expenseColor = MaterialTheme.colorScheme.tertiary
+    val incomeColor = MaterialTheme.colorScheme.primary
+    val peak = trend.maxOfOrNull { maxOf(it.expenseCents, it.incomeCents) }
+        ?.coerceAtLeast(1L) ?: 1L
+    val average = LedgerCalculator.averageFullMonthExpense(trend)
+
+    InfoCard(strings.trendTitle(trend.size)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            TrendLegend(expenseColor, strings.trendExpenseLegend)
+            TrendLegend(incomeColor, strings.monthIncomeLabel)
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(132.dp),
+        ) {
+            trend.forEach { month ->
+                val detail = strings.trendMonthDetail(
+                    month.month,
+                    LedgerCalculator.formatCurrency(month.expenseCents / 100.0),
+                    LedgerCalculator.formatCurrency(month.incomeCents / 100.0),
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(8.dp))
+                        .combinedClickable(
+                            onClick = { onOpenMonth(month.month) },
+                            onLongClick = {
+                                copyToClipboard(
+                                    context = context,
+                                    label = strings.trendTitle(trend.size),
+                                    value = detail,
+                                    copiedMessage = strings.copied(detail),
+                                )
+                            },
+                        )
+                        .semantics(mergeDescendants = true) { contentDescription = detail },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(top = 4.dp),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        TrendBar(month.expenseCents, peak, expenseColor)
+                        TrendBar(month.incomeCents, peak, incomeColor)
+                    }
+                    Text(
+                        text = strings.trendMonthLabel(month.month),
+                        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        average?.let { (months, cents) ->
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = strings.trendAverageExpense(
+                    months,
+                    LedgerCalculator.formatCurrency(cents / 100.0),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = strings.trendTapHint,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun TrendBar(cents: Long, peak: Long, color: Color) {
+    val target = if (cents > 0L) (cents.toFloat() / peak).coerceIn(0.02f, 1f) else 0f
+    val fraction = remember { Animatable(0f) }
+    LaunchedEffect(target) {
+        fraction.animateTo(target, tween(durationMillis = 450))
+    }
+    Box(
+        modifier = Modifier
+            .width(10.dp)
+            .fillMaxHeight(fraction.value)
+            .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+            .background(color),
+    )
+}
+
+@Composable
+private fun TrendLegend(color: Color, label: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

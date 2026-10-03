@@ -20,6 +20,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
 
 enum class AppLanguage(val displayName: String) {
@@ -654,6 +655,30 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "收入" else "Income"
     val monthNetLabel: String
         get() = if (chinese) "结余" else "Net"
+    fun trendTitle(months: Int): String =
+        if (chinese) "近 $months 个月收支" else "Last $months months"
+    val trendExpenseLegend: String
+        get() = if (chinese) "支出" else "Spending"
+    fun trendMonthLabel(month: YearMonth): String =
+        if (chinese) {
+            "${month.monthValue}月"
+        } else {
+            month.month.getDisplayName(TextStyle.SHORT, Locale.US)
+        }
+    fun trendMonthDetail(month: YearMonth, expense: String, income: String): String =
+        if (chinese) {
+            "${formatLedgerMonth(month)} 支出 $expense · 收入 $income"
+        } else {
+            "${formatLedgerMonth(month)}: spent $expense · income $income"
+        }
+    fun trendAverageExpense(months: Int, amount: String): String =
+        if (chinese) {
+            "近 $months 个完整月平均每月支出 $amount"
+        } else {
+            "Average over the last $months full months: $amount spent per month"
+        }
+    val trendTapHint: String
+        get() = if (chinese) "点月份查看当月明细，长按复制" else "Tap a month to open its entries; long-press to copy"
     val categoryBreakdownMonthTitle: String
         get() = if (chinese) "本月支出分类" else "Spending by category"
     val noExpenseThisMonth: String

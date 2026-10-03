@@ -370,6 +370,23 @@ object LedgerCalculator {
         )
     }
 
+    fun monthlyTrend(
+        entries: List<LedgerEntry>,
+        lastMonth: YearMonth,
+        months: Int,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<MonthSummary> = (months - 1 downTo 0).map { back ->
+        monthSummary(entries, lastMonth.minusMonths(back.toLong()), zone)
+    }
+
+    fun averageFullMonthExpense(trend: List<MonthSummary>): Pair<Int, Long>? {
+        val firstActive = trend.indexOfFirst { it.expenseCents > 0L || it.incomeCents > 0L }
+        if (firstActive < 0) return null
+        val fullMonths = trend.subList(firstActive, trend.size).dropLast(1)
+        if (fullMonths.isEmpty()) return null
+        return fullMonths.size to fullMonths.sumOf { it.expenseCents } / fullMonths.size
+    }
+
     /**
      * Per-tag base-amount totals for [month]. An entry with several tags
      * counts under each of them; entries with no live tag fall into the

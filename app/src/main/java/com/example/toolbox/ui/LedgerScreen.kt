@@ -1250,6 +1250,11 @@ internal fun LedgerScreen(
                             onCopyEntry = ::copyEntry,
                             onSeeAll = { selectedTab = 1 },
                             onShowCosts = { selectedTab = 2 },
+                            onOpenMonth = { month ->
+                                selectedMonthName = month.toString()
+                                selectedEntryUuids = emptySet()
+                                selectedTab = 1
+                            },
                         )
 
                         1 -> LedgerTransactionsTab(
