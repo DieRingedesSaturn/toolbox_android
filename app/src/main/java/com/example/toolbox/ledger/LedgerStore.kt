@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import androidx.core.database.sqlite.transaction
 import com.example.toolbox.ui.AppPreferences
 import com.example.toolbox.ui.ToolboxStrings
+import java.io.File
 import org.json.JSONArray
 
 class LedgerStore(context: Context) : SQLiteOpenHelper(
@@ -17,6 +18,23 @@ class LedgerStore(context: Context) : SQLiteOpenHelper(
     DATABASE_VERSION,
 ) {
     private val appContext = context.applicationContext
+
+    override fun onConfigure(db: SQLiteDatabase) {
+        super.onConfigure(db)
+        val fromVersion = db.version
+        if (fromVersion in 1 until DATABASE_VERSION) {
+            runCatching {
+                db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
+                LedgerDbSnapshots.save(
+                    dbFile = File(db.path),
+                    dir = File(appContext.noBackupFilesDir, LedgerDbSnapshots.DIR_NAME),
+                    fromVersion = fromVersion,
+                    nowMillis = System.currentTimeMillis(),
+                )
+            }
+        }
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
