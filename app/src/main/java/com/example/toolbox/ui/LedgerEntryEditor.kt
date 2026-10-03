@@ -32,6 +32,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -72,6 +73,7 @@ import com.example.toolbox.ledger.FX_SOURCE_MANUAL
 import com.example.toolbox.ledger.LINK_TYPE_SALE
 import com.example.toolbox.ledger.LedgerAccount
 import com.example.toolbox.ledger.LedgerAccounts
+import com.example.toolbox.ledger.LedgerQuickPick
 import com.example.toolbox.ledger.LedgerTag
 import com.example.toolbox.ledger.LedgerCalculator
 import com.example.toolbox.ledger.LedgerCategory
@@ -99,6 +101,7 @@ internal fun LedgerEntryEditor(
     tags: List<LedgerTag>,
     accounts: List<LedgerAccount> = emptyList(),
     defaultAccountUuid: String = LedgerAccounts.DEFAULT_ACCOUNT_UUID,
+    quickPicks: List<LedgerQuickPick> = emptyList(),
     parentTitle: String?,
     onCreateTag: (LedgerTag) -> Unit,
     onManageTags: () -> Unit = {},
@@ -597,6 +600,62 @@ internal fun LedgerEntryEditor(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    if (initialEntry == null && draftAmountCents == null && quickPicks.isNotEmpty()) {
+                        Text(
+                            text = strings.quickPicksLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            quickPicks.forEach { pick ->
+                                val emoji = pick.tagUuids.firstNotNullOfOrNull { uuid ->
+                                    liveTags.firstOrNull { it.uuid == uuid }
+                                        ?.emoji?.takeIf { it.isNotBlank() }
+                                }
+                                SuggestionChip(
+                                    onClick = {
+                                        entryType = pick.type
+                                        title = pick.title
+                                        amountText = "%.2f".format(
+                                            Locale.US,
+                                            pick.amountCents / 100.0,
+                                        ).removeSuffix(".00")
+                                        if (pick.currency != currency) {
+                                            currency = pick.currency
+                                            lockedRate = null
+                                            lockedRateDate = null
+                                            lockedRateSource = null
+                                            rateError = null
+                                        }
+                                        tagUuidsText = pick.tagUuids
+                                            .filter { uuid -> liveTags.any { it.uuid == uuid } }
+                                            .joinToString(",")
+                                        pick.accountUuid
+                                            ?.takeIf { uuid -> liveAccounts.any { it.uuid == uuid } }
+                                            ?.let { accountUuid = it }
+                                    },
+                                    label = {
+                                        Text(
+                                            listOfNotNull(
+                                                emoji,
+                                                pick.title,
+                                                LedgerCalculator.formatMoney(
+                                                    pick.amountCents,
+                                                    pick.currency,
+                                                ),
+                                            ).joinToString(" "),
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+
                     // Expense / Income / Transfer segmented control.
                     // Adjustments keep their type: they only exist via reconcile.
                     if (isAdjustment) {

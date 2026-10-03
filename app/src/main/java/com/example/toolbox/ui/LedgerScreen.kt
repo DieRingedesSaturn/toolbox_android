@@ -83,6 +83,7 @@ import com.example.toolbox.ledger.LedgerCategory
 import com.example.toolbox.ledger.LedgerCsv
 import com.example.toolbox.ledger.LedgerEntry
 import com.example.toolbox.ledger.LedgerEntryType
+import com.example.toolbox.ledger.LedgerQuickPicks
 import com.example.toolbox.ledger.LedgerStore
 import com.example.toolbox.ledger.LedgerSyncPayload
 import com.example.toolbox.ledger.LedgerSyncSerializer
@@ -306,6 +307,7 @@ internal fun LedgerScreen(
     }
 
     val nowMillis = remember(entries) { System.currentTimeMillis() }
+    val quickPicks = remember(entries) { LedgerQuickPicks.from(entries, nowMillis) }
     val filteredEntries = remember(entries, filterSelected, filterMode) {
         entries.filter { LedgerTags.matches(it, filterSelected, filterMode) }
     }
@@ -1378,6 +1380,7 @@ internal fun LedgerScreen(
                 defaultAccountUuid = AppPreferences(context)
                     .ledgerLastAccount()
                     .ifBlank { LedgerAccounts.DEFAULT_ACCOUNT_UUID },
+                quickPicks = quickPicks,
                 parentTitle = editingEntry?.parentUuid?.let { parent ->
                     allEntries.firstOrNull { it.uuid == parent }?.title
                 },

@@ -733,6 +733,8 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "确定" else "OK"
     val addLedgerEntry: String
         get() = if (chinese) "记一笔" else "Add entry"
+    val quickPicksLabel: String
+        get() = if (chinese) "常用（点一下填好，确认后保存）" else "Frequent (tap to fill in, then save)"
     val notificationLedgerTitle: String
         get() = if (chinese) "通知快速记账" else "Quick entry from notifications"
     val notificationLedgerEnable: String
