@@ -44,6 +44,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -105,23 +106,35 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+internal data class LedgerSnapshot(
+    val entries: List<LedgerEntry>,
+    val allEntries: List<LedgerEntry>,
+    val tags: List<LedgerTag>,
+    val accounts: List<LedgerAccount>,
+    val latestFxRates: FxRates?,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LedgerScreen(
+internal fun LedgerScreen(
     strings: ToolboxStrings,
     onBack: () -> Unit,
     openEditorRequested: Boolean = false,
     onEditorRequestHandled: () -> Unit = {},
-    initialTab: Int = 0,
+    tabRequest: Int? = null,
+    onTabRequestHandled: () -> Unit = {},
+    cachedSnapshot: LedgerSnapshot? = null,
+    onSnapshot: (LedgerSnapshot) -> Unit = {},
 ) {
     val context = LocalContext.current
     val store = remember(context) { LedgerStore(context) }
     val scope = rememberCoroutineScope()
+    val currentOnSnapshot by rememberUpdatedState(onSnapshot)
 
-    var entries by remember { mutableStateOf<List<LedgerEntry>>(emptyList()) }
-    var allEntries by remember { mutableStateOf<List<LedgerEntry>>(emptyList()) }
-    var entriesLoaded by remember { mutableStateOf(false) }
-    var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
+    var entries by remember { mutableStateOf(cachedSnapshot?.entries.orEmpty()) }
+    var allEntries by remember { mutableStateOf(cachedSnapshot?.allEntries.orEmpty()) }
+    var entriesLoaded by remember { mutableStateOf(cachedSnapshot != null) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(tabRequest ?: 0) }
     var editingUuid by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDeleteUuid by rememberSaveable { mutableStateOf<String?>(null) }
     var showEditor by rememberSaveable { mutableStateOf(false) }
@@ -143,10 +156,10 @@ fun LedgerScreen(
     var webDavLastSyncAt by remember { mutableStateOf<Long?>(null) }
     var webDavBusyAction by remember { mutableStateOf<WebDavBusyAction?>(null) }
     var webDavLastResult by remember { mutableStateOf<String?>(null) }
-    var tags by remember { mutableStateOf<List<LedgerTag>>(emptyList()) }
-    var accounts by remember { mutableStateOf<List<LedgerAccount>>(emptyList()) }
+    var tags by remember { mutableStateOf(cachedSnapshot?.tags.orEmpty()) }
+    var accounts by remember { mutableStateOf(cachedSnapshot?.accounts.orEmpty()) }
     var detailAccount by remember { mutableStateOf<LedgerAccount?>(null) }
-    var latestFxRates by remember { mutableStateOf<FxRates?>(null) }
+    var latestFxRates by remember { mutableStateOf(cachedSnapshot?.latestFxRates) }
     var renewalBusy by remember { mutableStateOf(false) }
     var renewalRateIssue by remember { mutableStateOf<RenewalRateIssue?>(null) }
     var nearestForIssue by remember { mutableStateOf<Map<LocalDate, FxRates>>(emptyMap()) }
@@ -204,11 +217,21 @@ fun LedgerScreen(
             accounts = loaded.second
             latestFxRates = withContext(Dispatchers.IO) { fxStore.latest() }
             entriesLoaded = true
+            currentOnSnapshot(
+                LedgerSnapshot(entries, allEntries, tags, accounts, latestFxRates),
+            )
         }
     }
 
     LaunchedEffect(store) {
         reloadEntries()
+    }
+
+    LaunchedEffect(tabRequest) {
+        if (tabRequest != null) {
+            selectedTab = tabRequest
+            onTabRequestHandled()
+        }
     }
 
     LaunchedEffect(openEditorRequested) {

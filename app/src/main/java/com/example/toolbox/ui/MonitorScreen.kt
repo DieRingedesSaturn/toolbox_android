@@ -112,7 +112,7 @@ fun MonitorScreen(
     var overlayOpacity by remember {
         mutableFloatStateOf(preferences.monitorOverlayOpacity())
     }
-    var isRunning by rememberSaveable { mutableStateOf(MonitorOverlayService.running) }
+    var isRunning by remember { mutableStateOf(MonitorOverlayService.running) }
     var latestSample by remember { mutableStateOf<MonitorSample?>(null) }
     var overlayGranted by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var notificationGranted by remember { mutableStateOf(hasNotificationPermission(context)) }

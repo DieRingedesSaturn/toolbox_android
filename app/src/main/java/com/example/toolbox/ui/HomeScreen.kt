@@ -30,9 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,7 +59,7 @@ private data class ModuleTile(
     val icon: Int,
 )
 
-private data class HomeStatus(
+internal data class HomeStatus(
     val batteryPercent: Int?,
     val isCharging: Boolean?,
     val storageAvailable: Long,
@@ -73,19 +71,21 @@ private data class HomeStatus(
 )
 
 @Composable
-fun HomeScreen(
+internal fun HomeScreen(
     strings: ToolboxStrings,
     deviceInfo: DeviceInfo?,
+    status: HomeStatus?,
+    onStatusChange: (HomeStatus?) -> Unit,
     onOpen: (ToolboxModule) -> Unit,
     onOpenLedgerAccounts: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var status by remember { mutableStateOf<HomeStatus?>(null) }
+    val currentOnStatusChange by rememberUpdatedState(onStatusChange)
 
     LaunchedEffect(Unit) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            status = withContext(Dispatchers.IO) {
+            currentOnStatusChange(withContext(Dispatchers.IO) {
                 runCatching {
                     val quick = DeviceInfoReader.readQuickStatus(context)
                     val store = LedgerStore(context)
@@ -108,7 +108,7 @@ fun HomeScreen(
                         assetsPartial = !allConverted,
                     )
                 }.getOrNull()
-            }
+            })
         }
     }
 

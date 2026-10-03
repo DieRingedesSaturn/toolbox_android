@@ -11,22 +11,23 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.example.toolbox.device.DeviceInfo
 import com.example.toolbox.device.DeviceInfoReader
+import com.example.toolbox.fx.FxRates
 import com.example.toolbox.ledger.ACTION_ADD_LEDGER_ENTRY
 import com.example.toolbox.ledger.ACTION_OPEN_LEDGER
 import com.example.toolbox.ledger.LedgerWidget
@@ -73,10 +74,14 @@ fun ToolboxApp(
     val strings = remember(language) { ToolboxStrings(language) }
 
     var deviceInfo by remember { mutableStateOf<DeviceInfo?>(null) }
-    var isDeviceInfoLoading by rememberSaveable { mutableStateOf(false) }
+    var isDeviceInfoLoading by remember { mutableStateOf(false) }
     var lastDeviceInfoUpdate by rememberSaveable { mutableStateOf<String?>(null) }
     var ledgerEditorRequested by remember { mutableStateOf(false) }
-    var ledgerInitialTab by remember { mutableIntStateOf(0) }
+    var ledgerTabRequest by remember { mutableStateOf<Int?>(null) }
+    var homeStatus by remember { mutableStateOf<HomeStatus?>(null) }
+    var ledgerSnapshot by remember { mutableStateOf<LedgerSnapshot?>(null) }
+    var fxRates by remember { mutableStateOf<FxRates?>(null) }
+    val pageStates = rememberSaveableStateHolder()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(launchAction) {
@@ -148,10 +153,6 @@ fun ToolboxApp(
             BackHandler { moduleName = ToolboxModule.HOME.name }
         }
 
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
         AnimatedContent(
             targetState = module,
             transitionSpec = {
@@ -163,87 +164,97 @@ fun ToolboxApp(
                 ).togetherWith(fadeOut(tween(160)))
             },
             label = "moduleTransition",
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
         ) { target ->
-            when (target) {
-                ToolboxModule.HOME -> HomeScreen(
-                    strings = strings,
-                    deviceInfo = deviceInfo,
-                    onOpen = { moduleName = it.name },
-                    onOpenLedgerAccounts = {
-                        ledgerInitialTab = 3
-                        moduleName = ToolboxModule.LEDGER.name
-                    },
-                )
+            pageStates.SaveableStateProvider(target.name) {
+                when (target) {
+                    ToolboxModule.HOME -> HomeScreen(
+                        strings = strings,
+                        deviceInfo = deviceInfo,
+                        status = homeStatus,
+                        onStatusChange = { homeStatus = it },
+                        onOpen = { moduleName = it.name },
+                        onOpenLedgerAccounts = {
+                            ledgerTabRequest = 3
+                            moduleName = ToolboxModule.LEDGER.name
+                        },
+                    )
 
-                ToolboxModule.DEVICE -> DeviceScreen(
-                    strings = strings,
-                    deviceInfo = deviceInfo,
-                    isLoading = isDeviceInfoLoading,
-                    lastUpdated = lastDeviceInfoUpdate,
-                    onRefresh = ::refreshDeviceInfo,
-                    onBack = { moduleName = ToolboxModule.HOME.name },
-                )
+                    ToolboxModule.DEVICE -> DeviceScreen(
+                        strings = strings,
+                        deviceInfo = deviceInfo,
+                        isLoading = isDeviceInfoLoading,
+                        lastUpdated = lastDeviceInfoUpdate,
+                        onRefresh = ::refreshDeviceInfo,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                    )
 
-                ToolboxModule.LOCATION -> LocationScreen(
-                    strings = strings,
-                    onBack = { moduleName = ToolboxModule.HOME.name },
-                )
+                    ToolboxModule.LOCATION -> LocationScreen(
+                        strings = strings,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                    )
 
-                ToolboxModule.NETWORK -> NetworkScreen(
-                    strings = strings,
-                    onBack = { moduleName = ToolboxModule.HOME.name },
-                )
+                    ToolboxModule.NETWORK -> NetworkScreen(
+                        strings = strings,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                    )
 
-                ToolboxModule.MONITOR -> MonitorScreen(
-                    strings = strings,
-                    accentColor = accentColor,
-                    customAccentRgb = customAccentRgb,
-                    onBack = { moduleName = ToolboxModule.HOME.name },
-                )
+                    ToolboxModule.MONITOR -> MonitorScreen(
+                        strings = strings,
+                        accentColor = accentColor,
+                        customAccentRgb = customAccentRgb,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                    )
 
-                ToolboxModule.ASTRONOMY -> AstronomyScreen(
-                    strings = strings,
-                    onBack = { moduleName = ToolboxModule.HOME.name },
-                )
+                    ToolboxModule.ASTRONOMY -> AstronomyScreen(
+                        strings = strings,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                    )
 
-                ToolboxModule.USAGE -> AppUsageScreen(
-                    strings = strings,
-                    onBack = { moduleName = ToolboxModule.HOME.name },
-                )
+                    ToolboxModule.USAGE -> AppUsageScreen(
+                        strings = strings,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                    )
 
-                ToolboxModule.LEDGER -> LedgerScreen(
-                    strings = strings,
-                    onBack = { moduleName = ToolboxModule.HOME.name },
-                    openEditorRequested = ledgerEditorRequested,
-                    onEditorRequestHandled = { ledgerEditorRequested = false },
-                    initialTab = ledgerInitialTab,
-                )
+                    ToolboxModule.LEDGER -> LedgerScreen(
+                        strings = strings,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                        openEditorRequested = ledgerEditorRequested,
+                        onEditorRequestHandled = { ledgerEditorRequested = false },
+                        tabRequest = ledgerTabRequest,
+                        onTabRequestHandled = { ledgerTabRequest = null },
+                        cachedSnapshot = ledgerSnapshot,
+                        onSnapshot = { ledgerSnapshot = it },
+                    )
 
-                ToolboxModule.FX -> FxScreen(
-                    strings = strings,
-                    onBack = { moduleName = ToolboxModule.HOME.name },
-                )
+                    ToolboxModule.FX -> FxScreen(
+                        strings = strings,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                        cachedRates = fxRates,
+                        onRatesChange = { fxRates = it },
+                    )
 
-                ToolboxModule.SETTINGS -> SettingsScreen(
-                    strings = strings,
-                    language = language,
-                    themeMode = themeMode,
-                    accentColor = accentColor,
-                    customAccentRgb = customAccentRgb,
-                    onLanguageChange = ::updateLanguage,
-                    onThemeModeChange = ::updateTheme,
-                    onAccentColorChange = ::updateAccent,
-                    onCustomAccentChange = ::updateCustomAccent,
-                    onBack = { moduleName = ToolboxModule.HOME.name },
-                )
+                    ToolboxModule.SETTINGS -> SettingsScreen(
+                        strings = strings,
+                        language = language,
+                        themeMode = themeMode,
+                        accentColor = accentColor,
+                        customAccentRgb = customAccentRgb,
+                        onLanguageChange = ::updateLanguage,
+                        onThemeModeChange = ::updateTheme,
+                        onAccentColorChange = ::updateAccent,
+                        onCustomAccentChange = ::updateCustomAccent,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                    )
 
-                ToolboxModule.ABOUT -> AboutScreen(
-                    strings = strings,
-                    onBack = { moduleName = ToolboxModule.HOME.name },
-                )
+                    ToolboxModule.ABOUT -> AboutScreen(
+                        strings = strings,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                    )
+                }
             }
-        }
         }
     }
 }

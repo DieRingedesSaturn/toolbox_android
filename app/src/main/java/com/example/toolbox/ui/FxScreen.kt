@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -64,9 +65,12 @@ import kotlinx.coroutines.withContext
 internal fun FxScreen(
     strings: ToolboxStrings,
     onBack: () -> Unit,
+    cachedRates: FxRates? = null,
+    onRatesChange: (FxRates?) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val currentOnRatesChange by rememberUpdatedState(onRatesChange)
     val fxStore = remember { FxRateStore(context.applicationContext) }
     val reader = remember { FxRateReader() }
     val displayLocale = if (strings.language == AppLanguage.CHINESE) {
@@ -75,8 +79,8 @@ internal fun FxScreen(
         Locale.US
     }
 
-    var rates by remember { mutableStateOf<FxRates?>(null) }
-    var ratesLoaded by remember { mutableStateOf(false) }
+    var rates by remember { mutableStateOf(cachedRates) }
+    var ratesLoaded by remember { mutableStateOf(cachedRates != null) }
     var fetching by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
 
@@ -91,6 +95,7 @@ internal fun FxScreen(
     LaunchedEffect(Unit) {
         rates = withContext(Dispatchers.IO) { fxStore.latest() }
         ratesLoaded = true
+        currentOnRatesChange(rates)
     }
 
     fun refresh() {
@@ -103,7 +108,10 @@ internal fun FxScreen(
                     reader.fetchLatest().also { fxStore.saveLatest(it) }
                 }
             }
-            outcome.onSuccess { rates = it }
+            outcome.onSuccess {
+                rates = it
+                currentOnRatesChange(it)
+            }
             outcome.onFailure { error ->
                 val fx = error as? FxException
                 lastAttempts = fx?.attempts.orEmpty()
