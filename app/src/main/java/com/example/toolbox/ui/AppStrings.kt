@@ -781,7 +781,11 @@ class ToolboxStrings(val language: AppLanguage) {
     val notificationLedgerSourcesTab: String
         get() = if (chinese) "来源应用" else "Source apps"
     val notificationLedgerStatusOff: String
-        get() = if (chinese) "已关闭，候选项已清空" else "Off; suggestions cleared"
+        get() = if (chinese) {
+            "已关闭：不再接收任何通知，候选项已清空"
+        } else {
+            "Off: no notifications are received; suggestions cleared"
+        }
     val notificationLedgerStatusNeedsAccess: String
         get() = if (chinese) "还需授予系统通知读取权限" else "Notification access required"
     val notificationLedgerStatusNeedsSources: String
