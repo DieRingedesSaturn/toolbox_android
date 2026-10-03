@@ -104,13 +104,13 @@ internal fun LedgerCostTab(
             it.first.type == LedgerEntryType.INCOME
     }
     val burnDaily = costItems
-        .filter { it.first.isActiveCost && it.first.type == LedgerEntryType.EXPENSE }
+        .filter { it.second.isActive && it.first.type == LedgerEntryType.EXPENSE }
         .sumOf { it.second.dailyCostYuan }
     val burnMonthly = costItems
-        .filter { it.first.isActiveCost && it.first.type == LedgerEntryType.EXPENSE }
+        .filter { it.second.isActive && it.first.type == LedgerEntryType.EXPENSE }
         .sumOf { it.second.monthlyCostYuan }
     val incomeMonthly = costItems
-        .filter { it.first.isActiveCost && it.first.type == LedgerEntryType.INCOME }
+        .filter { it.second.isActive && it.first.type == LedgerEntryType.INCOME }
         .sumOf { it.second.monthlyCostYuan }
 
     LazyColumn(
@@ -323,8 +323,12 @@ private fun CostAssetCard(
                     fontWeight = FontWeight.Bold,
                 )
                 LedgerStatusChip(
-                    text = if (entry.isActiveCost) strings.statusActiveInUse else strings.statusRetired,
-                    active = entry.isActiveCost,
+                    text = when {
+                        entry.isActiveCost && !breakdown.isActive -> strings.statusEnded
+                        entry.isActiveCost -> strings.statusActiveInUse
+                        else -> strings.statusRetired
+                    },
+                    active = breakdown.isActive,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
@@ -332,7 +336,7 @@ private fun CostAssetCard(
                         text = dailyStr,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (entry.isActiveCost) {
+                        color = if (breakdown.isActive) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -380,6 +384,22 @@ private fun CostAssetCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+
+            if (entry.isActiveCost && entry.disposalType == null) {
+                entry.costEndsAtMillis?.let { endMillis ->
+                    val endDate = Instant.ofEpochMilli(endMillis)
+                        .atZone(zone).toLocalDate().toString()
+                    Text(
+                        text = if (breakdown.isActive) {
+                            strings.costEndsOn(endDate)
+                        } else {
+                            strings.costEndedOn(endDate)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             entry.disposalType?.let { disposal ->
@@ -462,8 +482,12 @@ private fun CostSubscriptionCard(
                     fontWeight = FontWeight.Bold,
                 )
                 LedgerStatusChip(
-                    text = if (entry.isActiveCost) strings.statusSubActive else strings.statusSubStopped,
-                    active = entry.isActiveCost,
+                    text = when {
+                        entry.isActiveCost && !breakdown.isActive -> strings.statusEnded
+                        entry.isActiveCost -> strings.statusSubActive
+                        else -> strings.statusSubStopped
+                    },
+                    active = breakdown.isActive,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
@@ -471,7 +495,7 @@ private fun CostSubscriptionCard(
                         text = dailyStr,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (entry.isActiveCost) {
+                        color = if (breakdown.isActive) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -516,23 +540,37 @@ private fun CostSubscriptionCard(
                             },
                         )
                     }
+                    entry.costEndsAtMillis?.let {
+                        val endText = dateFormatter.format(Date(it))
+                        append(
+                            if (breakdown.isActive) {
+                                " · ${strings.costEndsOn(endText)}"
+                            } else {
+                                " · ${strings.costEndedOn(endText)}"
+                            },
+                        )
+                    }
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(onClick = onToggleActive) {
-                    Text(
-                        if (entry.isActiveCost) {
-                            strings.stopSubscriptionAction
-                        } else {
-                            strings.resumeSubscriptionAction
-                        },
-                    )
+            // An item ended by its scheduled date has no manual toggle —
+            // editing the entry moves or clears the date.
+            if (!(entry.isActiveCost && !breakdown.isActive)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = onToggleActive) {
+                        Text(
+                            if (entry.isActiveCost) {
+                                strings.stopSubscriptionAction
+                            } else {
+                                strings.resumeSubscriptionAction
+                            },
+                        )
+                    }
                 }
             }
         }

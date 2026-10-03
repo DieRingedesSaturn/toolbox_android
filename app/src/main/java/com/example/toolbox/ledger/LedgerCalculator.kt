@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 object LedgerCalculator {
@@ -51,16 +52,37 @@ object LedgerCalculator {
         return when (entry.costTrackingMode) {
             CostTrackingMode.NONE -> null
             CostTrackingMode.ONE_TIME_AMORTIZED ->
-                calculateOneTimeBreakdown(entry, nowMillis, children)
+                calculateOneTimeBreakdown(entry, nowMillis, children, zone)
             CostTrackingMode.PERIODIC_SUBSCRIPTION ->
                 calculatePeriodicBreakdown(entry, nowMillis, children, zone)
         }
+    }
+
+    /** Local calendar day the cost item's scheduled end falls on. */
+    private fun scheduledEndDate(entry: LedgerEntry, zone: ZoneId): LocalDate? =
+        entry.costEndsAtMillis?.let {
+            Instant.ofEpochMilli(it).atZone(zone).toLocalDate()
+        }
+
+    /**
+     * Effective measurement end for a cost item: the recorded stop wins,
+     * then the scheduled end date once it has passed, otherwise `now`.
+     */
+    private fun effectiveEndMillis(
+        entry: LedgerEntry,
+        nowMillis: Long,
+        endedBySchedule: Boolean,
+    ): Long = when {
+        !entry.isActiveCost && entry.retiredAtMillis != null -> entry.retiredAtMillis
+        endedBySchedule -> entry.costEndsAtMillis ?: nowMillis
+        else -> nowMillis
     }
 
     private fun calculateOneTimeBreakdown(
         entry: LedgerEntry,
         nowMillis: Long,
         children: List<LedgerEntry>,
+        zone: ZoneId,
     ): CostBreakdown {
         val netCents = when (entry.disposalType) {
             // Sold: net cost is price minus what it was actually sold for.
@@ -74,18 +96,24 @@ object LedgerCalculator {
             else -> entry.netCostCents
         }
         val netCostYuan = netCents / 100.0
-        val effectiveEndMillis = if (!entry.isActiveCost && entry.retiredAtMillis != null) {
-            entry.retiredAtMillis
-        } else {
-            nowMillis
-        }
-        val elapsedDays = ((effectiveEndMillis - entry.occurredAtMillis) / MILLIS_PER_DAY).toInt()
+        val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+        val endDate = scheduledEndDate(entry, zone)
+        val endedBySchedule = endDate != null && today > endDate
+        val effectiveEnd = effectiveEndMillis(entry, nowMillis, endedBySchedule)
+        val elapsedDays = ((effectiveEnd - entry.occurredAtMillis) / MILLIS_PER_DAY).toInt()
         val daysHeld = elapsedDays.coerceAtLeast(1)
 
         val actualDailyYuan = netCostYuan / daysHeld
         val actualMonthlyYuan = actualDailyYuan * DAYS_PER_MONTH
 
-        val plannedDays = entry.targetDays?.takeIf { it > 0 }
+        // An explicit end date is the amortization horizon; otherwise the
+        // days-count field carries the plan.
+        val horizonDays = endDate?.let {
+            val start = Instant.ofEpochMilli(entry.occurredAtMillis)
+                .atZone(zone).toLocalDate()
+            ChronoUnit.DAYS.between(start, it).toInt()
+        }?.takeIf { it > 0 }
+        val plannedDays = horizonDays ?: entry.targetDays?.takeIf { it > 0 }
         val targetDailyYuan = plannedDays?.let { netCostYuan / it }
         val targetMonthlyYuan = targetDailyYuan?.let { it * DAYS_PER_MONTH }
 
@@ -114,7 +142,7 @@ object LedgerCalculator {
             daysUntilRenewal = null,
             accumulatedCyclesCount = 1,
             accumulatedTotalYuan = netCostYuan,
-            isActive = entry.isActiveCost,
+            isActive = entry.isActiveCost && !endedBySchedule,
         )
     }
 
@@ -165,14 +193,11 @@ object LedgerCalculator {
             else -> dailyCostYuan * DAYS_PER_YEAR
         }
 
-        val effectiveEndMillis = if (!entry.isActiveCost && entry.retiredAtMillis != null) {
-            entry.retiredAtMillis
-        } else {
-            nowMillis
-        }
-        val elapsedMillis = (effectiveEndMillis - entry.occurredAtMillis).coerceAtLeast(0L)
-        val daysHeld = ((elapsedMillis / MILLIS_PER_DAY).toInt()).coerceAtLeast(1)
         val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+        val endedBySchedule = scheduledEndDate(entry, zone)?.let { today > it } == true
+        val effectiveEnd = effectiveEndMillis(entry, nowMillis, endedBySchedule)
+        val elapsedMillis = (effectiveEnd - entry.occurredAtMillis).coerceAtLeast(0L)
+        val daysHeld = ((elapsedMillis / MILLIS_PER_DAY).toInt()).coerceAtLeast(1)
         val nextRenewal = SubscriptionRenewals.nextRenewalDate(entry, today, zone)
             ?.let { date ->
                 date.atTime(
@@ -198,7 +223,7 @@ object LedgerCalculator {
             daysUntilRenewal = daysUntilRenewal,
             accumulatedCyclesCount = payments.size,
             accumulatedTotalYuan = payments.sumOf { it.baseAmountCents } / 100.0,
-            isActive = entry.isActiveCost,
+            isActive = entry.isActiveCost && !endedBySchedule,
         )
     }
 
@@ -236,7 +261,7 @@ object LedgerCalculator {
                     children[entry.uuid].orEmpty(),
                     zone,
                 )
-                if (breakdown != null) {
+                if (breakdown != null && breakdown.isActive) {
                     when (entry.costTrackingMode) {
                         CostTrackingMode.ONE_TIME_AMORTIZED -> {
                             activeOneTimeDaily += breakdown.dailyCostYuan
@@ -262,7 +287,7 @@ object LedgerCalculator {
                     children[entry.uuid].orEmpty(),
                     zone,
                 )
-                if (breakdown != null) {
+                if (breakdown != null && breakdown.isActive) {
                     recurringIncomeDaily += breakdown.dailyCostYuan
                     recurringIncomeMonthly += breakdown.monthlyCostYuan
                     recurringIncomeCount++

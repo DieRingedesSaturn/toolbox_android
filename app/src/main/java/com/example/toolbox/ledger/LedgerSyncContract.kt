@@ -116,6 +116,11 @@ object LedgerSyncSerializer {
         put("salvageValueCents", entry.salvageValueCents)
         if (entry.targetDays != null) put("targetDays", entry.targetDays) else put("targetDays", JSONObject.NULL)
         if (entry.retiredAtMillis != null) put("retiredAtMillis", entry.retiredAtMillis) else put("retiredAtMillis", JSONObject.NULL)
+        if (entry.costEndsAtMillis != null) {
+            put("costEndsAtMillis", entry.costEndsAtMillis)
+        } else {
+            put("costEndsAtMillis", JSONObject.NULL)
+        }
         put("billingCycle", entry.billingCycle.name)
         put("customCycleDays", entry.customCycleDays)
         put("customCycleUnit", entry.customCycleUnit.name)
@@ -182,6 +187,11 @@ object LedgerSyncSerializer {
         salvageValueCents = obj.optLong("salvageValueCents", 0L),
         targetDays = if (obj.isNull("targetDays")) null else obj.optInt("targetDays", 0).takeIf { it > 0 },
         retiredAtMillis = if (obj.isNull("retiredAtMillis")) null else obj.optLong("retiredAtMillis", 0L).takeIf { it > 0L },
+        costEndsAtMillis = if (obj.isNull("costEndsAtMillis")) {
+            null
+        } else {
+            obj.optLong("costEndsAtMillis", 0L).takeIf { it > 0L }
+        },
         billingCycle = runCatching { BillingCycle.valueOf(obj.optString("billingCycle", "MONTHLY")) }
             .getOrDefault(BillingCycle.MONTHLY),
         customCycleDays = obj.optInt("customCycleDays", 30).coerceAtLeast(1),

@@ -181,6 +181,14 @@ internal fun LedgerEntryEditor(
     var customCycleUnit by rememberSaveable {
         mutableStateOf(initialEntry?.customCycleUnit?.name ?: CycleUnit.DAYS.name)
     }
+    var costEndsEpochDay by rememberSaveable {
+        mutableLongStateOf(
+            initialEntry?.costEndsAtMillis
+                ?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
+                ?.toEpochDay() ?: -1L,
+        )
+    }
+    var showCostEndPicker by rememberSaveable { mutableStateOf(false) }
     var accountUuid by rememberSaveable {
         mutableStateOf(initialEntry?.accountUuid ?: defaultAccountUuid)
     }
@@ -358,6 +366,19 @@ internal fun LedgerEntryEditor(
         salvageValueCents = previewSalvageCents,
         targetDays = targetDaysText.toIntOrNull()?.takeIf { it > 0 },
         retiredAtMillis = initialEntry?.retiredAtMillis,
+        costEndsAtMillis = if (
+            effectiveMode != CostTrackingMode.NONE && costEndsEpochDay >= 0L
+        ) {
+            // Same local time-of-day as occurredAt keeps day counts exact.
+            LocalDate.ofEpochDay(costEndsEpochDay)
+                .atTime(
+                    Instant.ofEpochMilli(occurredAtMillis)
+                        .atZone(zone).toLocalTime(),
+                )
+                .atZone(zone).toInstant().toEpochMilli()
+        } else {
+            null
+        },
         billingCycle = billingCycle,
         customCycleDays = (customCycleDaysText.toIntOrNull() ?: 30).coerceAtLeast(1),
         customCycleUnit = runCatching { CycleUnit.valueOf(customCycleUnit) }
@@ -1043,6 +1064,13 @@ internal fun LedgerEntryEditor(
                                     onUnit = { customCycleUnit = it },
                                 )
                             }
+                            CostEndDateRow(
+                                strings = strings,
+                                endDate = costEndsEpochDay.takeIf { it >= 0L }
+                                    ?.let(LocalDate::ofEpochDay),
+                                onPick = { showCostEndPicker = true },
+                                onClear = { costEndsEpochDay = -1L },
+                            )
                         }
                     } else if (entryType == LedgerEntryType.EXPENSE) {
                         // Average cost tracking switch
@@ -1131,6 +1159,14 @@ internal fun LedgerEntryEditor(
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
+
+                                CostEndDateRow(
+                                    strings = strings,
+                                    endDate = costEndsEpochDay.takeIf { it >= 0L }
+                                        ?.let(LocalDate::ofEpochDay),
+                                    onPick = { showCostEndPicker = true },
+                                    onClear = { costEndsEpochDay = -1L },
+                                )
                             } else {
                                 Text(
                                     text = strings.billingCycleLabel,
@@ -1153,6 +1189,14 @@ internal fun LedgerEntryEditor(
                                         onUnit = { customCycleUnit = it },
                                     )
                                 }
+
+                                CostEndDateRow(
+                                    strings = strings,
+                                    endDate = costEndsEpochDay.takeIf { it >= 0L }
+                                        ?.let(LocalDate::ofEpochDay),
+                                    onPick = { showCostEndPicker = true },
+                                    onClear = { costEndsEpochDay = -1L },
+                                )
                             }
 
                             if (previewBreakdown != null) {
@@ -1206,6 +1250,22 @@ internal fun LedgerEntryEditor(
                 showDatePicker = false
             },
             onDismiss = { showDatePicker = false },
+        )
+    }
+
+    if (showCostEndPicker) {
+        ToolboxDatePickerDialog(
+            initial = costEndsEpochDay.takeIf { it >= 0L }
+                ?.let(LocalDate::ofEpochDay)
+                ?: selectedDate.plusYears(1),
+            minDate = selectedDate,
+            maxDate = null,
+            strings = strings,
+            onConfirm = { day ->
+                costEndsEpochDay = day.toEpochDay()
+                showCostEndPicker = false
+            },
+            onDismiss = { showCostEndPicker = false },
         )
     }
 
@@ -1334,6 +1394,41 @@ private fun LedgerCycleChips(
                     )
                 },
             )
+        }
+    }
+}
+
+/** Read-only end-date field with a clear action; opens the shared picker. */
+@Composable
+private fun CostEndDateRow(
+    strings: ToolboxStrings,
+    endDate: LocalDate?,
+    onPick: () -> Unit,
+    onClear: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
+            OutlinedTextField(
+                value = endDate?.toString() ?: strings.costEndDateNone,
+                onValueChange = {},
+                label = { Text(strings.costEndDateLabel) },
+                readOnly = true,
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable(onClick = onPick),
+            )
+        }
+        if (endDate != null) {
+            TextButton(onClick = onClear) {
+                Text(strings.clearFilter)
+            }
         }
     }
 }
