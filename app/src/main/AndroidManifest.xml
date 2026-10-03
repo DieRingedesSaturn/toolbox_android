@@ -25,7 +25,9 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Toolbox">
+        android:enableOnBackInvokedCallback="true"
+        android:theme="@style/Theme.Toolbox"
+        tools:targetApi="33">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -4,19 +4,25 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -34,6 +40,7 @@ import com.example.toolbox.ledger.LedgerWidget
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -62,7 +69,7 @@ fun ToolboxApp(
     var languageName by rememberSaveable { mutableStateOf(preferences.language().name) }
     var themeName by rememberSaveable { mutableStateOf(preferences.themeMode().name) }
     var accentName by rememberSaveable { mutableStateOf(preferences.accentColor().name) }
-    var customAccentRgb by rememberSaveable { mutableStateOf(preferences.customAccentRgb()) }
+    var customAccentRgb by rememberSaveable { mutableIntStateOf(preferences.customAccentRgb()) }
     var moduleName by rememberSaveable { mutableStateOf(ToolboxModule.HOME.name) }
 
     val language = runCatching { AppLanguage.valueOf(languageName) }
@@ -149,21 +156,66 @@ fun ToolboxApp(
         accentColor = accentColor,
         customAccentRgb = customAccentRgb,
     ) {
-        if (module != ToolboxModule.HOME) {
-            BackHandler { moduleName = ToolboxModule.HOME.name }
+        val moduleTransitionState = remember { SeekableTransitionState(module) }
+        val moduleTransition = rememberTransition(moduleTransitionState, label = "moduleTransition")
+        var inPredictiveBack by remember { mutableStateOf(false) }
+        var backProgress by remember { mutableFloatStateOf(0f) }
+
+        PredictiveBackHandler(enabled = module != ToolboxModule.HOME) { events ->
+            inPredictiveBack = true
+            try {
+                events.collect { backProgress = it.progress }
+                inPredictiveBack = false
+                moduleName = ToolboxModule.HOME.name
+            } catch (cancelled: CancellationException) {
+                inPredictiveBack = false
+                throw cancelled
+            }
         }
 
-        AnimatedContent(
-            targetState = module,
-            transitionSpec = {
-                val entering = targetState != ToolboxModule.HOME
-                (
-                    fadeIn(tween(240)) + slideInHorizontally(tween(240)) {
-                        if (entering) it / 16 else -it / 16
+        if (inPredictiveBack) {
+            LaunchedEffect(backProgress) {
+                moduleTransitionState.seekTo(backProgress, ToolboxModule.HOME)
+            }
+        } else {
+            LaunchedEffect(module) {
+                if (moduleTransitionState.currentState != module) {
+                    moduleTransitionState.animateTo(module)
+                } else {
+                    val totalMillis = moduleTransition.totalDurationNanos / 1_000_000
+                    animate(
+                        initialValue = moduleTransitionState.fraction,
+                        targetValue = 0f,
+                        animationSpec = tween(
+                            (moduleTransitionState.fraction * totalMillis).toInt(),
+                        ),
+                    ) { value, _ ->
+                        launch {
+                            if (value > 0f) {
+                                moduleTransitionState.seekTo(value)
+                            } else {
+                                moduleTransitionState.snapTo(module)
+                            }
+                        }
                     }
-                ).togetherWith(fadeOut(tween(160)))
+                }
+            }
+        }
+
+        moduleTransition.AnimatedContent(
+            transitionSpec = {
+                if (targetState == ToolboxModule.HOME) {
+                    (
+                        fadeIn(tween(240)) + slideInHorizontally(tween(240)) { -it / 16 }
+                    ).togetherWith(
+                        fadeOut(tween(200)) + scaleOut(tween(240), targetScale = 0.92f),
+                    ).apply { targetContentZIndex = -1f }
+                } else {
+                    (
+                        fadeIn(tween(240)) + slideInHorizontally(tween(240)) { it / 16 }
+                    ).togetherWith(fadeOut(tween(160)))
+                }
             },
-            label = "moduleTransition",
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
