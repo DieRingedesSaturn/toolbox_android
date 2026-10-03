@@ -6,6 +6,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val projectSigningKey = rootProject.file("signing/toolbox-debug.keystore")
+
 android {
     namespace = "com.example.toolbox"
     compileSdk = 36
@@ -25,9 +27,8 @@ android {
 
     signingConfigs {
         getByName("debug") {
-            val projectDebugKey = rootProject.file("signing/toolbox-debug.keystore")
-            if (projectDebugKey.exists()) {
-                storeFile = projectDebugKey
+            if (projectSigningKey.exists()) {
+                storeFile = projectSigningKey
                 storePassword = "android"
                 keyAlias = "androiddebugkey"
                 keyPassword = "android"
@@ -43,6 +44,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (projectSigningKey.exists()) {
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 

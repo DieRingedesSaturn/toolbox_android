@@ -64,8 +64,11 @@ Open the repository in Android Studio and let Gradle synchronize the configured 
 ```bash
 ./gradlew assembleDebug
 ./gradlew installDebug
+./gradlew installRelease
 adb logcat
 ```
+
+Debug builds run Compose without R8 and without the bundled baseline profile, so the UI is noticeably slower; install the release build for day-to-day use. When the untracked `signing/toolbox-debug.keystore` exists, debug and release builds are both signed with it, so either one updates an installed copy in place and keeps its data. Without that file, debug builds fall back to the default debug key and release builds stay unsigned. Release builds are not debuggable, so `adb shell run-as` cannot read the app's files; back up with the in-app JSON export or WebDAV instead.
 
 If JDK 17 and the Android SDK are not already configured in the shell, set `JAVA_HOME` and `ANDROID_SDK_ROOT` to the local installations. Keep the SDK path in the untracked `local.properties` file.
 
