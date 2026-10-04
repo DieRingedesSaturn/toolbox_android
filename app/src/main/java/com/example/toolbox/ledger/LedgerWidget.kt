@@ -56,7 +56,9 @@ object LedgerWidget {
         if (ids.isEmpty()) return
 
         val strings = ToolboxStrings(AppPreferences(appContext).language())
-        val entries = LedgerStore(appContext).queryVisibleEntries()
+        val entries = runCatching {
+            LedgerStore(appContext).use { it.queryVisibleEntries() }
+        }.getOrNull() ?: return
         val now = System.currentTimeMillis()
         val summary = LedgerCalculator.summarize(entries, now)
         val month = LedgerCalculator.monthSummary(

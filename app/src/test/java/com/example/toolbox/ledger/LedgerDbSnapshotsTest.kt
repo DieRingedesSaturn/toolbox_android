@@ -89,34 +89,56 @@ class LedgerDbSnapshotsTest {
     }
 
     @Test
-    fun testRestoreReplacesDatabaseAndWal() {
-        val db = temp.newFile("toolbox_ledger.db").apply { writeText("current") }
-        File(db.path + "-wal").writeText("old wal")
-        File(db.path + "-shm").writeText("old shm")
-        val dir = File(temp.root, LedgerDbSnapshots.DIR_NAME)
-        val source = temp.newFile("src.db").apply { writeText("v4 data") }
-        File(source.path + "-wal").writeText("snap wal")
-        val snapshot = LedgerDbSnapshots.save(source, dir, 4, millis(3, 15), utc)
+    fun testStagedCopyPreservesSourceAndCleansUpOnFailure() {
+        val source = temp.newFile("snapshot.db").apply { writeText("snapshot") }
+        File(source.path + "-wal").writeText("wal pages")
+        var work: File? = null
 
-        LedgerDbSnapshots.restore(snapshot, db)
+        org.junit.Assert.assertThrows(IllegalStateException::class.java) {
+            LedgerDbSnapshots.withStagedCopy(source, temp.root) { staged ->
+                work = staged.parentFile
+                assertEquals("snapshot", staged.readText())
+                assertEquals("wal pages", File(staged.path + "-wal").readText())
+                staged.writeText("changed only in staging")
+                error("Validation failed")
+            }
+        }
 
-        assertEquals("v4 data", db.readText())
-        assertEquals("snap wal", File(db.path + "-wal").readText())
-        assertFalse(File(db.path + "-shm").exists())
-        assertFalse(File(db.path + ".restore-tmp").exists())
+        assertEquals("snapshot", source.readText())
+        assertEquals("wal pages", File(source.path + "-wal").readText())
+        assertFalse(work!!.exists())
     }
 
     @Test
-    fun testRestoreDropsWalWhenSnapshotHasNone() {
-        val db = temp.newFile("toolbox_ledger.db").apply { writeText("current") }
-        File(db.path + "-wal").writeText("old wal")
+    fun testSavingCurrentCopyCanDeferPruningTheRecoverySource() {
+        val db = temp.newFile("toolbox_ledger.db").apply { writeText("old data") }
         val dir = File(temp.root, LedgerDbSnapshots.DIR_NAME)
-        val source = temp.newFile("src.db").apply { writeText("v4 data") }
-        val snapshot = LedgerDbSnapshots.save(source, dir, 4, millis(3, 15), utc)
+        val oldest = LedgerDbSnapshots.save(db, dir, 4, millis(1, 9), utc)
+        for (day in 2..3) LedgerDbSnapshots.save(db, dir, 4, millis(day, 9), utc)
+        db.writeText("current data")
 
-        LedgerDbSnapshots.restore(snapshot, db)
+        LedgerDbSnapshots.save(db, dir, 5, millis(4, 9), utc, pruneAfterSave = false)
 
-        assertEquals("v4 data", db.readText())
-        assertFalse(File(db.path + "-wal").exists())
+        assertTrue(oldest.isFile)
+        assertEquals("old data", oldest.readText())
+        assertEquals(4, LedgerDbSnapshots.list(dir).size)
+        LedgerDbSnapshots.prune(dir, LedgerDbSnapshots.KEEP)
+        assertEquals(3, LedgerDbSnapshots.list(dir).size)
+    }
+
+    @Test
+    fun testTwoSavesInTheSameSecondNeverOverwriteACopy() {
+        val db = temp.newFile("toolbox_ledger.db").apply { writeText("first") }
+        val dir = File(temp.root, LedgerDbSnapshots.DIR_NAME)
+        val first = LedgerDbSnapshots.save(db, dir, 5, millis(3, 15), utc)
+        db.writeText("second")
+
+        val second = LedgerDbSnapshots.save(db, dir, 5, millis(3, 15), utc)
+
+        assertTrue(first != second)
+        assertEquals("first", first.readText())
+        assertEquals("second", second.readText())
+        assertEquals(second, LedgerDbSnapshots.list(dir, utc).first().file)
+        assertTrue(dir.listFiles().orEmpty().none { it.name.startsWith(".pending-") })
     }
 }

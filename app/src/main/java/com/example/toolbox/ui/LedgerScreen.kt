@@ -93,6 +93,7 @@ import com.example.toolbox.ledger.LedgerEntry
 import com.example.toolbox.ledger.LedgerEntryType
 import com.example.toolbox.ledger.LedgerQuickPicks
 import com.example.toolbox.ledger.LedgerStore
+import com.example.toolbox.ledger.LedgerUpgradeBackupException
 import com.example.toolbox.ledger.LedgerSyncPayload
 import com.example.toolbox.ledger.LedgerSyncSerializer
 import com.example.toolbox.ledger.LedgerSyncStatus
@@ -145,14 +146,14 @@ internal fun LedgerScreen(
     onSnapshot: (LedgerSnapshot) -> Unit = {},
 ) {
     val context = LocalContext.current
-    var storeGeneration by remember { mutableIntStateOf(0) }
-    val store = remember(context, storeGeneration) { LedgerStore(context) }
+    val store = remember(context) { LedgerStore(context) }
     val scope = rememberCoroutineScope()
     val currentOnSnapshot by rememberUpdatedState(onSnapshot)
 
     var entries by remember { mutableStateOf(cachedSnapshot?.entries.orEmpty()) }
     var allEntries by remember { mutableStateOf(cachedSnapshot?.allEntries.orEmpty()) }
     var entriesLoaded by remember { mutableStateOf(cachedSnapshot != null) }
+    var loadError by remember { mutableStateOf<Throwable?>(null) }
     var selectedTab by rememberSaveable { mutableIntStateOf(tabRequest ?: 0) }
     var editingUuid by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDeleteUuid by rememberSaveable { mutableStateOf<String?>(null) }
@@ -259,22 +260,27 @@ internal fun LedgerScreen(
 
     fun reloadEntries() {
         scope.launch {
-            val loaded = withContext(Dispatchers.IO) {
-                Triple(
-                    store.queryVisibleEntries(),
-                    store.queryTags(includeDeleted = true),
-                    store.queryAllEntriesForSync(),
-                ) to store.queryAccounts(includeDeleted = true)
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    LedgerSnapshot(
+                        entries = store.queryVisibleEntries(),
+                        allEntries = store.queryAllEntriesForSync(),
+                        tags = store.queryTags(includeDeleted = true),
+                        accounts = store.queryAccounts(includeDeleted = true),
+                        latestFxRates = fxStore.latest(),
+                    )
+                }
             }
-            entries = loaded.first.first
-            tags = loaded.first.second
-            allEntries = loaded.first.third
-            accounts = loaded.second
-            latestFxRates = withContext(Dispatchers.IO) { fxStore.latest() }
-            entriesLoaded = true
-            currentOnSnapshot(
-                LedgerSnapshot(entries, allEntries, tags, accounts, latestFxRates),
-            )
+            outcome.onSuccess { loaded ->
+                entries = loaded.entries
+                tags = loaded.tags
+                allEntries = loaded.allEntries
+                accounts = loaded.accounts
+                latestFxRates = loaded.latestFxRates
+                entriesLoaded = true
+                loadError = null
+                currentOnSnapshot(loaded)
+            }.onFailure { loadError = it }
         }
     }
 
@@ -319,18 +325,7 @@ internal fun LedgerScreen(
         scope.launch {
             val restored = withContext(Dispatchers.IO) {
                 runCatching {
-                    val dbFile = context.getDatabasePath(LedgerStore.DATABASE_NAME)
-                    store.writableDatabase
-                        .rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null)
-                        .use { it.moveToFirst() }
-                    LedgerDbSnapshots.save(
-                        dbFile = dbFile,
-                        dir = snapshotDir,
-                        fromVersion = store.readableDatabase.version,
-                        nowMillis = System.currentTimeMillis(),
-                    )
-                    store.close()
-                    LedgerDbSnapshots.restore(snapshot.file, dbFile)
+                    store.restoreSnapshot(snapshot.file)
                 }.isSuccess
             }
             restoreBusy = false
@@ -342,7 +337,7 @@ internal fun LedgerScreen(
                     strings.snapshotRestored,
                     Toast.LENGTH_LONG,
                 ).show()
-                storeGeneration++
+                reloadEntries()
             } else {
                 Toast.makeText(
                     context,
@@ -1049,6 +1044,33 @@ internal fun LedgerScreen(
         entriesLoaded &&
         backupStatusLoaded &&
         webDavStatusLoaded
+
+    if (loadError != null) {
+        Scaffold(
+            topBar = {
+                ToolboxTopBar(
+                    title = strings.moduleTitle(ToolboxModule.LEDGER),
+                    onBack = onBack,
+                    backLabel = strings.back,
+                )
+            },
+        ) { padding ->
+            InfoCard(
+                title = strings.ledgerOpenFailed,
+                modifier = Modifier.padding(padding).padding(16.dp),
+            ) {
+                Text(
+                    if (loadError is LedgerUpgradeBackupException) {
+                        strings.ledgerUpgradeBackupFailed
+                    } else {
+                        strings.ledgerOpenFailedHint
+                    },
+                )
+                TextButton(onClick = ::reloadEntries) { Text(strings.refresh) }
+            }
+        }
+        return
+    }
 
     Scaffold(
         topBar = {

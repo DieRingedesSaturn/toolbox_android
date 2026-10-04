@@ -1,11 +1,13 @@
 package com.example.toolbox.ledger
 
 import java.io.File
+import java.io.FileOutputStream
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.UUID
 
 object LedgerDbSnapshots {
     const val DIR_NAME = "ledger-db-snapshots"
@@ -13,8 +15,6 @@ object LedgerDbSnapshots {
     private const val PREFIX = "toolbox_ledger-"
     private const val SUFFIX = ".db"
     private const val WAL_SUFFIX = "-wal"
-    private const val SHM_SUFFIX = "-shm"
-    private const val RESTORE_TMP_SUFFIX = ".restore-tmp"
     private val STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.US)
     private val NAME_PATTERN = Regex(
         "^${Regex.escape(PREFIX)}(\\d{8}-\\d{6})-v(\\d+)${Regex.escape(SUFFIX)}\$",
@@ -34,20 +34,36 @@ object LedgerDbSnapshots {
         LocalDateTime.ofInstant(Instant.ofEpochMilli(nowMillis), zone).format(STAMP) +
         "-v$fromVersion" + SUFFIX
 
+    @Synchronized
     fun save(
         dbFile: File,
         dir: File,
         fromVersion: Int,
         nowMillis: Long,
         zone: ZoneId = ZoneId.systemDefault(),
+        pruneAfterSave: Boolean = true,
     ): File {
         check(dir.isDirectory || dir.mkdirs()) { "Cannot create $dir" }
-        val target = File(dir, fileName(fromVersion, nowMillis, zone))
-        dbFile.copyTo(target, overwrite = true)
-        val wal = File(dbFile.path + WAL_SUFFIX)
-        val targetWal = File(target.path + WAL_SUFFIX)
-        if (wal.length() > 0L) wal.copyTo(targetWal, overwrite = true) else targetWal.delete()
-        prune(dir, KEEP)
+        // Never overwrite a recovery copy, including two saves in the same second.
+        var stamp = nowMillis
+        var target = File(dir, fileName(fromVersion, stamp, zone))
+        while (target.exists() || File(target.path + WAL_SUFFIX).exists()) {
+            stamp += 1_000L
+            target = File(dir, fileName(fromVersion, stamp, zone))
+        }
+        withStagedCopy(dbFile, dir) { staged ->
+            val wal = File(staged.path + WAL_SUFFIX)
+            val targetWal = File(target.path + WAL_SUFFIX)
+            try {
+                // The main filename publishes the completed pair to list().
+                if (wal.isFile) check(wal.renameTo(targetWal)) { "Cannot publish snapshot WAL" }
+                check(staged.renameTo(target)) { "Cannot publish snapshot" }
+            } catch (failure: Exception) {
+                targetWal.delete()
+                throw failure
+            }
+        }
+        if (pruneAfterSave) prune(dir, KEEP)
         return target
     }
 
@@ -66,25 +82,37 @@ object LedgerDbSnapshots {
             }
             .sortedByDescending { it.takenAtMillis }
 
-    fun restore(snapshot: File, dbFile: File) {
-        require(snapshot.isFile) { "Missing snapshot $snapshot" }
-        val tmp = File(dbFile.path + RESTORE_TMP_SUFFIX)
-        val tmpWal = File(tmp.path + WAL_SUFFIX)
-        snapshot.copyTo(tmp, overwrite = true)
-        val snapshotWal = File(snapshot.path + WAL_SUFFIX)
-        if (snapshotWal.isFile && snapshotWal.length() > 0L) {
-            snapshotWal.copyTo(tmpWal, overwrite = true)
-        } else {
-            tmpWal.delete()
+    /** Isolate the database and its WAL; callers never open the original copy. */
+    fun <T> withStagedCopy(source: File, parent: File, block: (File) -> T): T {
+        require(source.isFile) { "Missing snapshot" }
+        return withTemporaryDatabase(parent) { staged ->
+            copyDurably(source, staged)
+            val wal = File(source.path + WAL_SUFFIX)
+            if (wal.isFile && wal.length() > 0L) {
+                copyDurably(wal, File(staged.path + WAL_SUFFIX))
+            }
+            block(staged)
         }
-        check(tmp.renameTo(dbFile)) { "Cannot replace $dbFile" }
-        val dbWal = File(dbFile.path + WAL_SUFFIX)
-        if (tmpWal.isFile) {
-            check(tmpWal.renameTo(dbWal)) { "Cannot replace $dbWal" }
-        } else {
-            dbWal.delete()
+    }
+
+    fun <T> withTemporaryDatabase(parent: File, block: (File) -> T): T {
+        check(parent.isDirectory || parent.mkdirs()) { "Cannot create staging directory" }
+        val work = File(parent, ".pending-${UUID.randomUUID()}")
+        check(work.mkdir()) { "Cannot create snapshot staging directory" }
+        try {
+            return block(File(work, "ledger.db"))
+        } finally {
+            work.deleteRecursively()
         }
-        File(dbFile.path + SHM_SUFFIX).delete()
+    }
+
+    private fun copyDurably(source: File, target: File) {
+        source.inputStream().use { input ->
+            FileOutputStream(target).use { output ->
+                input.copyTo(output)
+                output.fd.sync()
+            }
+        }
     }
 
     fun prune(dir: File, keep: Int) {

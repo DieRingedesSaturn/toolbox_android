@@ -942,6 +942,20 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "文件过大（超过 20 MB）" else "File too large (over 20 MB)"
     val backupReadFailed: String
         get() = if (chinese) "无法读取文件" else "Could not read the file"
+    val ledgerOpenFailed: String
+        get() = if (chinese) "无法打开账本" else "Could not open ledger"
+    val ledgerUpgradeBackupFailed: String
+        get() = if (chinese) {
+            "升级前副本保存失败，已停止升级并保留原数据。请检查可用存储空间后重试。"
+        } else {
+            "The pre-upgrade copy could not be saved. Upgrade was stopped and original data kept. Check available storage and retry."
+        }
+    val ledgerOpenFailedHint: String
+        get() = if (chinese) {
+            "账本读取失败，原数据库已保留。请重试。"
+        } else {
+            "The ledger could not be read. The original database was kept. Please retry."
+        }
     val snapshotRestoreMenu: String
         get() = if (chinese) "恢复升级前副本…" else "Restore pre-upgrade copy…"
     val snapshotRestoreTitle: String
@@ -950,9 +964,9 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "暂无可恢复的副本" else "No copies available yet"
     val snapshotRestoreHint: String
         get() = if (chinese) {
-            "所选副本会整体替换当前账本；替换前会先保存一份当前数据的副本。"
+            "所选副本通过校验后会整体替换当前账本；替换前会保存当前数据的副本，失败时保留原账本。"
         } else {
-            "The selected copy fully replaces the current ledger; a copy of current data is saved first."
+            "The selected copy is checked before replacing the ledger. Current data is saved first; a failed restore keeps the original ledger."
         }
     val snapshotRestoreAction: String
         get() = if (chinese) "恢复" else "Restore"

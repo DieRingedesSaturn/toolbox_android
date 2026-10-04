@@ -84,6 +84,85 @@ class LedgerStoreMigrationTest {
     }
 
     @Test
+    fun testUpgradeFromV1KeepsEntriesAndAddsFxColumns() {
+        legacyDatabase(version = 1) {
+            execSQL(
+                V2_ENTRIES.replace("fx_rate_to_cny REAL NOT NULL DEFAULT 1.0,", "")
+                    .replace("fx_rate_date TEXT,", ""),
+            )
+            insertEntry("v1", "V1 entry", 123L, "FOOD")
+        }
+        LedgerStore(context).use { store ->
+            val entry = store.queryVisibleEntries().single()
+            assertEquals("V1 entry", entry.title)
+            assertEquals(1.0, entry.fxRateToCny, 0.0)
+            assertEquals(5, store.readableDatabase.version)
+        }
+    }
+
+    @Test
+    fun testUpgradeFromV3KeepsEntriesAndAddsEndDate() {
+        legacyDatabase(version = 3) {
+            execSQL(V4_ENTRIES)
+            execSQL(TAGS)
+            execSQL(ACCOUNTS)
+            insertEntry("v3", "V3 entry", 456L, "FOOD")
+        }
+        LedgerStore(context).use { store ->
+            assertEquals("V3 entry", store.queryVisibleEntries().single().title)
+            assertEquals(5, store.readableDatabase.version)
+        }
+    }
+
+    @Test
+    fun testBackupFailureStopsUpgradeAndLeavesOldDataReadable() {
+        legacyDatabase(version = 2) {
+            execSQL(V2_ENTRIES)
+            insertEntry("e1", "Original", 789L, "FOOD")
+        }
+        snapshotDir.parentFile!!.mkdirs()
+        snapshotDir.writeText("Cannot create a directory here")
+        LedgerStore(context).use { store ->
+            org.junit.Assert.assertThrows(LedgerUpgradeBackupException::class.java) {
+                store.queryVisibleEntries()
+            }
+        }
+        SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+            assertEquals(2, db.version)
+            assertTrue("cost_ends_at" !in db.columnsOf("ledger_entries"))
+            db.rawQuery("SELECT title FROM ledger_entries", null).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Original", cursor.getString(0))
+            }
+        }
+        snapshotDir.delete()
+        LedgerStore(context).use { store ->
+            assertEquals("Original", store.queryVisibleEntries().single().title)
+            assertEquals(5, store.readableDatabase.version)
+        }
+    }
+
+    @Test
+    fun testRestoreMigratesAnIsolatedV4CopyAndLeavesTheSourceUnchanged() {
+        legacyDatabase(version = 4) {
+            execSQL(V4_ENTRIES)
+            execSQL(TAGS)
+            execSQL(ACCOUNTS)
+            insertEntry("e1", "Restored", 2_500L, "FOOD")
+        }
+        val snapshot = LedgerDbSnapshots.save(dbFile, snapshotDir, 4, 1_790_000_000_000L)
+        val bytes = snapshot.readBytes()
+        context.deleteDatabase(DB_NAME)
+        LedgerStore(context).use { store ->
+            store.upsert(LedgerEntry(title = "Current", amountCents = 100L, occurredAtMillis = OCCURRED_AT))
+            store.restoreSnapshot(snapshot)
+            assertEquals("Restored", store.queryVisibleEntries().single().title)
+            assertEquals(5, store.readableDatabase.version)
+            org.junit.Assert.assertArrayEquals(bytes, snapshot.readBytes())
+        }
+    }
+
+    @Test
     fun testFreshAndCurrentDatabasesTakeNoSnapshot() {
         LedgerStore(context).apply {
             queryVisibleEntries()

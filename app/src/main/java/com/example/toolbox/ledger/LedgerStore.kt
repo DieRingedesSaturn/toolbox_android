@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteException
 import android.database.sqlite.SQLiteOpenHelper
 import androidx.core.database.sqlite.transaction
 import com.example.toolbox.ui.AppPreferences
@@ -11,26 +12,41 @@ import com.example.toolbox.ui.ToolboxStrings
 import java.io.File
 import org.json.JSONArray
 
-class LedgerStore(context: Context) : SQLiteOpenHelper(
+class LedgerUpgradeBackupException(cause: Exception) :
+    IllegalStateException("Cannot save the pre-upgrade ledger copy", cause)
+
+class LedgerStore private constructor(
+    context: Context,
+    databaseName: String,
+    private val snapshotBeforeUpgrade: Boolean,
+) : SQLiteOpenHelper(
     context.applicationContext,
-    DATABASE_NAME,
+    databaseName,
     null,
     DATABASE_VERSION,
+    { throw SQLiteException("Ledger database is corrupt") },
 ) {
+    constructor(context: Context) : this(context, DATABASE_NAME, true)
+
     private val appContext = context.applicationContext
 
     override fun onConfigure(db: SQLiteDatabase) {
         super.onConfigure(db)
         val fromVersion = db.version
-        if (fromVersion in 1 until DATABASE_VERSION) {
-            runCatching {
-                db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
+        if (snapshotBeforeUpgrade && fromVersion in 1 until DATABASE_VERSION) {
+            try {
+                db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use {
+                    check(it.moveToFirst() && it.getInt(0) == 0) { "Ledger checkpoint is busy" }
+                }
                 LedgerDbSnapshots.save(
                     dbFile = File(db.path),
                     dir = File(appContext.noBackupFilesDir, LedgerDbSnapshots.DIR_NAME),
                     fromVersion = fromVersion,
                     nowMillis = System.currentTimeMillis(),
                 )
+            } catch (failure: Exception) {
+                // Stop before onUpgrade; the old database remains untouched.
+                throw LedgerUpgradeBackupException(failure)
             }
         }
     }
@@ -518,6 +534,75 @@ class LedgerStore(context: Context) : SQLiteOpenHelper(
             }
         }
         notifyChanged()
+    }
+
+    /** Validate and migrate an isolated copy, then replace rows atomically. */
+    fun restoreSnapshot(snapshot: File, nowMillis: Long = System.currentTimeMillis()) {
+        val payload = LedgerDbSnapshots.withStagedCopy(snapshot, appContext.cacheDir) { staged ->
+            validateSnapshot(staged)
+            LedgerStore(appContext, staged.path, false).use { source ->
+                val db = source.readableDatabase
+                check(db.isDatabaseIntegrityOk) { "Invalid ledger snapshot" }
+                LedgerSyncPayload(
+                    entries = source.queryAllEntriesForSync(),
+                    tags = source.queryTags(includeDeleted = true),
+                    accounts = source.queryAccounts(includeDeleted = true),
+                )
+            }
+        }
+        val dir = File(appContext.noBackupFilesDir, LedgerDbSnapshots.DIR_NAME)
+        val db = writableDatabase
+        db.transaction {
+            // Capture all rows under the same write lock as the replacement.
+            // A closed, standalone database avoids copying an active WAL pair.
+            val current = LedgerSyncPayload(
+                entries = queryAllEntriesForSync(),
+                tags = queryTags(includeDeleted = true),
+                accounts = queryAccounts(includeDeleted = true),
+            )
+            LedgerDbSnapshots.withTemporaryDatabase(appContext.cacheDir) { backup ->
+                LedgerStore(appContext, backup.path, false).use { copy ->
+                    copy.writableDatabase.transaction {
+                        copy.replaceSnapshotRows(copy.writableDatabase, current)
+                    }
+                }
+                LedgerDbSnapshots.save(
+                    dbFile = backup,
+                    dir = dir,
+                    fromVersion = DATABASE_VERSION,
+                    nowMillis = nowMillis,
+                    pruneAfterSave = false,
+                )
+            }
+            replaceSnapshotRows(db, payload)
+        }
+        // Only a committed restore may retire the selected recovery source.
+        runCatching { LedgerDbSnapshots.prune(dir, LedgerDbSnapshots.KEEP) }
+        notifyChanged()
+    }
+
+    private fun validateSnapshot(file: File) {
+        // A non-deleting handler prevents SQLite's default corruption recovery
+        // from silently turning a broken snapshot into a new, empty ledger.
+        SQLiteDatabase.openDatabase(
+            file.path,
+            null,
+            SQLiteDatabase.OPEN_READONLY,
+            { throw SQLiteException("Invalid ledger snapshot") },
+        ).use { db ->
+            check(db.version in 1..DATABASE_VERSION) { "Unsupported ledger schema" }
+            check(db.isDatabaseIntegrityOk) { "Invalid ledger snapshot" }
+            db.rawQuery("SELECT uuid FROM ledger_entries LIMIT 0", null).use { }
+        }
+    }
+
+    private fun replaceSnapshotRows(db: SQLiteDatabase, payload: LedgerSyncPayload) {
+        db.delete(TABLE_ENTRIES, null, null)
+        db.delete(TABLE_TAGS, null, null)
+        db.delete(TABLE_ACCOUNTS, null, null)
+        payload.accounts.forEach { db.insertOrThrow(TABLE_ACCOUNTS, null, toAccountValues(it)) }
+        payload.tags.forEach { db.insertOrThrow(TABLE_TAGS, null, toTagValues(it)) }
+        payload.entries.forEach { db.insertOrThrow(TABLE_ENTRIES, null, toContentValues(it)) }
     }
 
     private fun notifyChanged() {
