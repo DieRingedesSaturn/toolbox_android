@@ -136,7 +136,10 @@ internal object NotificationAmountParser {
             "\\b(?:otp|one-time|passcode|verification code)\\b",
         RegexOption.IGNORE_CASE,
     )
-    private val balanceLead = Regex("余额|可用额度|balance", RegexOption.IGNORE_CASE)
+    private val balanceLead = Regex(
+        "(?:余额|可用额度|\\bbalance)\\s*(?:[:：=]|为|is)?\\s*$",
+        RegexOption.IGNORE_CASE,
+    )
 
     fun parse(text: String): List<Long> {
         if (codeNotice.containsMatchIn(text)) return emptyList()
@@ -145,7 +148,7 @@ internal object NotificationAmountParser {
                 val number = match.groupValues[2]
                 val marked = match.groupValues[1].isNotEmpty() || match.groupValues[3].isNotEmpty()
                 if (!marked && !twoDecimals.containsMatchIn(number)) return@mapNotNull null
-                val lead = text.substring((match.range.first - 6).coerceAtLeast(0), match.range.first)
+                val lead = text.substring(0, match.range.first)
                 if (balanceLead.containsMatchIn(lead)) return@mapNotNull null
                 runCatching {
                     BigDecimal(number.replace(",", "")).movePointRight(2).longValueExact()

@@ -36,6 +36,15 @@ class NotificationAmountParserTest {
     }
 
     @Test
+    fun testEnglishBalancesAreExcludedWithoutDroppingTheCharge() {
+        assertEquals(listOf(2_500L), parse("Spent 25.00 CNY, balance 1,234.56 CNY"))
+        assertEquals(listOf(2_500L), parse("Charged ¥25.00; Balance: ¥1,234.56"))
+        assertEquals(emptyList<Long>(), parse("Available balance is   CNY 1234.56"))
+        assertEquals(emptyList<Long>(), parse("可用额度： 人民币1234.56元"))
+        assertEquals(listOf(2_500L), parse("余额1000元，消费25.00元"))
+    }
+
+    @Test
     fun testDeduplicatesAndCaps() {
         assertEquals(listOf(2_500L), parse("¥25.00 收款 ¥25.00"))
         val many = (1..15).joinToString(" ") { "¥$it" }
