@@ -79,6 +79,8 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerWebDavClient.kt
 │   ├── LedgerWebDavSync.kt
 │   ├── NotificationLedger.kt
+│   ├── NotificationLedgerDefaults.kt
+│   ├── LedgerDuplicateMatcher.kt
 │   ├── LedgerNotificationListener.kt
 │   └── LedgerWidget.kt
 ├── fx/
@@ -118,6 +120,8 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerBudgetDialog.kt
 │   ├── LedgerWebDavDialog.kt
 │   ├── NotificationLedgerDialog.kt
+│   ├── NotificationLedgerDefaultsDialog.kt
+│   ├── NotificationLedgerDuplicateDialog.kt
 │   ├── FxScreen.kt
 │   ├── SettingsScreen.kt
 │   └── AboutScreen.kt

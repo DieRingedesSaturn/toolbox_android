@@ -326,12 +326,13 @@ class LedgerStore private constructor(
             updatedAtMillis = now,
             syncStatus = LedgerSyncStatus.PENDING_PUSH,
         )
-        writableDatabase.insertWithOnConflict(
+        val rowId = writableDatabase.insertWithOnConflict(
             TABLE_ENTRIES,
             null,
             toContentValues(updated),
             SQLiteDatabase.CONFLICT_REPLACE,
         )
+        check(rowId != -1L) { "Ledger entry write failed" }
         notifyChanged()
     }
 

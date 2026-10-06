@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -38,10 +39,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,11 +58,15 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.app.NotificationManagerCompat
 import com.example.toolbox.ledger.NotificationLedgerCandidate
+import com.example.toolbox.ledger.NotificationLedgerDefaults
+import com.example.toolbox.ledger.LedgerAccount
+import com.example.toolbox.ledger.LedgerTag
 import com.example.toolbox.ledger.NotificationLedgerStore
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private data class NotificationSourceApp(val packageName: String, val label: String)
@@ -67,6 +75,8 @@ private data class NotificationSourceApp(val packageName: String, val label: Str
 @Composable
 internal fun NotificationLedgerDialog(
     strings: ToolboxStrings,
+    accounts: List<LedgerAccount>,
+    tags: List<LedgerTag>,
     onSelectAmount: (NotificationLedgerCandidate, Long) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -74,19 +84,29 @@ internal fun NotificationLedgerDialog(
     val locale = LocalConfiguration.current.locales[0]
     val timeFormatter = remember(locale) { SimpleDateFormat("MM-dd HH:mm", locale) }
     val store = remember(context) { NotificationLedgerStore(context) }
+    val scope = rememberCoroutineScope()
+    var defaultsPackage by rememberSaveable { mutableStateOf<String?>(null) }
+    var sourceDefaults by remember { mutableStateOf<Pair<String, NotificationLedgerDefaults>?>(null) }
+    var defaultsBusy by remember { mutableStateOf(false) }
+    LaunchedEffect(defaultsPackage) {
+        sourceDefaults = null
+        defaultsPackage?.let { pkg ->
+            sourceDefaults = pkg to withContext(Dispatchers.IO) { store.defaultsFor(pkg) }
+        }
+    }
     var enabled by remember { mutableStateOf(store.enabled()) }
     var allowedPackages by remember { mutableStateOf(store.allowedPackages()) }
     var candidates by remember { mutableStateOf(store.candidates()) }
     var apps by remember { mutableStateOf<List<NotificationSourceApp>>(emptyList()) }
     var appsLoaded by remember { mutableStateOf(false) }
-    var search by remember { mutableStateOf("") }
-    var selectedOnly by remember { mutableStateOf(false) }
+    var search by rememberSaveable { mutableStateOf("") }
+    var selectedOnly by rememberSaveable { mutableStateOf(false) }
     var accessGranted by remember {
         mutableStateOf(
             context.packageName in NotificationManagerCompat.getEnabledListenerPackages(context),
         )
     }
-    var selectedTab by remember {
+    var selectedTab by rememberSaveable {
         mutableIntStateOf(if (accessGranted && allowedPackages.isNotEmpty()) 0 else 1)
     }
     val settingsLauncher = rememberLauncherForActivityResult(
@@ -343,6 +363,11 @@ internal fun NotificationLedgerDialog(
                                                 }
                                             }
                                         }
+                                        if (checked) {
+                                            TextButton(onClick = { defaultsPackage = app.packageName }) {
+                                                Text(strings.notificationLedgerDefaults)
+                                            }
+                                        }
                                         HorizontalDivider()
                                     }
                                 }
@@ -351,6 +376,35 @@ internal fun NotificationLedgerDialog(
                     }
                 }
             }
+        }
+    }
+    val editingDefaults = sourceDefaults
+    val editingPackage = defaultsPackage
+    if (editingDefaults != null && editingPackage == editingDefaults.first) {
+        key(editingPackage) {
+            NotificationLedgerDefaultsDialog(
+                strings = strings,
+                sourceLabel = appLabels[editingDefaults.first] ?: editingDefaults.first,
+                initialDefaults = editingDefaults.second,
+                accounts = accounts,
+                tags = tags,
+                busy = defaultsBusy,
+                onSave = { defaults ->
+                    if (!defaultsBusy) {
+                        defaultsBusy = true
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                runCatching { store.saveDefaults(editingDefaults.first, defaults) }
+                            }
+                            defaultsBusy = false
+                            if (result.isSuccess) defaultsPackage = null else {
+                                Toast.makeText(context, strings.ledgerSaveFailed, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                },
+                onDismiss = { defaultsPackage = null },
+            )
         }
     }
 }

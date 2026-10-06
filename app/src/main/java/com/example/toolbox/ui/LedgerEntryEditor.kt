@@ -79,6 +79,7 @@ import com.example.toolbox.ledger.LedgerCalculator
 import com.example.toolbox.ledger.LedgerCategory
 import com.example.toolbox.ledger.LedgerEntry
 import com.example.toolbox.ledger.LedgerEntryType
+import com.example.toolbox.ledger.NotificationLedgerDefaults
 import com.example.toolbox.ledger.LedgerSyncStatus
 import java.time.Instant
 import java.time.LocalDate
@@ -98,6 +99,8 @@ internal fun LedgerEntryEditor(
     initialEntry: LedgerEntry?,
     draftAmountCents: Long? = null,
     draftOccurredAtMillis: Long? = null,
+    draftDefaults: NotificationLedgerDefaults? = null,
+    saveBusy: Boolean = false,
     tags: List<LedgerTag>,
     accounts: List<LedgerAccount> = emptyList(),
     defaultAccountUuid: String = LedgerAccounts.DEFAULT_ACCOUNT_UUID,
@@ -111,11 +114,12 @@ internal fun LedgerEntryEditor(
 ) {
     val zone = ZoneId.systemDefault()
     val nowMillis = remember { System.currentTimeMillis() }
+    val entryUuid = rememberSaveable { initialEntry?.uuid ?: UUID.randomUUID().toString() }
     var attemptedSave by remember { mutableStateOf(false) }
     val isLinked = initialEntry?.parentUuid != null
 
     var entryType by rememberSaveable {
-        mutableStateOf(initialEntry?.type ?: LedgerEntryType.EXPENSE)
+        mutableStateOf(initialEntry?.type ?: draftDefaults?.type ?: LedgerEntryType.EXPENSE)
     }
     var title by rememberSaveable {
         mutableStateOf(initialEntry?.title ?: "")
@@ -129,7 +133,7 @@ internal fun LedgerEntryEditor(
         )
     }
     var tagUuidsText by rememberSaveable {
-        mutableStateOf(initialEntry?.tagUuids?.joinToString(",") ?: "")
+        mutableStateOf((initialEntry?.tagUuids ?: draftDefaults?.tagUuids.orEmpty()).joinToString(","))
     }
     val selectedTagUuids = tagUuidsText.split(',')
         .filter { it.isNotBlank() }
@@ -193,7 +197,7 @@ internal fun LedgerEntryEditor(
     }
     var showCostEndPicker by rememberSaveable { mutableStateOf(false) }
     var accountUuid by rememberSaveable {
-        mutableStateOf(initialEntry?.accountUuid ?: defaultAccountUuid)
+        mutableStateOf(initialEntry?.accountUuid ?: draftDefaults?.accountUuid ?: defaultAccountUuid)
     }
     var toAccountUuid by rememberSaveable {
         mutableStateOf(initialEntry?.toAccountUuid ?: "")
@@ -340,7 +344,7 @@ internal fun LedgerEntryEditor(
     }
 
     val previewEntry = LedgerEntry(
-        uuid = initialEntry?.uuid ?: UUID.randomUUID().toString(),
+        uuid = entryUuid,
         title = title.ifBlank {
             when {
                 isAdjustment -> strings.adjustmentTitleText
@@ -516,13 +520,14 @@ internal fun LedgerEntryEditor(
                                 }
                             }
                             TextButton(
+                                enabled = !saveBusy && !rateFetching,
                                 onClick = {
                                     attemptedSave = true
                                     rateError = null
                                     if (amountValid &&
                                         !decimalsForbidden &&
                                         !costEndInvalid &&
-                                        !rateFetching
+                                        !rateFetching && !saveBusy
                                     ) {
                                         when {
                                             // Adjustments are denominated in the
@@ -577,7 +582,7 @@ internal fun LedgerEntryEditor(
                                     }
                                 },
                             ) {
-                                if (rateFetching) {
+                                if (rateFetching || saveBusy) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(18.dp),
                                         strokeWidth = 2.dp,

@@ -808,6 +808,28 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "没有匹配的应用" else "No matching apps"
     val notificationLedgerDiscard: String
         get() = if (chinese) "忽略" else "Dismiss"
+    val notificationLedgerDefaults: String
+        get() = if (chinese) "记账默认设置" else "Entry defaults"
+    val notificationLedgerDefaultsHint: String
+        get() = if (chinese) "仅预填此应用的候选账目，保存前可修改。设置仅保存在本机。" else
+            "Prefill suggestions from this app; you can edit before saving. Settings stay on this device."
+    val notificationLedgerFollowLastAccount: String
+        get() = if (chinese) "使用上次记账账户" else "Use last entry's account"
+    val notificationLedgerDuplicateTitle: String
+        get() = if (chinese) "可能已记过这笔账" else "Possible duplicate entry"
+    val notificationLedgerDuplicateHint: String
+        get() = if (chinese) "同一账户前后 5 分钟内有金额、币种和收支类型相同的账目，请检查。" else
+            "Entries in this account within 5 minutes have the same amount, currency and type. Please review."
+    val notificationLedgerSaveAnyway: String
+        get() = if (chinese) "仍然保存" else "Save anyway"
+    val notificationLedgerAlreadyRecorded: String
+        get() = if (chinese) "已记账，忽略通知" else "Already recorded; dismiss suggestion"
+    val notificationLedgerReviewEntry: String
+        get() = if (chinese) "返回编辑" else "Back to editor"
+    fun notificationLedgerDuplicateCount(count: Int): String =
+        if (chinese) "共 $count 笔相似账目，显示最近 5 笔" else "$count similar entries; showing the latest 5"
+    val ledgerSaveFailed: String
+        get() = if (chinese) "未能保存，请重试；编辑内容已保留" else "Could not save. Your edits are kept; please retry."
     val editLedgerEntry: String
         get() = if (chinese) "编辑账目" else "Edit entry"
     val trackAverageCostOption: String

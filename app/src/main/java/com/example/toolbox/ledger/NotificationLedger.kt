@@ -1,5 +1,6 @@
 package com.example.toolbox.ledger
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.service.notification.StatusBarNotification
 import androidx.core.content.edit
@@ -35,6 +36,17 @@ class NotificationLedgerStore(context: Context) {
     fun allowedPackages(): Set<String> = preferences.getStringSet("packages", emptySet())
         ?.toSet().orEmpty()
 
+    fun defaultsFor(packageName: String): NotificationLedgerDefaults =
+        NotificationLedgerDefaults.fromJson(preferences.getString("defaults:$packageName", null))
+
+    @SuppressLint("UseKtx") // KTX edit discards the commit result; the editor needs failure feedback.
+    fun saveDefaults(packageName: String, defaults: NotificationLedgerDefaults) {
+        require(packageName.isNotBlank())
+        check(preferences.edit().putString("defaults:$packageName", defaults.toJson()).commit()) {
+            "Notification defaults write failed"
+        }
+    }
+
     fun setAllowedPackages(packages: Set<String>) {
         preferences.edit { putStringSet("packages", packages.toSet()) }
         synchronized(lock) {
@@ -51,8 +63,13 @@ class NotificationLedgerStore(context: Context) {
         fresh.sortedByDescending { it.occurredAtMillis }
     }
 
-    fun removeCandidate(id: String) {
-        synchronized(lock) { saveCandidates(readCandidates().filterNot { it.id == id }) }
+    fun removeCandidate(id: String, occurredAtMillis: Long? = null, amountsCents: List<Long>? = null) {
+        synchronized(lock) {
+            saveCandidates(readCandidates().filterNot {
+                it.id == id && (occurredAtMillis == null || it.occurredAtMillis == occurredAtMillis) &&
+                    (amountsCents == null || it.amountsCents == amountsCents)
+            })
+        }
     }
 
     fun clearCandidates() {

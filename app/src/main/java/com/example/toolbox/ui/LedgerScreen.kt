@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -89,6 +90,7 @@ import com.example.toolbox.ledger.LedgerCalculator
 import com.example.toolbox.ledger.LedgerCategory
 import com.example.toolbox.ledger.LedgerCsv
 import com.example.toolbox.ledger.LedgerDbSnapshots
+import com.example.toolbox.ledger.LedgerDuplicateMatcher
 import com.example.toolbox.ledger.LedgerEntry
 import com.example.toolbox.ledger.LedgerEntryType
 import com.example.toolbox.ledger.LedgerQuickPicks
@@ -101,6 +103,7 @@ import com.example.toolbox.ledger.LedgerTag
 import com.example.toolbox.ledger.LedgerTags
 import com.example.toolbox.ledger.LedgerWebDavSync
 import com.example.toolbox.ledger.NotificationLedgerCandidate
+import com.example.toolbox.ledger.NotificationLedgerDefaults
 import com.example.toolbox.ledger.NotificationLedgerStore
 import com.example.toolbox.ledger.SubscriptionRenewals
 import com.example.toolbox.ledger.TagFilterMode
@@ -124,6 +127,31 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val LEDGER_TAB_COUNT = 4
+
+private val notificationDraftSaver = listSaver<Pair<NotificationLedgerCandidate, Long>?, Any>(
+    save = { draft ->
+        draft?.let {
+            listOf(
+                it.first.id,
+                it.first.packageName,
+                it.first.occurredAtMillis,
+                it.second,
+                it.first.amountsCents.joinToString(","),
+            )
+        } ?: emptyList()
+    },
+    restore = { values ->
+        if (values.size != 5) null else {
+            val amount = values[3] as Long
+            NotificationLedgerCandidate(
+                id = values[0] as String,
+                packageName = values[1] as String,
+                occurredAtMillis = values[2] as Long,
+                amountsCents = (values[4] as String).split(',').mapNotNull { it.toLongOrNull() },
+            ) to amount
+        }
+    },
+)
 
 internal data class LedgerSnapshot(
     val entries: List<LedgerEntry>,
@@ -165,10 +193,15 @@ internal fun LedgerScreen(
         mutableStateOf(YearMonth.now().toString())
     }
     var showWebDavDialog by rememberSaveable { mutableStateOf(false) }
-    var showNotificationLedgerDialog by remember { mutableStateOf(false) }
-    var notificationDraft by remember {
+    var showNotificationLedgerDialog by rememberSaveable { mutableStateOf(false) }
+    var notificationDraft by rememberSaveable(stateSaver = notificationDraftSaver) {
         mutableStateOf<Pair<NotificationLedgerCandidate, Long>?>(null)
     }
+    var notificationDefaults by remember { mutableStateOf<NotificationLedgerDefaults?>(null) }
+    var notificationLastAccount by remember { mutableStateOf<String?>(null) }
+    var entrySaveBusy by remember { mutableStateOf(false) }
+    var pendingDuplicateEntry by remember { mutableStateOf<LedgerEntry?>(null) }
+    var duplicateMatches by remember { mutableStateOf<List<LedgerEntry>>(emptyList()) }
     val webDavStore = remember(context) { WebDavConfigStore(context) }
     var webDavConfigVersion by remember { mutableIntStateOf(0) }
     var webDavConfig by remember { mutableStateOf<WebDavConfig?>(null) }
@@ -286,6 +319,18 @@ internal fun LedgerScreen(
 
     LaunchedEffect(store) {
         reloadEntries()
+    }
+
+    LaunchedEffect(notificationDraft) {
+        notificationDefaults = null
+        notificationDraft?.first?.let { candidate ->
+            val loaded = withContext(Dispatchers.IO) {
+                NotificationLedgerStore(context).defaultsFor(candidate.packageName) to
+                    AppPreferences(context).ledgerLastAccount()
+            }
+            notificationLastAccount = loaded.second
+            notificationDefaults = loaded.first
+        }
     }
 
     LaunchedEffect(tabRequest) {
@@ -1484,18 +1529,57 @@ internal fun LedgerScreen(
         }
     }
 
-    if (showEditor && (editingUuid == null || editingEntry != null)) {
+    fun persistEntry(newEntry: LedgerEntry, candidate: NotificationLedgerCandidate?) {
+        entrySaveBusy = true
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    store.upsert(newEntry)
+                    newEntry.accountUuid?.let { AppPreferences(context).saveLedgerLastAccount(it) }
+                    candidate?.let {
+                        NotificationLedgerStore(context).removeCandidate(
+                            it.id,
+                            it.occurredAtMillis,
+                            it.amountsCents,
+                        )
+                    }
+                }
+            }
+            entrySaveBusy = false
+            if (result.isSuccess) {
+                pendingDuplicateEntry = null
+                duplicateMatches = emptyList()
+                showEditor = false
+                editingUuid = null
+                notificationDraft = null
+                reloadEntries()
+            } else {
+                Toast.makeText(context, strings.ledgerSaveFailed, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    if (showEditor && (editingUuid == null || editingEntry != null) &&
+        (notificationDraft == null || (notificationDefaults != null && entriesLoaded))
+    ) {
         key(editingUuid ?: notificationDraft?.let { "${it.first.id}:${it.second}" } ?: "new") {
             LedgerEntryEditor(
                 strings = strings,
                 initialEntry = editingEntry,
                 draftAmountCents = notificationDraft?.second,
                 draftOccurredAtMillis = notificationDraft?.first?.occurredAtMillis,
+                draftDefaults = notificationDefaults?.takeIf { notificationDraft != null }
+                    ?.resolve(accounts, tags),
+                saveBusy = entrySaveBusy,
                 tags = tags,
                 accounts = accounts,
-                defaultAccountUuid = AppPreferences(context)
-                    .ledgerLastAccount()
-                    .ifBlank { LedgerAccounts.DEFAULT_ACCOUNT_UUID },
+                defaultAccountUuid = if (notificationDraft != null) {
+                    notificationDefaults?.accountFor(accounts, notificationLastAccount)
+                        ?: LedgerAccounts.DEFAULT_ACCOUNT_UUID
+                } else {
+                    AppPreferences(context).ledgerLastAccount()
+                        .ifBlank { LedgerAccounts.DEFAULT_ACCOUNT_UUID }
+                },
                 quickPicks = quickPicks,
                 parentTitle = editingEntry?.parentUuid?.let { parent ->
                     allEntries.firstOrNull { it.uuid == parent }?.title
@@ -1512,45 +1596,107 @@ internal fun LedgerScreen(
                     showTagsDialog = true
                 },
                 onDismiss = {
-                    showEditor = false
-                    editingUuid = null
-                    notificationDraft = null
+                    if (!entrySaveBusy) {
+                        showEditor = false
+                        editingUuid = null
+                        notificationDraft = null
+                    }
                 },
                 onSave = { newEntry ->
-                    val candidateToRemove = notificationDraft?.first?.id
-                    showEditor = false
-                    editingUuid = null
-                    notificationDraft = null
-                    newEntry.accountUuid?.let {
-                        AppPreferences(context).saveLedgerLastAccount(it)
-                    }
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            store.upsert(newEntry)
-                            candidateToRemove?.let {
-                                NotificationLedgerStore(context).removeCandidate(it)
+                    if (!entrySaveBusy) {
+                        val candidate = notificationDraft?.first
+                        if (candidate == null) persistEntry(newEntry, null) else {
+                            entrySaveBusy = true
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        LedgerDuplicateMatcher.find(newEntry, store.queryVisibleEntries())
+                                    }
+                                }
+                                val matches = result.getOrNull()
+                                when {
+                                    matches == null -> {
+                                        entrySaveBusy = false
+                                        Toast.makeText(context, strings.ledgerSaveFailed, Toast.LENGTH_LONG).show()
+                                    }
+                                    matches.isEmpty() -> persistEntry(newEntry, candidate)
+                                    else -> {
+                                        entrySaveBusy = false
+                                        duplicateMatches = matches
+                                        pendingDuplicateEntry = newEntry
+                                    }
+                                }
                             }
                         }
-                        reloadEntries()
                     }
                 },
                 onDelete = { entry ->
-                    pendingDeleteUuid = entry.uuid
+                    if (!entrySaveBusy) pendingDeleteUuid = entry.uuid
                 },
             )
         }
     }
 
-    if (showNotificationLedgerDialog) {
+    if (showNotificationLedgerDialog && entriesLoaded) {
         NotificationLedgerDialog(
             strings = strings,
+            accounts = accounts,
+            tags = tags,
             onSelectAmount = { candidate, amount ->
                 showNotificationLedgerDialog = false
                 editingUuid = null
+                notificationDefaults = null
                 notificationDraft = candidate to amount
                 showEditor = true
             },
             onDismiss = { showNotificationLedgerDialog = false },
+        )
+    }
+
+    pendingDuplicateEntry?.let { pending ->
+        NotificationLedgerDuplicateDialog(
+            strings = strings,
+            matches = duplicateMatches,
+            accounts = accounts,
+            tags = tags,
+            busy = entrySaveBusy,
+            onSaveAnyway = {
+                if (!entrySaveBusy) persistEntry(pending, notificationDraft?.first)
+            },
+            onDismiss = {
+                if (!entrySaveBusy) {
+                    pendingDuplicateEntry = null
+                    duplicateMatches = emptyList()
+                }
+            },
+            onAlreadyRecorded = {
+                if (!entrySaveBusy) {
+                    val candidate = notificationDraft?.first
+                    entrySaveBusy = true
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            runCatching {
+                                candidate?.let {
+                                    NotificationLedgerStore(context).removeCandidate(
+                                        it.id,
+                                        it.occurredAtMillis,
+                                        it.amountsCents,
+                                    )
+                                }
+                            }
+                        }
+                        entrySaveBusy = false
+                        if (result.isSuccess) {
+                            pendingDuplicateEntry = null
+                            showEditor = false
+                            editingUuid = null
+                            notificationDraft = null
+                        } else {
+                            Toast.makeText(context, strings.ledgerSaveFailed, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            },
         )
     }
 

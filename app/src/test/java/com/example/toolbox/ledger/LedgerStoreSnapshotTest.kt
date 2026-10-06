@@ -34,6 +34,18 @@ class LedgerStoreSnapshotTest {
         occurredAtMillis = time,
     )
 
+    @Test
+    fun testRejectedInsertDoesNotReportSuccess() {
+        LedgerStore(context).use { store ->
+            store.writableDatabase.execSQL(
+                "CREATE TEMP TRIGGER reject_write BEFORE INSERT ON ledger_entries " +
+                    "BEGIN SELECT RAISE(IGNORE); END",
+            )
+            assertThrows(IllegalStateException::class.java) { store.upsert(entry("Rejected")) }
+            assertTrue(store.queryVisibleEntries().isEmpty())
+        }
+    }
+
     private fun snapshot(): File {
         LedgerStore(context).use { it.upsert(entry("Restored")) }
         return LedgerDbSnapshots.save(dbFile, dir, 5, time).also {
