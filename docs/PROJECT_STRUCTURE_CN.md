@@ -54,7 +54,9 @@ app/src/main/java/com/example/toolbox/
 │   └── AstronomyInfo.kt
 ├── network/
 │   ├── NetworkInfo.kt
-│   └── NetworkInfoReader.kt
+│   ├── NetworkInfoReader.kt
+│   ├── LanScan.kt
+│   └── LanScanner.kt
 ├── usage/
 │   ├── AppCategory.kt
 │   ├── AppCategoryResolver.kt
@@ -159,7 +161,9 @@ com/example/toolbox/
 │   └── CoordinateFormatter.kt
 ├── network/
 │   ├── NetworkInfo.kt
-│   └── NetworkInfoReader.kt
+│   ├── NetworkInfoReader.kt
+│   ├── LanScan.kt
+│   └── LanScanner.kt
 └── ui/
     ├── LocationScreen.kt
     └── NetworkScreen.kt
@@ -168,6 +172,7 @@ com/example/toolbox/
 - `CoordinateFormatter` 是纯逻辑，已用 JVM 单元测试验证十进制度、DMS、半球和边界值。
 - `LocationInfoReader` 只申请用户主动触发的前台定位，不申请后台定位。
 - `NetworkInfoReader` 读取本地连接信息，并用短超时执行用户明确触发的公网 IP 查询。
+- `LanScan` 是局域网扫描的纯逻辑（子网枚举、摄像头端口/厂商表、可疑标记、SSDP/WS-Discovery 解析），有 JVM 测试；`LanScanner` 执行用户主动触发的 ARP 发现、TCP 端口探测和 mDNS/SSDP/ONVIF WS-Discovery 收听，组播锁只在扫描期间持有。
 - 页面仍放在 `ui/`，数据模型和 Android API 读取放在能力包，保持规则统一。
 
 ## 何时拆分

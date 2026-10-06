@@ -499,9 +499,9 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "网络权限" else "Network permissions"
     val networkPermissionDescription: String
         get() = if (chinese) {
-            "用于读取本地网络连接状态与路由接口信息。"
+            "用于读取本地网络连接状态与路由接口信息；局域网扫描时会加入组播以接收 mDNS/SSDP/ONVIF 服务通告，且仅在你点击「开始扫描」时运行。"
         } else {
-            "Used to read local network connection status and routing interface details."
+            "Used to read local connection status and routing details; a LAN scan joins multicast to receive mDNS/SSDP/ONVIF announcements and only runs after you tap Scan."
         }
     val publicIpTitle: String
         get() = if (chinese) "公网 IP" else "Public IP"
@@ -521,6 +521,68 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "查询公网 IP" else "Query public IP"
     val publicIpNotRequested: String
         get() = if (chinese) "尚未查询" else "Not requested"
+    val lanScanTitle: String
+        get() = if (chinese) "局域网设备" else "LAN devices"
+    val lanScanAction: String
+        get() = if (chinese) "开始扫描" else "Start scan"
+    val lanScanStop: String
+        get() = if (chinese) "停止" else "Stop"
+    val lanScanDiscovering: String
+        get() = if (chinese) "正在发现设备…" else "Discovering devices…"
+    fun lanScanPortProgress(done: Int, total: Int): String =
+        if (chinese) "扫描端口中 $done/$total…" else "Scanning ports $done/$total…"
+    val lanScanListening: String
+        get() = if (chinese) "正在收集服务通告…" else "Collecting service announcements…"
+    val lanScanNoNetwork: String
+        get() = if (chinese) "未连接到局域网（需要 Wi-Fi 或以太网）" else
+            "Not on a local network (Wi-Fi or Ethernet required)"
+    val lanScanFailed: String
+        get() = if (chinese) "扫描失败，请重试" else "Scan failed; please try again"
+    fun lanScanFound(count: Int, subnet: String): String =
+        if (chinese) "网段 $subnet：发现 $count 台设备" else "Subnet $subnet: $count devices found"
+    val lanScanNotRun: String
+        get() = if (chinese) "尚未扫描" else "Not scanned yet"
+    val lanScanHint: String
+        get() = if (chinese) {
+            "设备发现 + 摄像头启发式检测：仅列出与手机同一局域网的设备。开放 RTSP/ONVIF 等摄像头" +
+                "典型服务或摄像头厂商私有端口、网卡为摄像头厂商的会标注。自带热点、仅连云或未" +
+                "开放端口的摄像头无法被发现；普通设备开放管理端口也可能被标注，仅供参考。"
+        } else {
+            "Device discovery plus camera heuristics: only devices on the same LAN are listed. " +
+                "Devices exposing camera-typical services (RTSP/ONVIF), camera vendor ports, or " +
+                "camera-vendor NICs are flagged. Cameras on their own hotspot, cloud-only cameras, " +
+                "or those with no open ports cannot be seen; ordinary devices with admin ports may " +
+                "be flagged too — treat results as hints."
+        }
+    val lanDeviceSelf: String
+        get() = if (chinese) "本机" else "This device"
+    val lanDeviceGateway: String
+        get() = if (chinese) "网关" else "Gateway"
+    val lanDeviceMac: String
+        get() = if (chinese) "MAC" else "MAC"
+    val lanDeviceHostname: String
+        get() = if (chinese) "主机名" else "Hostname"
+    val lanDeviceVendor: String
+        get() = if (chinese) "厂商推测" else "Vendor guess"
+    val lanDeviceServices: String
+        get() = if (chinese) "广播的服务" else "Advertised services"
+    val lanDeviceOpenPorts: String
+        get() = if (chinese) "开放端口" else "Open ports"
+    val lanSuspicionLikely: String
+        get() = if (chinese) "疑似摄像头/监控设备" else "Likely camera/NVR"
+    val lanSuspicionNoteworthy: String
+        get() = if (chinese) "摄像头厂商网卡" else "Camera-vendor NIC"
+    fun lanReasonRtsp(ports: String): String =
+        if (chinese) "开放 RTSP 端口 $ports" else "RTSP port(s) $ports open"
+    fun lanReasonCameraPort(detail: String): String =
+        if (chinese) "开放摄像头常见端口：$detail" else "Camera-typical port(s) open: $detail"
+    val lanReasonOnvif: String
+        get() = if (chinese) "广播了 ONVIF/摄像头服务" else "Advertises an ONVIF/camera service"
+    fun lanReasonVendor(vendor: String): String =
+        if (chinese) "网卡厂商：$vendor" else "NIC vendor: $vendor"
+    val lanReasonWebAdmin: String
+        get() = if (chinese) "仅开放管理端口（80/443/8080 等），注意核对" else
+            "Only admin port(s) open (80/443/8080…); worth a look"
     val connected: String
         get() = if (chinese) "已连接" else "Connected"
     val disconnected: String

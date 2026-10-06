@@ -54,7 +54,9 @@ app/src/main/java/com/example/toolbox/
 │   └── AstronomyInfo.kt
 ├── network/
 │   ├── NetworkInfo.kt
-│   └── NetworkInfoReader.kt
+│   ├── NetworkInfoReader.kt
+│   ├── LanScan.kt
+│   └── LanScanner.kt
 ├── usage/
 │   ├── AppCategory.kt
 │   ├── AppCategoryResolver.kt
@@ -159,7 +161,9 @@ com/example/toolbox/
 │   └── CoordinateFormatter.kt
 ├── network/
 │   ├── NetworkInfo.kt
-│   └── NetworkInfoReader.kt
+│   ├── NetworkInfoReader.kt
+│   ├── LanScan.kt
+│   └── LanScanner.kt
 └── ui/
     ├── LocationScreen.kt
     └── NetworkScreen.kt
@@ -168,6 +172,7 @@ com/example/toolbox/
 - `CoordinateFormatter` is pure logic with JVM tests for decimal degrees, DMS, hemispheres, and boundary values.
 - `LocationInfoReader` requests only a foreground, user-triggered location and does not request background location.
 - `NetworkInfoReader` reads local connection information and performs the explicit public-IP request with a short timeout.
+- `LanScan` holds pure LAN-scan logic (subnet enumeration, camera-port/vendor tables, suspicion flags, SSDP/WS-Discovery parsing) with JVM tests; `LanScanner` performs the user-triggered ARP sweep, TCP port probes, and mDNS/SSDP/ONVIF WS-Discovery listening, holding a multicast lock only during the scan.
 - Screens remain in `ui/`; models and Android API reads remain in their capability packages.
 
 ## When to split further
