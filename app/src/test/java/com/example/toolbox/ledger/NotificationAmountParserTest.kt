@@ -50,4 +50,19 @@ class NotificationAmountParserTest {
         val many = (1..15).joinToString(" ") { "¥$it" }
         assertEquals(10, parse(many).size)
     }
+
+    @Test
+    fun testDetailedResultExplainsSkips() {
+        assertEquals(
+            NotificationSkipReason.VERIFICATION_CODE,
+            NotificationAmountParser.parseDetailed("验证码 482913，支付 ¥25.00").skipReason,
+        )
+        assertEquals(
+            NotificationSkipReason.NO_AMOUNT,
+            NotificationAmountParser.parseDetailed("今天天气不错").skipReason,
+        )
+        val matched = NotificationAmountParser.parseDetailed("消费 ¥25.00")
+        assertEquals(null, matched.skipReason)
+        assertEquals(listOf(2_500L), matched.amountsCents)
+    }
 }

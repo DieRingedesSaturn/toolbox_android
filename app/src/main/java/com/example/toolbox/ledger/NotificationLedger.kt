@@ -14,9 +14,23 @@ data class NotificationLedgerCandidate(
     val packageName: String,
     val occurredAtMillis: Long,
     val amountsCents: List<Long>,
+    val title: String = "",
+    val text: String = "",
+    val skipReason: NotificationSkipReason? = null,
 )
 
-/** Keeps only extracted amounts and the source package, never notification bodies. */
+enum class NotificationSkipReason { EMPTY_TEXT, VERIFICATION_CODE, NO_AMOUNT }
+
+data class ParsedNotification(
+    val amountsCents: List<Long>,
+    val skipReason: NotificationSkipReason?,
+)
+
+/**
+ * Keeps every notification from selected source apps — extracted amounts plus the
+ * title and body so the user can audit what was captured. Records stay local only,
+ * expire after [MAX_AGE_MILLIS], and are wiped when the feature is turned off.
+ */
 class NotificationLedgerStore(context: Context) {
     private val appContext = context.applicationContext
     private val preferencesPackageName = context.packageName
@@ -50,22 +64,25 @@ class NotificationLedgerStore(context: Context) {
     fun setAllowedPackages(packages: Set<String>) {
         preferences.edit { putStringSet("packages", packages.toSet()) }
         synchronized(lock) {
-            saveCandidates(readCandidates().filter { it.packageName in packages })
+            saveRecords(readRecords().filter { it.packageName in packages })
         }
     }
 
-    fun candidates(): List<NotificationLedgerCandidate> = synchronized(lock) {
-        val fresh = readCandidates().filter {
+    fun records(): List<NotificationLedgerCandidate> = synchronized(lock) {
+        val fresh = readRecords().filter {
             System.currentTimeMillis() - it.occurredAtMillis in 0..MAX_AGE_MILLIS &&
                 it.packageName in allowedPackages()
         }
-        saveCandidates(fresh)
+        saveRecords(fresh)
         fresh.sortedByDescending { it.occurredAtMillis }
     }
 
+    fun candidates(): List<NotificationLedgerCandidate> =
+        records().filter { it.amountsCents.isNotEmpty() }
+
     fun removeCandidate(id: String, occurredAtMillis: Long? = null, amountsCents: List<Long>? = null) {
         synchronized(lock) {
-            saveCandidates(readCandidates().filterNot {
+            saveRecords(readRecords().filterNot {
                 it.id == id && (occurredAtMillis == null || it.occurredAtMillis == occurredAtMillis) &&
                     (amountsCents == null || it.amountsCents == amountsCents)
             })
@@ -77,35 +94,62 @@ class NotificationLedgerStore(context: Context) {
     }
 
     fun record(notification: StatusBarNotification) {
-        if (!enabled() || notification.packageName == preferencesPackageName ||
-            notification.packageName !in allowedPackages()
-        ) return
         if (notification.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY != 0) return
-        val extras = notification.notification.extras ?: return
+        val extras = notification.notification.extras
+        val title = extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)
+            ?.toString().orEmpty().take(MAX_FIELD_CHARS)
         val text = listOfNotNull(
-            extras.getCharSequence(android.app.Notification.EXTRA_TITLE),
-            extras.getCharSequence(android.app.Notification.EXTRA_TEXT),
-            extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT),
-            extras.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT),
-        ).joinToString(" ").take(2_000)
-        val amounts = NotificationAmountParser.parse(text)
-        if (amounts.isEmpty()) return
+            extras?.getCharSequence(android.app.Notification.EXTRA_TEXT),
+            extras?.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT),
+            extras?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT),
+        ).joinToString(" ").take(MAX_FIELD_CHARS)
+        recordParts(
+            packageName = notification.packageName,
+            key = notification.key,
+            occurredAtMillis = notification.postTime,
+            title = title,
+            text = text,
+        )
+    }
+
+    internal fun recordParts(
+        packageName: String,
+        key: String,
+        occurredAtMillis: Long,
+        title: String,
+        text: String,
+    ) {
+        if (!enabled() || packageName == preferencesPackageName ||
+            packageName !in allowedPackages()
+        ) return
+        val body = listOf(title, text).filter { it.isNotBlank() }.joinToString(" ")
+        val result = if (body.isBlank()) {
+            ParsedNotification(emptyList(), NotificationSkipReason.EMPTY_TEXT)
+        } else {
+            NotificationAmountParser.parseDetailed(body)
+        }
         val digest = MessageDigest.getInstance("SHA-256")
-            .digest(notification.key.toByteArray(Charsets.UTF_8))
+            .digest(key.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
         val item = NotificationLedgerCandidate(
             id = digest,
-            packageName = notification.packageName,
-            occurredAtMillis = notification.postTime,
-            amountsCents = amounts,
+            packageName = packageName,
+            occurredAtMillis = occurredAtMillis,
+            amountsCents = result.amountsCents,
+            title = title,
+            text = text,
+            skipReason = result.skipReason,
         )
         synchronized(lock) {
-            saveCandidates((listOf(item) + readCandidates().filterNot { it.id == digest })
-                .take(MAX_CANDIDATES))
+            saveRecords((listOf(item) + readRecords().filterNot { it.id == digest }).trimmed())
         }
     }
 
-    private fun readCandidates(): List<NotificationLedgerCandidate> = runCatching {
+    private fun List<NotificationLedgerCandidate>.trimmed(): List<NotificationLedgerCandidate> =
+        filter { it.amountsCents.isNotEmpty() }.take(MAX_CANDIDATES) +
+            filter { it.amountsCents.isEmpty() }.take(MAX_IGNORED)
+
+    private fun readRecords(): List<NotificationLedgerCandidate> = runCatching {
         val array = JSONArray(preferences.getString("candidates", "[]"))
         (0 until array.length()).map { index ->
             val item = array.getJSONObject(index)
@@ -115,11 +159,15 @@ class NotificationLedgerStore(context: Context) {
                 packageName = item.getString("package"),
                 occurredAtMillis = item.getLong("time"),
                 amountsCents = (0 until amounts.length()).map { amounts.getLong(it) },
+                title = item.optString("title"),
+                text = item.optString("text"),
+                skipReason = item.optString("reason").takeIf { it.isNotEmpty() }
+                    ?.let { runCatching { NotificationSkipReason.valueOf(it) }.getOrNull() },
             )
         }
     }.getOrDefault(emptyList())
 
-    private fun saveCandidates(items: List<NotificationLedgerCandidate>) {
+    private fun saveRecords(items: List<NotificationLedgerCandidate>) {
         val array = JSONArray()
         items.forEach { item ->
             array.put(JSONObject().apply {
@@ -127,6 +175,9 @@ class NotificationLedgerStore(context: Context) {
                 put("package", item.packageName)
                 put("time", item.occurredAtMillis)
                 put("amounts", JSONArray(item.amountsCents))
+                put("title", item.title)
+                put("text", item.text)
+                item.skipReason?.let { put("reason", it.name) }
             })
         }
         preferences.edit { putString("candidates", array.toString()) }
@@ -135,6 +186,8 @@ class NotificationLedgerStore(context: Context) {
     private companion object {
         val lock = Any()
         const val MAX_CANDIDATES = 30
+        const val MAX_IGNORED = 15
+        const val MAX_FIELD_CHARS = 800
         const val MAX_AGE_MILLIS = 7L * 24 * 60 * 60 * 1_000
     }
 }
@@ -158,9 +211,13 @@ internal object NotificationAmountParser {
         RegexOption.IGNORE_CASE,
     )
 
-    fun parse(text: String): List<Long> {
-        if (codeNotice.containsMatchIn(text)) return emptyList()
-        return amountPattern.findAll(text)
+    fun parse(text: String): List<Long> = parseDetailed(text).amountsCents
+
+    fun parseDetailed(text: String): ParsedNotification {
+        if (codeNotice.containsMatchIn(text)) {
+            return ParsedNotification(emptyList(), NotificationSkipReason.VERIFICATION_CODE)
+        }
+        val amounts = amountPattern.findAll(text)
             .mapNotNull { match ->
                 val number = match.groupValues[2]
                 val marked = match.groupValues[1].isNotEmpty() || match.groupValues[3].isNotEmpty()
@@ -174,5 +231,9 @@ internal object NotificationAmountParser {
             .distinct()
             .take(10)
             .toList()
+        return ParsedNotification(
+            amountsCents = amounts,
+            skipReason = if (amounts.isEmpty()) NotificationSkipReason.NO_AMOUNT else null,
+        )
     }
 }

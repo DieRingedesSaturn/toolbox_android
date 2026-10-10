@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,6 +61,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.app.NotificationManagerCompat
 import com.example.toolbox.ledger.NotificationLedgerCandidate
 import com.example.toolbox.ledger.NotificationLedgerDefaults
+import com.example.toolbox.ledger.NotificationSkipReason
 import com.example.toolbox.ledger.LedgerAccount
 import com.example.toolbox.ledger.LedgerTag
 import com.example.toolbox.ledger.NotificationLedgerStore
@@ -97,6 +100,7 @@ internal fun NotificationLedgerDialog(
     var enabled by remember { mutableStateOf(store.enabled()) }
     var allowedPackages by remember { mutableStateOf(store.allowedPackages()) }
     var candidates by remember { mutableStateOf(store.candidates()) }
+    var records by remember { mutableStateOf(store.records()) }
     var apps by remember { mutableStateOf<List<NotificationSourceApp>>(emptyList()) }
     var appsLoaded by remember { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -107,7 +111,7 @@ internal fun NotificationLedgerDialog(
         )
     }
     var selectedTab by rememberSaveable {
-        mutableIntStateOf(if (accessGranted && allowedPackages.isNotEmpty()) 0 else 1)
+        mutableIntStateOf(if (accessGranted && allowedPackages.isNotEmpty()) 0 else 2)
     }
     val settingsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -115,6 +119,12 @@ internal fun NotificationLedgerDialog(
         accessGranted = context.packageName in
             NotificationManagerCompat.getEnabledListenerPackages(context)
         candidates = store.candidates()
+        records = store.records()
+    }
+
+    fun reload() {
+        candidates = store.candidates()
+        records = store.records()
     }
 
     LaunchedEffect(context) {
@@ -186,7 +196,10 @@ internal fun NotificationLedgerDialog(
                             onCheckedChange = {
                                 enabled = it
                                 store.setEnabled(it)
-                                if (!it) candidates = emptyList()
+                                if (!it) {
+                                    candidates = emptyList()
+                                    records = emptyList()
+                                }
                             },
                         )
                     }
@@ -201,7 +214,7 @@ internal fun NotificationLedgerDialog(
                             selected = selectedTab == 0,
                             onClick = {
                                 selectedTab = 0
-                                candidates = store.candidates()
+                                reload()
                             },
                             text = {
                                 Text("${strings.notificationLedgerCandidatesTab} (${candidates.size})")
@@ -209,7 +222,17 @@ internal fun NotificationLedgerDialog(
                         )
                         Tab(
                             selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
+                            onClick = {
+                                selectedTab = 1
+                                records = store.records()
+                            },
+                            text = {
+                                Text("${strings.notificationLedgerRecordsTab} (${records.size})")
+                            },
+                        )
+                        Tab(
+                            selected = selectedTab == 2,
+                            onClick = { selectedTab = 2 },
                             text = {
                                 Text("${strings.notificationLedgerSourcesTab} (${allowedPackages.size})")
                             },
@@ -228,7 +251,7 @@ internal fun NotificationLedgerDialog(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            TextButton(onClick = { candidates = store.candidates() }) {
+                            TextButton(onClick = ::reload) {
                                 Text(strings.refresh)
                             }
                         }
@@ -246,7 +269,7 @@ internal fun NotificationLedgerDialog(
                                     InfoCard(strings.notificationLedgerEmpty) {
                                         Text(strings.notificationLedgerEmptyHint)
                                         if (allowedPackages.isEmpty()) {
-                                            TextButton(onClick = { selectedTab = 1 }) {
+                                            TextButton(onClick = { selectedTab = 2 }) {
                                                 Text(strings.notificationLedgerSources)
                                             }
                                         }
@@ -270,9 +293,10 @@ internal fun NotificationLedgerDialog(
                                         )
                                         TextButton(onClick = {
                                             store.removeCandidate(candidate.id)
-                                            candidates = store.candidates()
+                                            reload()
                                         }) { Text(strings.notificationLedgerDiscard) }
                                     }
+                                    NotificationOriginalText(candidate.title, candidate.text)
                                     FlowRow(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -285,6 +309,80 @@ internal fun NotificationLedgerDialog(
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    } else if (selectedTab == 1) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(start = 18.dp, end = 8.dp, top = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                strings.notificationLedgerRecordsHint,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            TextButton(onClick = {
+                                records = store.records()
+                            }) { Text(strings.refresh) }
+                            TextButton(onClick = {
+                                store.clearCandidates()
+                                reload()
+                            }) { Text(strings.notificationLedgerClearRecords) }
+                        }
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                bottom = 20.dp,
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (records.isEmpty()) {
+                                item {
+                                    InfoCard(strings.notificationLedgerRecordsEmpty) {}
+                                }
+                            }
+                            items(records, key = { it.id }) { record ->
+                                InfoCard(
+                                    title = appLabels[record.packageName]
+                                        ?: record.packageName,
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            timeFormatter.format(Date(record.occurredAtMillis)),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        Text(
+                                            when (record.skipReason) {
+                                                NotificationSkipReason.EMPTY_TEXT ->
+                                                    strings.notificationLedgerReasonEmpty
+                                                NotificationSkipReason.VERIFICATION_CODE ->
+                                                    strings.notificationLedgerReasonCode
+                                                NotificationSkipReason.NO_AMOUNT ->
+                                                    strings.notificationLedgerReasonNoAmount
+                                                null -> strings.notificationLedgerAmountsFound(
+                                                    record.amountsCents.size,
+                                                )
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (record.skipReason == null) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                        )
+                                    }
+                                    NotificationOriginalText(record.title, record.text)
                                 }
                             }
                         }
@@ -340,7 +438,7 @@ internal fun NotificationLedgerDialog(
                                                         allowedPackages - app.packageName
                                                     }
                                                     store.setAllowedPackages(allowedPackages)
-                                                    candidates = store.candidates()
+                                                    reload()
                                                 },
                                             ).padding(vertical = 8.dp),
                                             verticalAlignment = Alignment.CenterVertically,
@@ -404,6 +502,32 @@ internal fun NotificationLedgerDialog(
                     }
                 },
                 onDismiss = { defaultsPackage = null },
+            )
+        }
+    }
+}
+
+@Composable
+private fun NotificationOriginalText(title: String, text: String) {
+    val preview = listOf(title, text).filter { it.isNotBlank() }.joinToString(" · ")
+    if (preview.isBlank()) return
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }) {
+        if (expanded) {
+            SelectionContainer {
+                Text(
+                    preview,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            Text(
+                preview,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

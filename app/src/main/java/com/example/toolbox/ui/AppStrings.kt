@@ -830,9 +830,9 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "读取通知中的金额" else "Read amounts from notifications"
     val notificationLedgerHint: String
         get() = if (chinese) {
-            "系统会授权读取通知，Toolbox 收到后只处理下方选中的应用。提取金额留在本机，点选后仍需确认保存；不保存通知正文。关闭时清除候选项；系统授权需在设置中撤销。"
+            "系统会授权读取通知，Toolbox 收到后只处理下方选中的应用。识别出的金额和通知原文只保存在本机、最多 7 天，点选金额后仍需确认保存。关闭时清空全部记录；系统授权需在设置中撤销。"
         } else {
-            "Android grants notification access; Toolbox processes only selected apps after receipt. Amounts stay on this device and require confirmation; text is not saved. Turning this off clears suggestions; revoke access in Settings."
+            "Android grants notification access; Toolbox processes only selected apps after receipt. Extracted amounts and the original notification text stay on this device for up to 7 days, and picking an amount still requires confirmation. Turning this off erases every record; revoke access in Settings."
         }
     val notificationLedgerGrantAccess: String
         get() = if (chinese) "前往系统设置授权通知读取" else "Grant notification access in Settings"
@@ -840,6 +840,8 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "在系统设置中管理通知读取" else "Manage notification access in Settings"
     val notificationLedgerCandidatesTab: String
         get() = if (chinese) "待记账" else "Suggestions"
+    val notificationLedgerRecordsTab: String
+        get() = if (chinese) "记录" else "Records"
     val notificationLedgerSourcesTab: String
         get() = if (chinese) "来源应用" else "Source apps"
     val notificationLedgerStatusOff: String
@@ -870,6 +872,24 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "没有匹配的应用" else "No matching apps"
     val notificationLedgerDiscard: String
         get() = if (chinese) "忽略" else "Dismiss"
+    val notificationLedgerRecordsHint: String
+        get() = if (chinese) {
+            "所选应用的通知会按时间留在这里（含原文，仅本机），点开可核对识别结果"
+        } else {
+            "Notifications from selected apps are listed here with their text, kept only on this device; tap one to audit the parse result"
+        }
+    val notificationLedgerRecordsEmpty: String
+        get() = if (chinese) "还没有收到所选应用的通知" else "Nothing received from selected apps yet"
+    val notificationLedgerClearRecords: String
+        get() = if (chinese) "清空记录" else "Clear records"
+    fun notificationLedgerAmountsFound(count: Int): String =
+        if (chinese) "识别到 $count 个金额" else "$count amount${if (count == 1) "" else "s"} found"
+    val notificationLedgerReasonEmpty: String
+        get() = if (chinese) "通知没有可读取的文本" else "No readable text in the notification"
+    val notificationLedgerReasonCode: String
+        get() = if (chinese) "验证码类通知，已跳过" else "Verification-code notice; skipped"
+    val notificationLedgerReasonNoAmount: String
+        get() = if (chinese) "没有识别出金额" else "No amount recognized"
     val notificationLedgerDefaults: String
         get() = if (chinese) "记账默认设置" else "Entry defaults"
     val notificationLedgerDefaultsHint: String
