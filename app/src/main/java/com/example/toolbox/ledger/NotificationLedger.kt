@@ -20,6 +20,8 @@ data class NotificationLedgerCandidate(
     val skipReason: NotificationSkipReason? = null,
     /** Source-aware parse result; null when no payment template matched. */
     val payment: NotificationPayment? = null,
+    /** Entry this candidate was auto-booked as; null while still a suggestion. */
+    val autoBookedEntryUuid: String? = null,
 )
 
 /** Notification fields extracted on the callback thread; safe to hand to a worker. */
@@ -101,6 +103,24 @@ class NotificationLedgerStore(context: Context) {
         }
     }
 
+    /** Remembers the ledger entry a candidate was automatically booked as. */
+    fun markAutoBooked(id: String, entryUuid: String) {
+        synchronized(lock) {
+            saveRecords(readRecords().map {
+                if (it.id == id) it.copy(autoBookedEntryUuid = entryUuid) else it
+            })
+        }
+    }
+
+    /** Drops the auto-book marker after the entry was undone. */
+    fun clearAutoBook(id: String) {
+        synchronized(lock) {
+            saveRecords(readRecords().map {
+                if (it.id == id) it.copy(autoBookedEntryUuid = null) else it
+            })
+        }
+    }
+
     fun clearCandidates() {
         synchronized(lock) { preferences.edit { remove("candidates") } }
     }
@@ -136,6 +156,7 @@ class NotificationLedgerStore(context: Context) {
             .digest(key.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
         synchronized(lock) {
+            val previous = readRecords().firstOrNull { it.id == digest }
             val item = NotificationLedgerCandidate(
                 id = digest,
                 packageName = packageName,
@@ -145,6 +166,9 @@ class NotificationLedgerStore(context: Context) {
                 text = text,
                 skipReason = result.skipReason,
                 payment = payment,
+                // A reposted notification keeps its auto-book marker so the
+                // same payment is never booked twice.
+                autoBookedEntryUuid = previous?.autoBookedEntryUuid,
             )
             saveRecords((listOf(item) + readRecords().filterNot { it.id == digest }).trimmed())
             return item
@@ -170,6 +194,7 @@ class NotificationLedgerStore(context: Context) {
                 skipReason = item.optString("reason").takeIf { it.isNotEmpty() }
                     ?.let { runCatching { NotificationSkipReason.valueOf(it) }.getOrNull() },
                 payment = item.optJSONObject("pay")?.let(::paymentFromJson),
+                autoBookedEntryUuid = item.optString("autoEntry").takeIf { it.isNotEmpty() },
             )
         }
     }.getOrDefault(emptyList())
@@ -186,6 +211,7 @@ class NotificationLedgerStore(context: Context) {
                 put("text", item.text)
                 item.skipReason?.let { put("reason", it.name) }
                 item.payment?.let { put("pay", paymentToJson(it)) }
+                item.autoBookedEntryUuid?.let { put("autoEntry", it) }
             })
         }
         preferences.edit { putString("candidates", array.toString()) }

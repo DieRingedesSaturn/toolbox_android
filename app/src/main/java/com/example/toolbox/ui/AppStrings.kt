@@ -830,9 +830,9 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "从通知识别收付款" else "Recognize payments from notifications"
     val notificationLedgerHint: String
         get() = if (chinese) {
-            "系统会授权读取通知，Toolbox 收到后只处理下方选中的应用。识别出的金额和通知原文只保存在本机、最多 7 天，点选金额后仍需确认保存。关闭时清空全部记录；系统授权需在设置中撤销。"
+            "系统会授权读取通知，Toolbox 收到后只处理下方选中的应用。识别出的金额和通知原文只保存在本机、最多 7 天；默认点选金额后仍需确认保存，在来源应用里开启自动入账后，仅高置信的收付款会直接入账并可撤销。关闭时清空全部记录；系统授权需在设置中撤销。"
         } else {
-            "Android grants notification access; Toolbox processes only selected apps after receipt. Extracted amounts and the original notification text stay on this device for up to 7 days, and picking an amount still requires confirmation. Turning this off erases every record; revoke access in Settings."
+            "Android grants notification access; Toolbox processes only selected apps after receipt. Extracted amounts and the original notification text stay on this device for up to 7 days. Picking an amount still requires confirmation; when auto-book is enabled for a source, only confident payments are booked directly and can be undone. Turning this off erases every record; revoke access in Settings."
         }
     val notificationLedgerGrantAccess: String
         get() = if (chinese) "前往系统设置授权通知读取" else "Grant notification access in Settings"
@@ -897,6 +897,22 @@ class ToolboxStrings(val language: AppLanguage) {
             "Prefill suggestions from this app; you can edit before saving. Settings stay on this device."
     val notificationLedgerFollowLastAccount: String
         get() = if (chinese) "使用上次记账账户" else "Use last entry's account"
+    val notificationLedgerAutoBook: String
+        get() = if (chinese) "高置信支付自动入账" else "Auto-book confident payments"
+    val notificationLedgerAutoBookHint: String
+        get() = if (chinese) {
+            "仅当通知写明付款/收款动词、金额与方向时直接入账；转账、低置信和疑似重复仍只给建议，入账后可在待记账列表撤销。"
+        } else {
+            "Books directly only when a notification names a payment verb, an amount and a direction. Transfers, low-confidence matches and possible duplicates stay suggestions; booked entries can be undone in the suggestion list."
+        }
+    val notificationLedgerAutoBooked: String
+        get() = if (chinese) "已自动入账" else "Auto-booked"
+    val notificationLedgerAutoBookUndo: String
+        get() = if (chinese) "撤销" else "Undo"
+    val notificationLedgerAutoBookUndoDone: String
+        get() = if (chinese) "已撤销这笔自动记账" else "Auto-booked entry removed"
+    val notificationLedgerAutoBookUndoFailed: String
+        get() = if (chinese) "撤销失败，请重试" else "Could not undo; please retry"
     val notificationLedgerTransferOut: String
         get() = if (chinese) "转出" else "Transfer out"
     val notificationLedgerTransferIn: String

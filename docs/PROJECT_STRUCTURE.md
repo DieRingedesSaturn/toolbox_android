@@ -82,6 +82,8 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerWebDavSync.kt
 │   ├── NotificationLedger.kt
 │   ├── NotificationLedgerDefaults.kt
+│   ├── PaymentNotificationParser.kt
+│   ├── NotificationAutoBooker.kt
 │   ├── LedgerDuplicateMatcher.kt
 │   ├── LedgerNotificationListener.kt
 │   └── LedgerWidget.kt
@@ -146,7 +148,7 @@ Responsibility boundaries:
 | `monitor/` | Sampling, CPU topology math, overlay service, and views | UI-only settings or unrelated device summaries |
 | `usage/` | App usage / traffic statistics reader and offline category resolver | Direct Compose UI rendering |
 | `astronomy/` | Solar/lunar ephemeris math and models | Android system services |
-| `ledger/` | Bookkeeping models and custom tags, one-time/periodic cost amortization calculator, calendar renewal scheduling, native SQLite store (tags + accounts tables, parent/link/disposal/account fields), shared backup/WebDAV exchange format, file backup (JSON/CSV) logic, manual WebDAV backup/sync client, and the RemoteViews widget provider | Compose UI rendering |
+| `ledger/` | Bookkeeping models and custom tags, one-time/periodic cost amortization calculator, calendar renewal scheduling, native SQLite store (tags + accounts tables, parent/link/disposal/account fields), shared backup/WebDAV exchange format, file backup (JSON/CSV) logic, manual WebDAV backup/sync client, source-aware WeChat/Alipay payment-notification parser with opt-in auto-booking and undo, notification listener/store, and the RemoteViews widget provider | Compose UI rendering |
 | `fx/` | Exchange-rate models and blocking reader with a Frankfurter → ECB → community mirror fallback chain, plus a SharedPreferences cache of latest + up to 120 dated rates (fetch only on explicit actions) | Compose UI rendering |
 
 ## Incremental v0.1 layout

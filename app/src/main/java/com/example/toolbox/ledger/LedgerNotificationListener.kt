@@ -27,7 +27,9 @@ class LedgerNotificationListener : NotificationListenerService() {
         val input = runCatching { NotificationLedgerStore.inputOf(sbn) }.getOrNull() ?: return
         worker.execute {
             runCatching {
-                NotificationLedgerStore(applicationContext).record(input)
+                val candidate = NotificationLedgerStore(applicationContext).record(input)
+                    ?: return@runCatching
+                NotificationAutoBooker.book(applicationContext, candidate)
             }
         }
     }

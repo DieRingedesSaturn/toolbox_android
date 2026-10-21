@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.app.NotificationManagerCompat
+import com.example.toolbox.ledger.NotificationAutoBooker
 import com.example.toolbox.ledger.NotificationLedgerCandidate
 import com.example.toolbox.ledger.NotificationLedgerDefaults
 import com.example.toolbox.ledger.NotificationPaymentDirection
@@ -126,6 +127,27 @@ internal fun NotificationLedgerDialog(
     fun reload() {
         candidates = store.candidates()
         records = store.records()
+    }
+
+    fun undoAutoBook(candidate: NotificationLedgerCandidate) {
+        val entryUuid = candidate.autoBookedEntryUuid ?: return
+        scope.launch {
+            val undone = withContext(Dispatchers.IO) {
+                runCatching {
+                    NotificationAutoBooker.undo(context, candidate.id, entryUuid)
+                }.getOrDefault(false)
+            }
+            Toast.makeText(
+                context,
+                if (undone) {
+                    strings.notificationLedgerAutoBookUndoDone
+                } else {
+                    strings.notificationLedgerAutoBookUndoFailed
+                },
+                Toast.LENGTH_SHORT,
+            ).show()
+            if (undone) reload()
+        }
     }
 
     LaunchedEffect(context) {
@@ -343,6 +365,24 @@ internal fun NotificationLedgerDialog(
                                                     )
                                                 }
                                             }
+                                    }
+                                    if (candidate.autoBookedEntryUuid != null) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                strings.notificationLedgerAutoBooked,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            TextButton(
+                                                onClick = { undoAutoBook(candidate) },
+                                            ) {
+                                                Text(strings.notificationLedgerAutoBookUndo)
+                                            }
+                                        }
                                     }
                                 }
                             }

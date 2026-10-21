@@ -8,6 +8,8 @@ data class NotificationLedgerDefaults(
     val type: LedgerEntryType = LedgerEntryType.EXPENSE,
     val accountUuid: String? = null,
     val tagUuids: List<String> = emptyList(),
+    /** When true, confident payment notifications from this source are booked directly. */
+    val autoBook: Boolean = false,
 ) {
     fun accountFor(accounts: List<LedgerAccount>, lastAccountUuid: String?): String {
         val available = accounts.filter { it.deletedAtMillis == null && !it.isArchived }
@@ -30,6 +32,7 @@ data class NotificationLedgerDefaults(
         put("type", type.name)
         put("account", accountUuid ?: JSONObject.NULL)
         put("tags", JSONArray(tagUuids.distinct()))
+        put("autoBook", autoBook)
     }.toString()
 
     companion object {
@@ -48,6 +51,7 @@ data class NotificationLedgerDefaults(
                 tagUuids = (0 until tags.length()).mapNotNull { index ->
                     (tags.opt(index) as? String)?.takeIf { it.isNotBlank() }
                 }.distinct(),
+                autoBook = json.optBoolean("autoBook"),
             )
         }.getOrDefault(NotificationLedgerDefaults())
     }
