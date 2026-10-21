@@ -1,6 +1,7 @@
 package com.example.toolbox.ledger
 
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.content.Context
 import android.service.notification.StatusBarNotification
 import androidx.core.content.edit
@@ -17,6 +18,17 @@ data class NotificationLedgerCandidate(
     val title: String = "",
     val text: String = "",
     val skipReason: NotificationSkipReason? = null,
+    /** Source-aware parse result; null when no payment template matched. */
+    val payment: NotificationPayment? = null,
+)
+
+/** Notification fields extracted on the callback thread; safe to hand to a worker. */
+data class NotificationLedgerInput(
+    val packageName: String,
+    val key: String,
+    val occurredAtMillis: Long,
+    val title: String,
+    val text: String,
 )
 
 enum class NotificationSkipReason { EMPTY_TEXT, VERIFICATION_CODE, NO_AMOUNT }
@@ -93,24 +105,13 @@ class NotificationLedgerStore(context: Context) {
         synchronized(lock) { preferences.edit { remove("candidates") } }
     }
 
-    fun record(notification: StatusBarNotification) {
-        if (notification.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY != 0) return
-        val extras = notification.notification.extras
-        val title = extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)
-            ?.toString().orEmpty().take(MAX_FIELD_CHARS)
-        val text = listOfNotNull(
-            extras?.getCharSequence(android.app.Notification.EXTRA_TEXT),
-            extras?.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT),
-            extras?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT),
-        ).joinToString(" ").take(MAX_FIELD_CHARS)
-        recordParts(
-            packageName = notification.packageName,
-            key = notification.key,
-            occurredAtMillis = notification.postTime,
-            title = title,
-            text = text,
-        )
-    }
+    fun record(input: NotificationLedgerInput): NotificationLedgerCandidate? = recordParts(
+        packageName = input.packageName,
+        key = input.key,
+        occurredAtMillis = input.occurredAtMillis,
+        title = input.title,
+        text = input.text,
+    )
 
     internal fun recordParts(
         packageName: String,
@@ -118,30 +119,35 @@ class NotificationLedgerStore(context: Context) {
         occurredAtMillis: Long,
         title: String,
         text: String,
-    ) {
+    ): NotificationLedgerCandidate? {
         if (!enabled() || packageName == preferencesPackageName ||
             packageName !in allowedPackages()
-        ) return
+        ) return null
         val body = listOf(title, text).filter { it.isNotBlank() }.joinToString(" ")
         val result = if (body.isBlank()) {
             ParsedNotification(emptyList(), NotificationSkipReason.EMPTY_TEXT)
         } else {
             NotificationAmountParser.parseDetailed(body)
         }
+        val payment = if (body.isBlank()) null else {
+            PaymentNotificationParser.parse(packageName, title, text)
+        }
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(key.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
-        val item = NotificationLedgerCandidate(
-            id = digest,
-            packageName = packageName,
-            occurredAtMillis = occurredAtMillis,
-            amountsCents = result.amountsCents,
-            title = title,
-            text = text,
-            skipReason = result.skipReason,
-        )
         synchronized(lock) {
+            val item = NotificationLedgerCandidate(
+                id = digest,
+                packageName = packageName,
+                occurredAtMillis = occurredAtMillis,
+                amountsCents = result.amountsCents,
+                title = title,
+                text = text,
+                skipReason = result.skipReason,
+                payment = payment,
+            )
             saveRecords((listOf(item) + readRecords().filterNot { it.id == digest }).trimmed())
+            return item
         }
     }
 
@@ -163,6 +169,7 @@ class NotificationLedgerStore(context: Context) {
                 text = item.optString("text"),
                 skipReason = item.optString("reason").takeIf { it.isNotEmpty() }
                     ?.let { runCatching { NotificationSkipReason.valueOf(it) }.getOrNull() },
+                payment = item.optJSONObject("pay")?.let(::paymentFromJson),
             )
         }
     }.getOrDefault(emptyList())
@@ -178,17 +185,69 @@ class NotificationLedgerStore(context: Context) {
                 put("title", item.title)
                 put("text", item.text)
                 item.skipReason?.let { put("reason", it.name) }
+                item.payment?.let { put("pay", paymentToJson(it)) }
             })
         }
         preferences.edit { putString("candidates", array.toString()) }
     }
 
-    private companion object {
+    private fun paymentToJson(payment: NotificationPayment): JSONObject = JSONObject().apply {
+        put("direction", payment.direction.name)
+        put("amount", payment.amountCents)
+        put("label", payment.label ?: JSONObject.NULL)
+        put("confident", payment.confident)
+    }
+
+    private fun paymentFromJson(json: JSONObject): NotificationPayment? = runCatching {
+        val direction = NotificationPaymentDirection.valueOf(json.getString("direction"))
+        NotificationPayment(
+            direction = direction,
+            amountCents = json.getLong("amount"),
+            label = if (json.isNull("label")) null else {
+                json.optString("label").takeIf { it.isNotBlank() }
+            },
+            confident = json.optBoolean("confident"),
+        )
+    }.getOrNull()
+
+    internal companion object {
         val lock = Any()
         const val MAX_CANDIDATES = 30
         const val MAX_IGNORED = 15
         const val MAX_FIELD_CHARS = 800
         const val MAX_AGE_MILLIS = 7L * 24 * 60 * 60 * 1_000
+
+        /**
+         * Extracts the fields the listener needs, on the thread that received
+         * the callback. Group summaries are skipped because their children
+         * carry the actual text.
+         */
+        internal fun inputOf(notification: StatusBarNotification): NotificationLedgerInput? {
+            if (notification.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return null
+            val extras = notification.notification.extras
+            val title = listOfNotNull(
+                extras?.getCharSequence(Notification.EXTRA_TITLE),
+                extras?.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE),
+                extras?.getCharSequence(Notification.EXTRA_TITLE_BIG),
+            ).map { it.toString() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .joinToString(" ")
+                .take(MAX_FIELD_CHARS)
+            val text = listOfNotNull(
+                extras?.getCharSequence(Notification.EXTRA_TEXT),
+                extras?.getCharSequence(Notification.EXTRA_BIG_TEXT),
+                extras?.getCharSequence(Notification.EXTRA_SUB_TEXT),
+                extras?.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString(" "),
+            ).joinToString(" ").take(MAX_FIELD_CHARS)
+            return NotificationLedgerInput(
+                packageName = notification.packageName,
+                key = notification.key,
+                occurredAtMillis = notification.postTime,
+                title = title,
+                text = text,
+            )
+        }
     }
 }
 

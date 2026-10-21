@@ -105,6 +105,8 @@ import com.example.toolbox.ledger.LedgerWebDavSync
 import com.example.toolbox.ledger.NotificationLedgerCandidate
 import com.example.toolbox.ledger.NotificationLedgerDefaults
 import com.example.toolbox.ledger.NotificationLedgerStore
+import com.example.toolbox.ledger.NotificationPayment
+import com.example.toolbox.ledger.NotificationPaymentDirection
 import com.example.toolbox.ledger.SubscriptionRenewals
 import com.example.toolbox.ledger.TagFilterMode
 import com.example.toolbox.ledger.WebDavClient
@@ -137,17 +139,32 @@ private val notificationDraftSaver = listSaver<Pair<NotificationLedgerCandidate,
                 it.first.occurredAtMillis,
                 it.second,
                 it.first.amountsCents.joinToString(","),
+                it.first.payment?.direction?.name ?: "",
+                it.first.payment?.amountCents ?: 0L,
+                it.first.payment?.label ?: "",
+                it.first.payment?.confident ?: false,
             )
         } ?: emptyList()
     },
     restore = { values ->
-        if (values.size != 5) null else {
+        if (values.size != 9) null else {
             val amount = values[3] as Long
+            val payment = (values[5] as String).takeIf { it.isNotEmpty() }?.let { name ->
+                runCatching {
+                    NotificationPayment(
+                        direction = NotificationPaymentDirection.valueOf(name),
+                        amountCents = values[6] as Long,
+                        label = (values[7] as String).takeIf { it.isNotEmpty() },
+                        confident = values[8] as Boolean,
+                    )
+                }.getOrNull()
+            }
             NotificationLedgerCandidate(
                 id = values[0] as String,
                 packageName = values[1] as String,
                 occurredAtMillis = values[2] as Long,
                 amountsCents = (values[4] as String).split(',').mapNotNull { it.toLongOrNull() },
+                payment = payment,
             ) to amount
         }
     },
@@ -1568,8 +1585,18 @@ internal fun LedgerScreen(
                 initialEntry = editingEntry,
                 draftAmountCents = notificationDraft?.second,
                 draftOccurredAtMillis = notificationDraft?.first?.occurredAtMillis,
+                draftTitle = notificationDraft?.first?.payment?.label,
                 draftDefaults = notificationDefaults?.takeIf { notificationDraft != null }
-                    ?.resolve(accounts, tags),
+                    ?.resolve(accounts, tags)
+                    ?.let { resolved ->
+                        when (notificationDraft?.first?.payment?.direction) {
+                            NotificationPaymentDirection.EXPENSE ->
+                                resolved.copy(type = LedgerEntryType.EXPENSE)
+                            NotificationPaymentDirection.INCOME ->
+                                resolved.copy(type = LedgerEntryType.INCOME)
+                            else -> resolved
+                        }
+                    },
                 saveBusy = entrySaveBusy,
                 tags = tags,
                 accounts = accounts,

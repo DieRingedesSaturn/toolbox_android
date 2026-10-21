@@ -827,7 +827,7 @@ class ToolboxStrings(val language: AppLanguage) {
     val notificationLedgerTitle: String
         get() = if (chinese) "通知快速记账" else "Quick entry from notifications"
     val notificationLedgerEnable: String
-        get() = if (chinese) "读取通知中的金额" else "Read amounts from notifications"
+        get() = if (chinese) "从通知识别收付款" else "Recognize payments from notifications"
     val notificationLedgerHint: String
         get() = if (chinese) {
             "系统会授权读取通知，Toolbox 收到后只处理下方选中的应用。识别出的金额和通知原文只保存在本机、最多 7 天，点选金额后仍需确认保存。关闭时清空全部记录；系统授权需在设置中撤销。"
@@ -897,6 +897,12 @@ class ToolboxStrings(val language: AppLanguage) {
             "Prefill suggestions from this app; you can edit before saving. Settings stay on this device."
     val notificationLedgerFollowLastAccount: String
         get() = if (chinese) "使用上次记账账户" else "Use last entry's account"
+    val notificationLedgerTransferOut: String
+        get() = if (chinese) "转出" else "Transfer out"
+    val notificationLedgerTransferIn: String
+        get() = if (chinese) "转入" else "Transfer in"
+    val notificationLedgerPaymentLabel: String
+        get() = if (chinese) "商户/对方" else "Merchant / party"
     val notificationLedgerDuplicateTitle: String
         get() = if (chinese) "可能已记过这笔账" else "Possible duplicate entry"
     val notificationLedgerDuplicateHint: String

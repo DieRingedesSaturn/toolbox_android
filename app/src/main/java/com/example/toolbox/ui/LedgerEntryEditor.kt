@@ -99,6 +99,7 @@ internal fun LedgerEntryEditor(
     initialEntry: LedgerEntry?,
     draftAmountCents: Long? = null,
     draftOccurredAtMillis: Long? = null,
+    draftTitle: String? = null,
     draftDefaults: NotificationLedgerDefaults? = null,
     saveBusy: Boolean = false,
     tags: List<LedgerTag>,
@@ -122,7 +123,7 @@ internal fun LedgerEntryEditor(
         mutableStateOf(initialEntry?.type ?: draftDefaults?.type ?: LedgerEntryType.EXPENSE)
     }
     var title by rememberSaveable {
-        mutableStateOf(initialEntry?.title ?: "")
+        mutableStateOf(initialEntry?.title ?: draftTitle.orEmpty())
     }
     var amountText by rememberSaveable {
         mutableStateOf(

@@ -61,6 +61,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.app.NotificationManagerCompat
 import com.example.toolbox.ledger.NotificationLedgerCandidate
 import com.example.toolbox.ledger.NotificationLedgerDefaults
+import com.example.toolbox.ledger.NotificationPaymentDirection
 import com.example.toolbox.ledger.NotificationSkipReason
 import com.example.toolbox.ledger.LedgerAccount
 import com.example.toolbox.ledger.LedgerTag
@@ -297,17 +298,51 @@ internal fun NotificationLedgerDialog(
                                         }) { Text(strings.notificationLedgerDiscard) }
                                     }
                                     NotificationOriginalText(candidate.title, candidate.text)
+                                    val payment = candidate.payment
+                                    if (payment != null) {
+                                        Column {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    onSelectAmount(candidate, payment.amountCents)
+                                                },
+                                            ) {
+                                                Text(
+                                                    "${directionLabel(strings, payment.direction)} · " +
+                                                        String.format(
+                                                            Locale.US,
+                                                            "%.2f",
+                                                            payment.amountCents / 100.0,
+                                                        ),
+                                                )
+                                            }
+                                            payment.label?.let { label ->
+                                                Text(
+                                                    "${strings.notificationLedgerPaymentLabel}：$label",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    }
                                     FlowRow(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
-                                        candidate.amountsCents.forEach { amount ->
-                                            OutlinedButton(
-                                                onClick = { onSelectAmount(candidate, amount) },
-                                            ) {
-                                                Text(String.format(Locale.US, "%.2f", amount / 100.0))
+                                        candidate.amountsCents
+                                            .filter { it != payment?.amountCents }
+                                            .forEach { amount ->
+                                                OutlinedButton(
+                                                    onClick = { onSelectAmount(candidate, amount) },
+                                                ) {
+                                                    Text(
+                                                        String.format(
+                                                            Locale.US,
+                                                            "%.2f",
+                                                            amount / 100.0,
+                                                        ),
+                                                    )
+                                                }
                                             }
-                                        }
                                     }
                                 }
                             }
@@ -506,6 +541,14 @@ internal fun NotificationLedgerDialog(
         }
     }
 }
+
+private fun directionLabel(strings: ToolboxStrings, direction: NotificationPaymentDirection): String =
+    when (direction) {
+        NotificationPaymentDirection.EXPENSE -> strings.expenseTypeLabel
+        NotificationPaymentDirection.INCOME -> strings.incomeTypeLabel
+        NotificationPaymentDirection.TRANSFER_OUT -> strings.notificationLedgerTransferOut
+        NotificationPaymentDirection.TRANSFER_IN -> strings.notificationLedgerTransferIn
+    }
 
 @Composable
 private fun NotificationOriginalText(title: String, text: String) {
