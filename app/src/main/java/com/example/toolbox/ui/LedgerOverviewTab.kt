@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -76,6 +77,7 @@ internal fun LedgerOverviewTab(
     onOpenMonth: (YearMonth) -> Unit,
     budgets: LedgerBudgets,
     onEditBudgets: () -> Unit,
+    cardOrder: List<LedgerOverviewCard>,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -104,152 +106,20 @@ internal fun LedgerOverviewTab(
         }
     }
 
+    val listState = rememberLazyListState()
+    // Reordering keeps the previous first card anchored, which can push a newly
+    // promoted card above the viewport; show the new order from the top.
+    LaunchedEffect(cardOrder) {
+        listState.scrollToItem(0)
+    }
+
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 1. Current month hero card
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = strings.formatLedgerMonth(monthSummary.month),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    val expenseText = LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0)
-                    Text(
-                        text = strings.monthExpenseLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = expenseText,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.clickable {
-                            copyToClipboard(
-                                context = context,
-                                label = strings.monthExpenseLabel,
-                                value = expenseText,
-                                copiedMessage = strings.copied(strings.monthExpenseLabel),
-                            )
-                        },
-                    )
-                    val monthlyBudget = budgets.monthlyCents
-                    if (monthlyBudget != null) {
-                        val progress = BudgetProgress(monthlyBudget, monthSummary.expenseCents)
-                        val budgetText = LedgerCalculator.formatCurrency(monthlyBudget / 100.0)
-                        BudgetBar(progress, Modifier.fillMaxWidth())
-                        Text(
-                            text = if (progress.isOver) {
-                                strings.budgetOver(
-                                    budgetText,
-                                    LedgerCalculator.formatCurrency(-progress.remainingCents / 100.0),
-                                )
-                            } else {
-                                strings.budgetRemaining(
-                                    budgetText,
-                                    LedgerCalculator.formatCurrency(progress.remainingCents / 100.0),
-                                    progress.dailyAllowanceCents(LocalDate.now(zone), monthSummary.month)
-                                        ?.let { LedgerCalculator.formatCurrency(it / 100.0) },
-                                )
-                            },
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable(onClick = onEditBudgets)
-                                .padding(vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (progress.isOver) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        )
-                    } else {
-                        Text(
-                            text = strings.budgetSetAction,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable(onClick = onEditBudgets)
-                                .padding(vertical = 2.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        val incomeText = "+" + LedgerCalculator.formatCurrency(monthSummary.incomeCents / 100.0)
-                        Column(
-                            modifier = Modifier.clickable {
-                                copyToClipboard(
-                                    context = context,
-                                    label = strings.monthIncomeLabel,
-                                    value = incomeText,
-                                    copiedMessage = strings.copied(strings.monthIncomeLabel),
-                                )
-                            },
-                        ) {
-                            Text(
-                                text = strings.monthIncomeLabel,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = incomeText,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                        val netText = LedgerCalculator.formatCurrency(monthSummary.netCents / 100.0)
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            modifier = Modifier.clickable {
-                                copyToClipboard(
-                                    context = context,
-                                    label = strings.monthNetLabel,
-                                    value = netText,
-                                    copiedMessage = strings.copied(strings.monthNetLabel),
-                                )
-                            },
-                        ) {
-                            Text(
-                                text = strings.monthNetLabel,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = netText,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (monthSummary.netCents >= 0) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.error
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 1b. Pending renewal confirmations
+        // Pending renewal confirmations stay pinned above the dashboard cards.
         if (pendingRenewals.isNotEmpty()) {
             item {
                 PendingRenewalsCard(
@@ -263,219 +133,427 @@ internal fun LedgerOverviewTab(
             }
         }
 
-        // 2. Tag breakdown for the current month's expenses
-        item {
-            InfoCard(strings.breakdownByTags) {
-                val budgetOnlyRows = tags
-                    .filter { tag ->
-                        tag.deletedAtMillis == null &&
-                            tag.uuid in budgets.tagCents &&
-                            tagRows.none { it.first?.uuid == tag.uuid }
-                    }
-                    .map { it to 0L }
-                val displayRows = tagRows + budgetOnlyRows
-                if (displayRows.isEmpty()) {
-                    Text(
-                        text = strings.noExpenseThisMonth,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        cardOrder.forEach { card ->
+            when (card) {
+                LedgerOverviewCard.MONTH -> item {
+                    MonthSummaryCard(
+                        strings = strings,
+                        monthSummary = monthSummary,
+                        budgets = budgets,
+                        onEditBudgets = onEditBudgets,
                     )
-                } else {
-                    val totalCents = tagRows.sumOf { it.second }.coerceAtLeast(1L)
-                    if (tagRows.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(10.dp)
-                                .clip(RoundedCornerShape(10.dp)),
-                        ) {
-                            tagRows.forEach { (tag, cents) ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(cents.toFloat())
-                                        .fillMaxHeight()
-                                        .background(
-                                            Color(tag?.colorArgb ?: 0xFF9DA9A0.toInt()),
-                                        ),
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
-                    displayRows.forEach { (tag, cents) ->
-                        val tagBudget = tag?.let { budgets.tagCents[it.uuid] }
-                        val percent = "%.0f%%".format(Locale.US, cents * 100.0 / totalCents)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Color(tag?.colorArgb ?: 0xFF9DA9A0.toInt())
-                                            .copy(alpha = 0.16f),
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(text = tag?.emoji ?: "", fontSize = 13.sp)
-                            }
-                            Text(
-                                text = tag?.name ?: strings.untaggedLabel,
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Text(
-                                text = if (tagBudget != null) {
-                                    strings.budgetOfTotal(
-                                        LedgerCalculator.formatCurrency(cents / 100.0),
-                                        LedgerCalculator.formatCurrency(tagBudget / 100.0),
-                                    )
-                                } else {
-                                    LedgerCalculator.formatCurrency(cents / 100.0)
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (tagBudget != null && cents > tagBudget) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
-                            )
-                            Text(
-                                text = percent,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        if (tagBudget != null) {
-                            BudgetBar(
-                                BudgetProgress(tagBudget, cents),
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 38.dp, bottom = 4.dp),
-                            )
-                        }
-                    }
-                    if (anyMultiTagged) {
-                        Text(
-                            text = strings.multiTagNote,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                }
+
+                LedgerOverviewCard.RECENT -> item {
+                    RecentEntriesCard(
+                        strings = strings,
+                        recent = recent,
+                        tags = tags,
+                        accounts = accounts,
+                        onOpenEntry = onOpenEntry,
+                        onCopyEntry = onCopyEntry,
+                        onSeeAll = onSeeAll,
+                    )
+                }
+
+                LedgerOverviewCard.TAGS -> item {
+                    TagBreakdownCard(
+                        strings = strings,
+                        tags = tags,
+                        tagRows = tagRows,
+                        budgets = budgets,
+                        anyMultiTagged = anyMultiTagged,
+                    )
+                }
+
+                LedgerOverviewCard.TREND -> item {
+                    LedgerTrendCard(
+                        strings = strings,
+                        trend = trend,
+                        onOpenMonth = onOpenMonth,
+                    )
+                }
+
+                LedgerOverviewCard.COST -> item {
+                    DailyCostCard(
+                        strings = strings,
+                        summary = summary,
+                        onShowCosts = onShowCosts,
+                    )
                 }
             }
         }
+    }
+}
 
-        item {
-            LedgerTrendCard(
-                strings = strings,
-                trend = trend,
-                onOpenMonth = onOpenMonth,
+@Composable
+private fun MonthSummaryCard(
+    strings: ToolboxStrings,
+    monthSummary: LedgerCalculator.MonthSummary,
+    budgets: LedgerBudgets,
+    onEditBudgets: () -> Unit,
+) {
+    val context = LocalContext.current
+    val zone = ZoneId.systemDefault()
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = strings.formatLedgerMonth(monthSummary.month),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-
-        // 3. Daily cost card -> Costs tab
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onShowCosts),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-            ) {
-                Column(
+            val expenseText = LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0)
+            Text(
+                text = strings.monthExpenseLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = expenseText,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.clickable {
+                    copyToClipboard(
+                        context = context,
+                        label = strings.monthExpenseLabel,
+                        value = expenseText,
+                        copiedMessage = strings.copied(strings.monthExpenseLabel),
+                    )
+                },
+            )
+            val monthlyBudget = budgets.monthlyCents
+            if (monthlyBudget != null) {
+                val progress = BudgetProgress(monthlyBudget, monthSummary.expenseCents)
+                val budgetText = LedgerCalculator.formatCurrency(monthlyBudget / 100.0)
+                BudgetBar(progress, Modifier.fillMaxWidth())
+                Text(
+                    text = if (progress.isOver) {
+                        strings.budgetOver(
+                            budgetText,
+                            LedgerCalculator.formatCurrency(-progress.remainingCents / 100.0),
+                        )
+                    } else {
+                        strings.budgetRemaining(
+                            budgetText,
+                            LedgerCalculator.formatCurrency(progress.remainingCents / 100.0),
+                            progress.dailyAllowanceCents(LocalDate.now(zone), monthSummary.month)
+                                ?.let { LedgerCalculator.formatCurrency(it / 100.0) },
+                        )
+                    },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onEditBudgets)
+                        .padding(vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (progress.isOver) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            } else {
+                Text(
+                    text = strings.budgetSetAction,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onEditBudgets)
+                        .padding(vertical = 2.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                val incomeText = "+" + LedgerCalculator.formatCurrency(monthSummary.incomeCents / 100.0)
+                Column(
+                    modifier = Modifier.clickable {
+                        copyToClipboard(
+                            context = context,
+                            label = strings.monthIncomeLabel,
+                            value = incomeText,
+                            copiedMessage = strings.copied(strings.monthIncomeLabel),
+                        )
+                    },
                 ) {
                     Text(
-                        text = strings.dailyCostCaption,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = "${LedgerCalculator.formatCurrency(summary.activeDailyBurnRateYuan)}${strings.perDayUnit}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "${LedgerCalculator.formatCurrency(summary.activeMonthlyBurnRateYuan)}${strings.perMonthUnit}" +
-                            " · ${LedgerCalculator.formatCurrency(summary.activeYearlyBurnRateYuan)}${strings.perYearUnit}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = strings.costItemsCount(
-                            summary.activeOneTimeCount,
-                            summary.activeSubscriptionCount,
-                        ),
+                        text = strings.monthIncomeLabel,
                         style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = incomeText,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
+                val netText = LedgerCalculator.formatCurrency(monthSummary.netCents / 100.0)
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.clickable {
+                        copyToClipboard(
+                            context = context,
+                            label = strings.monthNetLabel,
+                            value = netText,
+                            copiedMessage = strings.copied(strings.monthNetLabel),
+                        )
+                    },
+                ) {
+                    Text(
+                        text = strings.monthNetLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = netText,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (monthSummary.netCents >= 0) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                    )
+                }
             }
         }
+    }
+}
 
-        // 4. Recent entries
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+@Composable
+private fun DailyCostCard(
+    strings: ToolboxStrings,
+    summary: LedgerSummary,
+    onShowCosts: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onShowCosts),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = strings.dailyCostCaption,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "${LedgerCalculator.formatCurrency(summary.activeDailyBurnRateYuan)}${strings.perDayUnit}",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "${LedgerCalculator.formatCurrency(summary.activeMonthlyBurnRateYuan)}${strings.perMonthUnit}" +
+                    " · ${LedgerCalculator.formatCurrency(summary.activeYearlyBurnRateYuan)}${strings.perYearUnit}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = strings.costItemsCount(
+                    summary.activeOneTimeCount,
+                    summary.activeSubscriptionCount,
                 ),
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, top = 8.dp, end = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = strings.recentEntriesTitle,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TagBreakdownCard(
+    strings: ToolboxStrings,
+    tags: List<LedgerTag>,
+    tagRows: List<Pair<LedgerTag?, Long>>,
+    budgets: LedgerBudgets,
+    anyMultiTagged: Boolean,
+) {
+    InfoCard(strings.breakdownByTags) {
+        val budgetOnlyRows = tags
+            .filter { tag ->
+                tag.deletedAtMillis == null &&
+                    tag.uuid in budgets.tagCents &&
+                    tagRows.none { it.first?.uuid == tag.uuid }
+            }
+            .map { it to 0L }
+        val displayRows = tagRows + budgetOnlyRows
+        if (displayRows.isEmpty()) {
+            Text(
+                text = strings.noExpenseThisMonth,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            val totalCents = tagRows.sumOf { it.second }.coerceAtLeast(1L)
+            if (tagRows.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(10.dp)),
+                ) {
+                    tagRows.forEach { (tag, cents) ->
+                        Box(
+                            modifier = Modifier
+                                .weight(cents.toFloat())
+                                .fillMaxHeight()
+                                .background(
+                                    Color(tag?.colorArgb ?: 0xFF9DA9A0.toInt()),
+                                ),
                         )
-                        TextButton(onClick = onSeeAll) {
-                            Text(strings.seeAllAction)
-                        }
-                    }
-                    if (recent.isEmpty()) {
-                        Text(
-                            text = strings.emptyOverviewHint,
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        recent.forEachIndexed { index, entry ->
-                            if (index > 0) {
-                                HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                )
-                            }
-                            LedgerEntryRow(
-                                strings = strings,
-                                entry = entry,
-                                tags = tags,
-                                accounts = accounts,
-                                onOpen = { onOpenEntry(entry) },
-                                onCopy = { onCopyEntry(entry) },
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+            displayRows.forEach { (tag, cents) ->
+                val tagBudget = tag?.let { budgets.tagCents[it.uuid] }
+                val percent = "%.0f%%".format(Locale.US, cents * 100.0 / totalCents)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Color(tag?.colorArgb ?: 0xFF9DA9A0.toInt())
+                                    .copy(alpha = 0.16f),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(text = tag?.emoji ?: "", fontSize = 13.sp)
+                    }
+                    Text(
+                        text = tag?.name ?: strings.untaggedLabel,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = if (tagBudget != null) {
+                            strings.budgetOfTotal(
+                                LedgerCalculator.formatCurrency(cents / 100.0),
+                                LedgerCalculator.formatCurrency(tagBudget / 100.0),
+                            )
+                        } else {
+                            LedgerCalculator.formatCurrency(cents / 100.0)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (tagBudget != null && cents > tagBudget) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    Text(
+                        text = percent,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (tagBudget != null) {
+                    BudgetBar(
+                        BudgetProgress(tagBudget, cents),
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = 38.dp, bottom = 4.dp),
+                    )
+                }
+            }
+            if (anyMultiTagged) {
+                Text(
+                    text = strings.multiTagNote,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentEntriesCard(
+    strings: ToolboxStrings,
+    recent: List<LedgerEntry>,
+    tags: List<LedgerTag>,
+    accounts: List<LedgerAccount>,
+    onOpenEntry: (LedgerEntry) -> Unit,
+    onCopyEntry: (LedgerEntry) -> Unit,
+    onSeeAll: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, top = 8.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = strings.recentEntriesTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                TextButton(onClick = onSeeAll) {
+                    Text(strings.seeAllAction)
+                }
+            }
+            if (recent.isEmpty()) {
+                Text(
+                    text = strings.emptyOverviewHint,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                recent.forEachIndexed { index, entry ->
+                    if (index > 0) {
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        )
+                    }
+                    LedgerEntryRow(
+                        strings = strings,
+                        entry = entry,
+                        tags = tags,
+                        accounts = accounts,
+                        onOpen = { onOpenEntry(entry) },
+                        onCopy = { onCopyEntry(entry) },
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
             }
         }
     }

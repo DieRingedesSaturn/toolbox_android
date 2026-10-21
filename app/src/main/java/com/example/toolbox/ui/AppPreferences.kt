@@ -19,6 +19,7 @@ private const val MONITOR_OVERLAY_THEME_KEY = "monitor_overlay_theme"
 private const val MONITOR_OVERLAY_CUSTOM_COLOR_KEY = "monitor_overlay_custom_color"
 private const val MONITOR_OVERLAY_OPACITY_KEY = "monitor_overlay_opacity"
 private const val LEDGER_LAST_ACCOUNT_KEY = "ledger_last_account"
+private const val LEDGER_OVERVIEW_ORDER_KEY = "ledger_overview_order"
 private const val FX_PINNED_CURRENCIES_KEY = "fx_pinned_currencies"
 
 /** Retired accent presets seed the custom accent instead of reverting. */
@@ -139,6 +140,14 @@ class AppPreferences(context: Context) {
 
     fun saveLedgerLastAccount(value: String) {
         preferences.edit { putString(LEDGER_LAST_ACCOUNT_KEY, value) }
+    }
+
+    /** User-defined order of the Overview cards, with missing cards appended. */
+    fun ledgerOverviewOrder(): List<LedgerOverviewCard> =
+        LedgerOverviewOrder.parse(preferences.getString(LEDGER_OVERVIEW_ORDER_KEY, null))
+
+    fun saveLedgerOverviewOrder(value: List<LedgerOverviewCard>) {
+        preferences.edit { putString(LEDGER_OVERVIEW_ORDER_KEY, LedgerOverviewOrder.format(value)) }
     }
 
     fun fxPinnedCurrencies(): List<String> =

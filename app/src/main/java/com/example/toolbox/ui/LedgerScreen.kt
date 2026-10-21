@@ -192,6 +192,7 @@ internal fun LedgerScreen(
 ) {
     val context = LocalContext.current
     val store = remember(context) { LedgerStore(context) }
+    val preferences = remember(context) { AppPreferences(context) }
     val scope = rememberCoroutineScope()
     val currentOnSnapshot by rememberUpdatedState(onSnapshot)
 
@@ -206,6 +207,8 @@ internal fun LedgerScreen(
     var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
     var pendingReplace by remember { mutableStateOf<PendingReplace?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var overviewOrder by remember { mutableStateOf(preferences.ledgerOverviewOrder()) }
+    var showOverviewOrderDialog by rememberSaveable { mutableStateOf(false) }
     var selectedMonthName by rememberSaveable {
         mutableStateOf(YearMonth.now().toString())
     }
@@ -1264,6 +1267,13 @@ internal fun LedgerScreen(
                                             showBudgetDialog = true
                                         },
                                     )
+                                    DropdownMenuItem(
+                                        text = { Text(strings.ledgerOverviewOrderMenu) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            showOverviewOrderDialog = true
+                                        },
+                                    )
                                     HorizontalDivider()
                                     DropdownMenuItem(
                                         text = { Text(strings.backupExportJson) },
@@ -1435,6 +1445,7 @@ internal fun LedgerScreen(
                             },
                             budgets = budgets,
                             onEditBudgets = { showBudgetDialog = true },
+                            cardOrder = overviewOrder,
                         )
 
                         1 -> LedgerTransactionsTab(
@@ -1982,6 +1993,31 @@ internal fun LedgerScreen(
                 scope.launch(Dispatchers.IO) { budgetStore.save(updated) }
             },
             onDismiss = { showBudgetDialog = false },
+        )
+    }
+
+    if (showOverviewOrderDialog) {
+        LedgerOverviewOrderDialog(
+            strings = strings,
+            order = overviewOrder,
+            onMove = { index, offset ->
+                val target = index + offset
+                if (target in overviewOrder.indices) {
+                    val next = overviewOrder.toMutableList()
+                    next.add(target, next.removeAt(index))
+                    overviewOrder = next
+                    scope.launch(Dispatchers.IO) {
+                        preferences.saveLedgerOverviewOrder(next)
+                    }
+                }
+            },
+            onReset = {
+                overviewOrder = LedgerOverviewOrder.DEFAULT
+                scope.launch(Dispatchers.IO) {
+                    preferences.saveLedgerOverviewOrder(LedgerOverviewOrder.DEFAULT)
+                }
+            },
+            onDismiss = { showOverviewOrderDialog = false },
         )
     }
 

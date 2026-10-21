@@ -745,6 +745,34 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "预算" else "Budgets"
     val budgetMenu: String
         get() = if (chinese) "预算设置" else "Budgets"
+    val ledgerOverviewOrderMenu: String
+        get() = if (chinese) "概览卡片排序…" else "Overview card order…"
+    val ledgerOverviewOrderTitle: String
+        get() = if (chinese) "概览卡片排序" else "Overview card order"
+    val ledgerOverviewOrderHint: String
+        get() = if (chinese) {
+            "拖动卡片调整顺序，修改会立即保存。"
+        } else {
+            "Drag a card to reorder it; changes save immediately."
+        }
+    val ledgerOverviewOrderDrag: String
+        get() = if (chinese) "拖动排序" else "Drag to reorder"
+    val ledgerOverviewMoveUp: String
+        get() = if (chinese) "上移" else "Move up"
+    val ledgerOverviewMoveDown: String
+        get() = if (chinese) "下移" else "Move down"
+    val ledgerOverviewOrderReset: String
+        get() = if (chinese) "恢复默认" else "Reset"
+    val doneAction: String
+        get() = if (chinese) "完成" else "Done"
+
+    fun ledgerOverviewCardName(card: LedgerOverviewCard): String = when (card) {
+        LedgerOverviewCard.MONTH -> if (chinese) "本月收支" else "Month summary"
+        LedgerOverviewCard.RECENT -> if (chinese) "最近记录" else "Recent entries"
+        LedgerOverviewCard.TAGS -> if (chinese) "按标签" else "By tag"
+        LedgerOverviewCard.TREND -> if (chinese) "收支趋势" else "Trend"
+        LedgerOverviewCard.COST -> if (chinese) "日均成本" else "Daily cost"
+    }
     val budgetMonthlyLabel: String
         get() = if (chinese) "每月总预算" else "Monthly budget"
     val budgetByTagLabel: String
