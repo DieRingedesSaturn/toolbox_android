@@ -508,15 +508,71 @@ class ToolboxStrings(val language: AppLanguage) {
     val publicIp: String
         get() = if (chinese) "公网地址" else "Public address"
     val publicIpLocation: String
-        get() = if (chinese) "IP 地理位置" else "IP location"
+        get() = if (chinese) "大致位置" else "Approximate location"
     val publicIpIsp: String
-        get() = if (chinese) "运营商 / 组织" else "ISP / Organization"
+        get() = if (chinese) "运营商 / 提供商" else "ISP / Provider"
+    val publicIpVersion: String
+        get() = if (chinese) "IP 类型" else "IP type"
+    val publicIpCountryCode: String
+        get() = if (chinese) "国家/地区代码" else "Country code"
+    val publicIpContinent: String
+        get() = if (chinese) "大洲" else "Continent"
+    val publicIpPostal: String
+        get() = if (chinese) "邮编" else "Postal code"
+    val publicIpTimezone: String
+        get() = if (chinese) "时区" else "Time zone"
+    val publicIpAsn: String
+        get() = "ASN"
+    val publicIpOrganization: String
+        get() = if (chinese) "组织" else "Organization"
+    val publicIpDomain: String
+        get() = if (chinese) "网络域名" else "Network domain"
+    val publicIpHostname: String
+        get() = if (chinese) "主机名" else "Hostname"
+    val publicIpRange: String
+        get() = if (chinese) "IP 段" else "IP range"
+    val publicIpNetworkType: String
+        get() = if (chinese) "网络类型" else "Network type"
+    val publicIpProxy: String
+        get() = if (chinese) "代理/VPN 标记" else "Proxy/VPN flag"
+    val publicIpRisk: String
+        get() = if (chinese) "风险评分" else "Risk score"
+    val publicIpRiskLow: String
+        get() = if (chinese) "低" else "Low"
+    val publicIpRiskMedium: String
+        get() = if (chinese) "中" else "Medium"
+    val publicIpRiskHigh: String
+        get() = if (chinese) "高" else "High"
+    val publicIpSource: String
+        get() = if (chinese) "数据来源" else "Data source"
+    val publicIpOpenIplark: String
+        get() = if (chinese) "在 IPLark 查看完整报告" else "View full report on IPLark"
     val publicIpDescription: String
         get() = if (chinese) {
-            "查询并显示当前网络出口的公网 IP 地址、大致地理位置与网络运营商。"
+            "查询当前网络出口的公网 IP、大致位置、ASN、网络类型与简单的代理/风险提示。" +
+                "仅在点击查询时访问免费数据源（ipwho.is、proxycheck.io 等），且只发送所查询的 IP；" +
+                "代理/VPN 标记针对所查询的出口 IP，不代表本机是否正在使用 VPN；" +
+                "风险评分为第三方启发式结果，仅供参考。「在 IPLark 查看」会在浏览器中打开第三方报告。"
         } else {
-            "Query and display your public egress IP, approximate location, and ISP."
+            "Look up the public egress IP, approximate location, ASN, network type, and simple proxy/risk hints. " +
+                "Free sources (ipwho.is, proxycheck.io, etc.) are contacted only when you tap Query, " +
+                "and only the queried IP is sent; the proxy/VPN flag describes the exit IP, not whether this device uses a VPN; " +
+                "the risk score is a third-party heuristic and may be inaccurate. " +
+                "The IPLark button opens a third-party report in your browser."
         }
+
+    fun publicIpNetworkType(value: String): String = when (value.trim().lowercase()) {
+        "business" -> if (chinese) "商业网络" else "Business"
+        "residential" -> if (chinese) "住宅网络" else "Residential"
+        "wireless" -> if (chinese) "无线网络" else "Wireless"
+        "hosting" -> if (chinese) "数据中心 / 托管" else "Hosting"
+        "vpn" -> "VPN"
+        "tor" -> "Tor"
+        "public proxy" -> if (chinese) "公共代理" else "Public proxy"
+        "compromised server" -> if (chinese) "受控服务器" else "Compromised server"
+        "scraper" -> if (chinese) "爬虫" else "Scraper"
+        else -> value
+    }
     val queryPublicIp: String
         get() = if (chinese) "查询公网 IP" else "Query public IP"
     val publicIpNotRequested: String

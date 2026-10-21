@@ -11,6 +11,7 @@ import java.net.URL
 import java.util.Collections
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 class NetworkInfoReader(context: Context) {
     private val appContext = context.applicationContext
@@ -52,12 +53,25 @@ class NetworkInfoReader(context: Context) {
     suspend fun readPublicIp(): String? = readPublicIpDetails()?.ip
 
     suspend fun readPublicIpDetails(): PublicIpDetails? = withContext(Dispatchers.IO) {
-        fetchUrl(IPWHOIS_URL)?.let { body ->
+        val base = fetchUrl(IPWHOIS_URL)?.let { body ->
             runCatching { parseIpWhoIs(body) }.getOrNull()
         } ?: fetchUrl(IPAPICO_URL)?.let { body ->
             runCatching { parseIpApiCo(body) }.getOrNull()
         } ?: fetchUrl(IPIFY_URL)?.let { body ->
             runCatching { parsePlainIp(body) }.getOrNull()
+        } ?: return@withContext null
+
+        // The free, keyless proxycheck tier adds usage type, proxy/VPN and a risk score.
+        // If it is rate-limited or unreachable, the core IP data above still stands.
+        val extra = fetchUrl(
+            "$PROXYCHECK_URL${base.ip}?vpn=1&asn=1&risk=1",
+        )?.let { body ->
+            runCatching { parseProxyCheck(body) }.getOrNull()
+        }
+        when {
+            extra == null -> base
+            base.source == "ipify" -> extra
+            else -> merge(base, extra)
         }
     }
 
@@ -112,48 +126,95 @@ class NetworkInfoReader(context: Context) {
         const val IPWHOIS_URL = "https://ipwho.is/"
         const val IPAPICO_URL = "https://ipapi.co/json/"
         const val IPIFY_URL = "https://api64.ipify.org?format=text"
+        const val PROXYCHECK_URL = "https://proxycheck.io/v2/"
 
         fun parseIpWhoIs(jsonString: String): PublicIpDetails? {
-            val json = org.json.JSONObject(jsonString)
+            val json = JSONObject(jsonString)
             if (json.has("success") && !json.optBoolean("success", true)) return null
             val ip = json.optString("ip").takeIf(::isIpAddress) ?: return null
-            val country = json.optString("country").takeUnless { it.isBlank() || it == "null" }
-            val region = json.optString("region").takeUnless { it.isBlank() || it == "null" }
-            val city = json.optString("city").takeUnless { it.isBlank() || it == "null" }
             val connection = json.optJSONObject("connection")
-            val isp = connection?.optString("isp")?.takeUnless { it.isBlank() || it == "null" }
-                ?: connection?.optString("org")?.takeUnless { it.isBlank() || it == "null" }
-                ?: json.optString("isp").takeUnless { it.isBlank() || it == "null" }
+            val timezoneJson = json.optJSONObject("timezone")
+            val timezoneId = timezoneJson?.text("id")
+            val utcOffset = timezoneJson?.text("utc")
+            val isp = connection?.text("isp") ?: connection?.text("org") ?: json.text("isp")
             return PublicIpDetails(
                 ip = ip,
-                country = country,
-                region = region,
-                city = city,
+                country = json.text("country"),
+                countryCode = json.text("country_code"),
+                region = json.text("region"),
+                city = json.text("city"),
+                postal = json.text("postal"),
+                continent = json.text("continent"),
+                timezone = formatTimezone(timezoneId, utcOffset),
+                ipType = json.text("type") ?: inferIpType(ip),
                 isp = isp,
+                organization = connection?.text("org"),
+                asn = normalizeAsn(connection?.text("asn")),
+                domain = connection?.text("domain"),
+                source = "ipwho.is",
             )
         }
 
         fun parseIpApiCo(jsonString: String): PublicIpDetails? {
-            val json = org.json.JSONObject(jsonString)
+            val json = JSONObject(jsonString)
             if (json.optBoolean("error", false)) return null
             val ip = json.optString("ip").takeIf(::isIpAddress) ?: return null
-            val country = json.optString("country_name").takeUnless { it.isBlank() || it == "null" }
-            val region = json.optString("region").takeUnless { it.isBlank() || it == "null" }
-            val city = json.optString("city").takeUnless { it.isBlank() || it == "null" }
-            val isp = json.optString("org").takeUnless { it.isBlank() || it == "null" }
-                ?: json.optString("asn").takeUnless { it.isBlank() || it == "null" }
+            val organization = json.text("org")
             return PublicIpDetails(
                 ip = ip,
-                country = country,
-                region = region,
-                city = city,
-                isp = isp,
+                country = json.text("country_name"),
+                countryCode = json.text("country_code"),
+                region = json.text("region"),
+                city = json.text("city"),
+                postal = json.text("postal"),
+                timezone = formatTimezone(json.text("timezone"), json.text("utc_offset")),
+                ipType = json.text("version") ?: inferIpType(ip),
+                isp = organization,
+                organization = organization,
+                asn = normalizeAsn(json.text("asn")),
+                ipRange = json.text("network"),
+                source = "ipapi.co",
+            )
+        }
+
+        fun parseProxyCheck(jsonString: String): PublicIpDetails? {
+            val json = JSONObject(jsonString)
+            val ip = json.keys().asSequence().firstOrNull(::isIpAddress) ?: return null
+            val data = json.optJSONObject(ip) ?: return null
+            val proxy = when (val value = data.opt("proxy")) {
+                is Boolean -> value
+                is String -> when (value.lowercase()) {
+                    "yes", "true" -> true
+                    "no", "false" -> false
+                    else -> null
+                }
+                else -> null
+            }
+            return PublicIpDetails(
+                ip = ip,
+                country = data.text("country"),
+                countryCode = data.text("isocode"),
+                region = data.text("region"),
+                city = data.text("city"),
+                postal = data.text("postcode"),
+                continent = data.text("continent"),
+                timezone = data.text("timezone"),
+                ipType = inferIpType(ip),
+                isp = data.text("provider"),
+                organization = data.text("organisation"),
+                asn = normalizeAsn(data.text("asn")),
+                hostname = data.text("hostname"),
+                ipRange = data.text("range"),
+                networkType = data.text("type"),
+                proxy = proxy,
+                risk = data.optInt("risk", -1).takeIf { it in 0..100 },
+                source = "proxycheck.io",
             )
         }
 
         fun parsePlainIp(text: String): PublicIpDetails? {
             val ip = text.trim().takeIf(::isIpAddress) ?: return null
-            return PublicIpDetails(ip = ip)
+            return PublicIpDetails(ip = ip, ipType = inferIpType(ip), source = "ipify")
         }
 
         fun isIpAddress(value: String): Boolean {
@@ -165,3 +226,39 @@ class NetworkInfoReader(context: Context) {
         }
     }
 }
+
+private fun JSONObject.text(key: String): String? =
+    optString(key).trim().takeUnless { it.isEmpty() || it == "null" }
+
+private fun normalizeAsn(value: String?): String? = value
+    ?.trim()
+    ?.takeUnless { it.isEmpty() || it == "null" }
+    ?.let { if (it.startsWith("AS", ignoreCase = true)) "AS" + it.substring(2) else "AS$it" }
+
+private fun inferIpType(ip: String): String = if (ip.contains(':')) "IPv6" else "IPv4"
+
+private fun formatTimezone(id: String?, utcOffset: String?): String? = when {
+    id != null && utcOffset != null -> "$id (UTC$utcOffset)"
+    else -> id
+}
+
+private fun merge(base: PublicIpDetails, extra: PublicIpDetails): PublicIpDetails = base.copy(
+    country = base.country ?: extra.country,
+    countryCode = base.countryCode ?: extra.countryCode,
+    region = base.region ?: extra.region,
+    city = base.city ?: extra.city,
+    postal = base.postal ?: extra.postal,
+    continent = base.continent ?: extra.continent,
+    timezone = base.timezone ?: extra.timezone,
+    ipType = base.ipType ?: extra.ipType,
+    isp = base.isp ?: extra.isp,
+    organization = base.organization ?: extra.organization,
+    asn = base.asn ?: extra.asn,
+    domain = base.domain ?: extra.domain,
+    hostname = base.hostname ?: extra.hostname,
+    ipRange = base.ipRange ?: extra.ipRange,
+    networkType = base.networkType ?: extra.networkType,
+    proxy = base.proxy ?: extra.proxy,
+    risk = base.risk ?: extra.risk,
+    source = listOfNotNull(base.source, extra.source).distinct().joinToString(" + "),
+)

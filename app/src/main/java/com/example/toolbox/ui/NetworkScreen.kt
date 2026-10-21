@@ -1,6 +1,7 @@
 package com.example.toolbox.ui
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.example.toolbox.network.LanDevice
 import com.example.toolbox.network.LanFlag
 import com.example.toolbox.network.LanScan
@@ -43,6 +45,7 @@ import com.example.toolbox.network.LanSuspicion
 import com.example.toolbox.network.NetworkInfo
 import com.example.toolbox.network.NetworkInfoReader
 import com.example.toolbox.network.PublicIpDetails
+import com.example.toolbox.network.PublicIpRiskLevel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -156,43 +159,14 @@ fun NetworkScreen(
                 )
             }
             item {
-                InfoCard(strings.publicIpTitle) {
-                    val ipValue = when {
-                        isLoadingPublicIp -> strings.loading
-                        !publicIpRequested -> strings.publicIpNotRequested
-                        publicIpDetails != null -> publicIpDetails!!.ip
-                        else -> strings.notAvailable
-                    }
-                    CopyableNetworkRow(context, strings, strings.publicIp, ipValue)
-                    if (publicIpDetails != null) {
-                        publicIpDetails?.formatLocation()?.let { loc ->
-                            CopyableNetworkRow(context, strings, strings.publicIpLocation, loc)
-                        }
-                        publicIpDetails?.isp?.let { isp ->
-                            CopyableNetworkRow(context, strings, strings.publicIpIsp, isp)
-                        }
-                    }
-                    Text(
-                        text = strings.publicIpDescription,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Button(
-                        onClick = ::queryPublicIp,
-                        enabled = !isLoadingPublicIp,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        if (isLoadingPublicIp) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = LocalContentColor.current,
-                            )
-                            Spacer(modifier = Modifier.size(8.dp))
-                        }
-                        Text(if (isLoadingPublicIp) strings.loading else strings.queryPublicIp)
-                    }
-                }
+                PublicIpCard(
+                    context = context,
+                    strings = strings,
+                    loading = isLoadingPublicIp,
+                    requested = publicIpRequested,
+                    details = publicIpDetails,
+                    onQuery = ::queryPublicIp,
+                )
             }
             item {
                 LanScanCard(
@@ -271,6 +245,131 @@ private fun NetworkDetailsCard(
             strings.gateways,
             info.gateways.takeUnless { it.isEmpty() }?.joinToString("\n") ?: strings.notAvailable,
         )
+    }
+}
+
+@Composable
+private fun PublicIpCard(
+    context: Context,
+    strings: ToolboxStrings,
+    loading: Boolean,
+    requested: Boolean,
+    details: PublicIpDetails?,
+    onQuery: () -> Unit,
+) {
+    InfoCard(strings.publicIpTitle) {
+        val ipValue = when {
+            loading -> strings.loading
+            !requested -> strings.publicIpNotRequested
+            details != null -> details.ip
+            else -> strings.notAvailable
+        }
+        CopyableNetworkRow(context, strings, strings.publicIp, ipValue)
+        if (details != null) {
+            details.ipType?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpVersion, it)
+            }
+            details.formatLocation()?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpLocation, it)
+            }
+            details.countryCode?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpCountryCode, it)
+            }
+            details.continent?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpContinent, it)
+            }
+            details.postal?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpPostal, it)
+            }
+            details.timezone?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpTimezone, it)
+            }
+            details.asn?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpAsn, it)
+            }
+            details.isp?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpIsp, it)
+            }
+            details.organization
+                ?.takeUnless { it == details.isp }
+                ?.let { CopyableNetworkRow(context, strings, strings.publicIpOrganization, it) }
+            details.domain?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpDomain, it)
+            }
+            details.hostname?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpHostname, it)
+            }
+            details.ipRange?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpRange, it)
+            }
+            details.networkType?.let {
+                CopyableNetworkRow(
+                    context,
+                    strings,
+                    strings.publicIpNetworkType,
+                    strings.publicIpNetworkType(it),
+                )
+            }
+            details.proxy?.let {
+                CopyableNetworkRow(
+                    context,
+                    strings,
+                    strings.publicIpProxy,
+                    if (it) strings.yes else strings.no,
+                )
+            }
+            details.risk?.let { risk ->
+                val level = when (details.riskLevel()) {
+                    PublicIpRiskLevel.LOW -> strings.publicIpRiskLow
+                    PublicIpRiskLevel.MEDIUM -> strings.publicIpRiskMedium
+                    PublicIpRiskLevel.HIGH -> strings.publicIpRiskHigh
+                    null -> null
+                }
+                CopyableNetworkRow(
+                    context,
+                    strings,
+                    strings.publicIpRisk,
+                    listOfNotNull("$risk / 100", level).joinToString(" · "),
+                )
+            }
+            details.source?.let {
+                CopyableNetworkRow(context, strings, strings.publicIpSource, it)
+            }
+        }
+        Text(
+            text = strings.publicIpDescription,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(
+            onClick = onQuery,
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = LocalContentColor.current,
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+            }
+            Text(if (loading) strings.loading else strings.queryPublicIp)
+        }
+        if (details != null) {
+            TextButton(
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, "https://iplark.com/${details.ip}".toUri()),
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(strings.publicIpOpenIplark)
+            }
+        }
     }
 }
 
