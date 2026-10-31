@@ -70,6 +70,7 @@ import com.example.toolbox.usage.UsageTimeRange
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 
 @Composable
 fun AppUsageScreen(
@@ -106,10 +107,15 @@ fun AppUsageScreen(
         if (hasPermission) {
             isLoading = true
             loadFailed = false
-            report = runCatching {
-                AppUsageReader.queryUsageReport(context, timeRange)
-            }.onFailure { loadFailed = true }.getOrNull()
-            isLoading = false
+            try {
+                report = AppUsageReader.queryUsageReport(context, timeRange)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                loadFailed = true
+            } finally {
+                isLoading = false
+            }
         }
     }
 
@@ -383,6 +389,35 @@ private fun UsageOverviewCard(
                     color = Color(0xFF2196F3),
                     modifier = Modifier.weight(1f),
                 )
+            }
+
+            val sharedNetwork = report.sharedNetworkTraffic
+            if (sharedNetwork?.totalBytes?.let { it > 0L } == true) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = strings.sharedNetworkData,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = listOfNotNull(
+                            sharedNetwork.wifiBytes?.let {
+                                "${strings.totalWifiData}: ${formatDataBytes(it)}"
+                            },
+                            sharedNetwork.cellularBytes?.let {
+                                "${strings.totalCellularData}: ${formatDataBytes(it)}"
+                            },
+                        ).joinToString("  ·  "),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = strings.sharedNetworkDataNote,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             if (report.hasUnattributedTraffic) {

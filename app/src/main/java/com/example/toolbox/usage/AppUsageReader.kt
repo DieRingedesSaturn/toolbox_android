@@ -18,6 +18,23 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 
+internal enum class NetworkBucketCategory { APP, TETHERING, IGNORED }
+
+/** Tethering buckets use a negative special UID, so `uid > 0` drops them. */
+internal fun classifyNetworkBucket(uid: Int): NetworkBucketCategory = when {
+    uid == NetworkStats.Bucket.UID_TETHERING -> NetworkBucketCategory.TETHERING
+    uid > 0 -> NetworkBucketCategory.APP
+    else -> NetworkBucketCategory.IGNORED
+}
+
+private data class NetworkBucketRead(
+    val byUid: Map<Int, Pair<Long, Long>> = emptyMap(),
+    val tetheringBytes: Pair<Long, Long>? = null,
+    val success: Boolean = false,
+)
+
+private fun Pair<Long, Long>.sum(): Long = first + second
+
 object AppUsageReader {
 
     fun hasUsagePermission(context: Context): Boolean {
@@ -91,18 +108,31 @@ object AppUsageReader {
         }
 
         // 2. Query Network Traffic (Wi-Fi & Mobile Cellular) by UID
-        val wifiTraffic = mutableMapOf<Int, Pair<Long, Long>>() // uid -> (rxBytes, txBytes)
-        val cellularTraffic = mutableMapOf<Int, Pair<Long, Long>>() // uid -> (rxBytes, txBytes)
-
         val canReadTraffic = networkStatsManager != null && hasUsagePermission(context)
-        val wifiAvailable = canReadTraffic && readNetworkBuckets(
-            networkStatsManager, NetworkCapabilities.TRANSPORT_WIFI,
-            startTime, endTime, wifiTraffic,
-        )
-        val cellularAvailable = canReadTraffic && readNetworkBuckets(
-            networkStatsManager, NetworkCapabilities.TRANSPORT_CELLULAR,
-            startTime, endTime, cellularTraffic,
-        )
+        val wifiRead = if (canReadTraffic) {
+            readNetworkBuckets(
+                networkStatsManager,
+                NetworkCapabilities.TRANSPORT_WIFI,
+                startTime,
+                endTime,
+            )
+        } else {
+            NetworkBucketRead()
+        }
+        val cellularRead = if (canReadTraffic) {
+            readNetworkBuckets(
+                networkStatsManager,
+                NetworkCapabilities.TRANSPORT_CELLULAR,
+                startTime,
+                endTime,
+            )
+        } else {
+            NetworkBucketRead()
+        }
+        val wifiTraffic = wifiRead.byUid
+        val cellularTraffic = cellularRead.byUid
+        val wifiAvailable = canReadTraffic && wifiRead.success
+        val cellularAvailable = canReadTraffic && cellularRead.success
 
         // 3. Resolve Installed Applications metadata
         val installedApps = runCatching {
@@ -173,9 +203,19 @@ object AppUsageReader {
         } else {
             items.sumOf { it.foregroundDurationMillis }
         }
-        val totalWifi = if (wifiAvailable) wifiTraffic.values.sumOf { it.first + it.second } else null
+        val sharedNetworkTraffic = SharedNetworkTraffic(
+            wifiBytes = if (wifiAvailable) wifiRead.tetheringBytes?.sum() else null,
+            cellularBytes = if (cellularAvailable) cellularRead.tetheringBytes?.sum() else null,
+        )
+        val totalWifi = if (wifiAvailable) {
+            wifiTraffic.values.sumOf { it.first + it.second } +
+                (wifiRead.tetheringBytes?.sum() ?: 0L)
+        } else {
+            null
+        }
         val totalCellular = if (cellularAvailable) {
-            cellularTraffic.values.sumOf { it.first + it.second }
+            cellularTraffic.values.sumOf { it.first + it.second } +
+                (cellularRead.tetheringBytes?.sum() ?: 0L)
         } else {
             null
         }
@@ -210,6 +250,7 @@ object AppUsageReader {
             hasUnattributedTraffic = unattributedUids,
             items = items,
             categorySummaries = categorySummaries,
+            sharedNetworkTraffic = sharedNetworkTraffic,
         )
     }
 
@@ -218,30 +259,37 @@ object AppUsageReader {
         transport: Int,
         startTime: Long,
         endTime: Long,
-        outMap: MutableMap<Int, Pair<Long, Long>>,
-    ): Boolean {
+    ): NetworkBucketRead {
+        val byUid = mutableMapOf<Int, Pair<Long, Long>>()
+        var tethering: Pair<Long, Long>? = null
         return try {
             val stats = manager.querySummary(transport, null, startTime, endTime)
             val bucket = NetworkStats.Bucket()
             try {
                 while (stats.hasNextBucket()) {
                     stats.getNextBucket(bucket)
-                    val uid = bucket.uid
-                    if (uid > 0) {
-                        val prev = outMap[uid] ?: Pair(0L, 0L)
-                        outMap[uid] = Pair(
-                            prev.first + bucket.rxBytes,
-                            prev.second + bucket.txBytes,
-                        )
+                    val bytes = bucket.rxBytes to bucket.txBytes
+                    when (classifyNetworkBucket(bucket.uid)) {
+                        NetworkBucketCategory.APP -> {
+                            val uid = bucket.uid
+                            val prev = byUid[uid] ?: (0L to 0L)
+                            byUid[uid] = (prev.first + bytes.first) to
+                                (prev.second + bytes.second)
+                        }
+                        NetworkBucketCategory.TETHERING -> {
+                            val prev = tethering ?: (0L to 0L)
+                            tethering = (prev.first + bytes.first) to
+                                (prev.second + bytes.second)
+                        }
+                        NetworkBucketCategory.IGNORED -> Unit
                     }
                 }
             } finally {
                 stats.close()
             }
-            true
+            NetworkBucketRead(byUid = byUid, tetheringBytes = tethering, success = true)
         } catch (_: Exception) {
-            outMap.clear()
-            false
+            NetworkBucketRead()
         }
     }
 

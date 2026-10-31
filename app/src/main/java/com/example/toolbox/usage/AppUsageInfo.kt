@@ -43,6 +43,18 @@ data class CategoryUsageSummary(
     val totalBytes: Long? get() = totalWifiBytes?.let { wifi -> totalCellularBytes?.let { wifi + it } }
 }
 
+data class SharedNetworkTraffic(
+    val wifiBytes: Long?,
+    val cellularBytes: Long?,
+) {
+    val totalBytes: Long?
+        get() = if (wifiBytes == null && cellularBytes == null) {
+            null
+        } else {
+            (wifiBytes ?: 0L) + (cellularBytes ?: 0L)
+        }
+}
+
 data class UsageReport(
     val timeRange: UsageTimeRange,
     val startTimeMillis: Long,
@@ -53,6 +65,8 @@ data class UsageReport(
     val hasUnattributedTraffic: Boolean,
     val items: List<AppUsageItem>,
     val categorySummaries: List<CategoryUsageSummary>,
+    /** Hotspot/USB/Bluetooth/P2P traffic recorded under UID_TETHERING. */
+    val sharedNetworkTraffic: SharedNetworkTraffic? = null,
 ) {
     val totalBytes: Long? get() = totalWifiBytes?.let { wifi -> totalCellularBytes?.let { wifi + it } }
 }

@@ -1535,9 +1535,9 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "使用情况访问权限" else "Usage access permission"
     val usagePermissionDescription: String
         get() = if (chinese) {
-            "用于读取各应用的前台屏幕使用时间与分网段（蜂窝/WLAN）流量消耗。数据由系统底层记录，完全离线计算，零后台耗电。"
+            "用于读取各应用的前台屏幕使用时间与分网段（蜂窝/WLAN）流量消耗，并汇总热点、USB、蓝牙或 P2P 共享给其他设备的流量。数据由系统底层记录，完全离线计算，零后台耗电。"
         } else {
-            "Used to read screen time and network traffic (Cellular/Wi-Fi) per app. Calculated offline from OS logs with zero background battery usage."
+            "Used to read screen time and Cellular/Wi-Fi traffic per app, plus traffic shared with other devices over hotspot, USB, Bluetooth, or P2P. Calculated offline from OS logs with zero background battery usage."
         }
     val openUsageSettings: String
         get() = if (chinese) "前往系统设置授权" else "Grant in System Settings"
@@ -1551,6 +1551,14 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "总消耗流量" else "Total Traffic"
     val sharedUidTraffic: String
         get() = if (chinese) "共享 UID，无法归属" else "Shared UID: cannot attribute"
+    val sharedNetworkData: String
+        get() = if (chinese) "共享网络流量" else "Tethered / P2P data"
+    val sharedNetworkDataNote: String
+        get() = if (chinese) {
+            "包含热点、USB、蓝牙或 P2P 共享给其他设备的流量，无法归属到本机单个应用；部分厂商或机型可能不公开 P2P 本地侧计数。"
+        } else {
+            "Includes traffic shared with other devices over hotspot, USB, Bluetooth, or P2P; it cannot be assigned to one local app. Some vendors may not expose the P2P local-side counter."
+        }
     val sharedUidTrafficNote: String
         get() = if (chinese) {
             "总流量包含无法归属到单个应用的 UID 流量；这些流量不计入应用和分类明细。"

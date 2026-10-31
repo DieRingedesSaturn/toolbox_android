@@ -46,10 +46,13 @@ System automatic backup is disabled because the local ledger contains financial
 records. Use the ledger's manual JSON export or WebDAV sync for backup. WebDAV
 sync requires a server that supplies strong ETags for existing `ledger.json`
 files and honors conditional writes; otherwise it stops before overwriting data.
-App traffic totals count each UID once. Traffic from shared or unidentified UIDs
-cannot be assigned to a single app or category, and unavailable traffic reads
-are shown as unavailable. GNSS constellations are listed only after an actual
-satellite observation.
+App traffic totals count each UID once. Tethering traffic recorded under the
+system's special tethering UID is included in the Wi-Fi/Mobile totals and shown
+separately as shared-network traffic; it cannot be assigned to a single local
+app or category. Some vendors may not expose P2P local-side counters. Other
+traffic from shared or unidentified UIDs also stays out of app details, and
+unavailable traffic reads are shown as unavailable. GNSS constellations are
+listed only after an actual satellite observation.
 
 ## Development environment
 
