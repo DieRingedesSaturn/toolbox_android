@@ -1,5 +1,6 @@
 package com.example.toolbox.fx
 
+import com.example.toolbox.network.BoundedHttpResponse
 import java.io.IOException
 import java.io.StringReader
 import java.net.HttpURLConnection
@@ -190,7 +191,7 @@ class FxRateReader(
             if (code !in 200..299) {
                 throw FxException(FxFailure.HTTP_ERROR, httpCode = code)
             }
-            return conn.inputStream.readBytes().toString(Charsets.UTF_8)
+            return BoundedHttpResponse.readText(conn.inputStream, MAX_RESPONSE_BYTES)
         } catch (e: FxException) {
             throw e
         } catch (e: IOException) {
@@ -262,5 +263,6 @@ class FxRateReader(
         private const val READ_TIMEOUT_MS = 8_000
         private const val OVERALL_DEADLINE_MS = 25_000L
         private const val MAX_CURRENCY_API_DATES = 12
+        private const val MAX_RESPONSE_BYTES = 4L * 1024 * 1024
     }
 }

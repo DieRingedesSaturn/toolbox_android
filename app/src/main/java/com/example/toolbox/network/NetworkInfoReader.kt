@@ -89,7 +89,7 @@ class NetworkInfoReader(context: Context) {
 
         return try {
             if (connection.responseCode in 200..299) {
-                connection.inputStream.bufferedReader().use { it.readText() }
+                BoundedHttpResponse.readText(connection.inputStream, MAX_RESPONSE_BYTES)
             } else {
                 null
             }
@@ -123,6 +123,7 @@ class NetworkInfoReader(context: Context) {
 
     companion object {
         const val HTTP_TIMEOUT_MILLIS = 5_000L
+        private const val MAX_RESPONSE_BYTES = 2L * 1024 * 1024
         const val IPWHOIS_URL = "https://ipwho.is/"
         const val IPAPICO_URL = "https://ipapi.co/json/"
         const val IPIFY_URL = "https://api64.ipify.org?format=text"

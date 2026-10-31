@@ -1,5 +1,7 @@
 package com.example.toolbox.ledger
 
+import com.example.toolbox.network.BoundedHttpResponse
+import com.example.toolbox.network.HttpResponseTooLargeException
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -53,7 +55,7 @@ class WebDavClient(
         } else {
             throwForStatus(code, "GET")
             WebDavFile(
-                body = conn.inputStream.readBytes().toString(Charsets.UTF_8),
+                body = BoundedHttpResponse.readText(conn.inputStream, MAX_RESPONSE_BYTES),
                 etag = conn.getHeaderField("ETag"),
             )
         }
@@ -99,6 +101,8 @@ class WebDavClient(
             return block(conn)
         } catch (e: WebDavException) {
             throw e
+        } catch (e: HttpResponseTooLargeException) {
+            throw WebDavException(WebDavFailure.INVALID_REMOTE_FILE, cause = e)
         } catch (e: SSLException) {
             throw WebDavException(WebDavFailure.TLS, cause = e)
         } catch (e: IOException) {
@@ -115,6 +119,7 @@ class WebDavClient(
     companion object {
         private const val CONNECT_TIMEOUT_MS = 15_000
         private const val READ_TIMEOUT_MS = 30_000
+        private const val MAX_RESPONSE_BYTES = LedgerBackup.MAX_BYTES
 
         fun failureForStatus(code: Int, method: String): WebDavFailure? = when {
             code in 200..299 -> null

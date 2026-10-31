@@ -63,6 +63,13 @@ class LocationInfoReader(context: Context) {
             override fun onProviderDisabled(provider: String) {}
         }
 
+        val cleanup: () -> Unit = {
+            runCatching {
+                manager.unregisterGnssStatusCallback(callback)
+                manager.removeUpdates(dummyListener)
+            }
+            Unit
+        }
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 manager.registerGnssStatusCallback(mainExecutor, callback)
@@ -89,15 +96,12 @@ class LocationInfoReader(context: Context) {
                     Looper.getMainLooper(),
                 )
             }
-            {
-                runCatching {
-                    manager.unregisterGnssStatusCallback(callback)
-                    manager.removeUpdates(dummyListener)
-                }
-            }
+            cleanup
         } catch (_: SecurityException) {
+            cleanup()
             null
         } catch (_: IllegalArgumentException) {
+            cleanup()
             null
         }
     }
@@ -143,7 +147,10 @@ class LocationInfoReader(context: Context) {
 
         return try {
             if (connection.responseCode in 200..299) {
-                connection.inputStream.bufferedReader().use { it.readText() }
+                com.example.toolbox.network.BoundedHttpResponse.readText(
+                    connection.inputStream,
+                    MAX_RESPONSE_BYTES,
+                )
             } else {
                 null
             }
@@ -292,6 +299,7 @@ class LocationInfoReader(context: Context) {
     companion object {
         const val LOCATION_TIMEOUT_MILLIS = 15_000L
         const val HTTP_TIMEOUT_MILLIS = 5_000L
+        private const val MAX_RESPONSE_BYTES = 2L * 1024 * 1024
 
         fun parseOpenMeteoElevation(jsonString: String): TerrainElevationInfo? {
             val json = org.json.JSONObject(jsonString)
