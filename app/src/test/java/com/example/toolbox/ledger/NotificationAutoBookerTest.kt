@@ -40,10 +40,11 @@ class NotificationAutoBookerTest {
         text: String,
         title: String = "微信支付",
         key: String = "key-$text",
+        atMillis: Long = System.currentTimeMillis(),
     ): NotificationLedgerCandidate = notificationStore.recordParts(
         packageName = "com.tencent.mm",
         key = key,
-        occurredAtMillis = System.currentTimeMillis(),
+        occurredAtMillis = atMillis,
         title = title,
         text = text,
     )!!
@@ -133,6 +134,21 @@ class NotificationAutoBookerTest {
             NotificationAutoBooker.book(context, second),
         )
         LedgerStore(context).use { assertEquals(1, it.queryVisibleEntries().size) }
+    }
+
+    @Test
+    fun testReusedNotificationKeyBooksALaterDifferentPayment() {
+        enableAutoBook()
+        val now = System.currentTimeMillis()
+        val first = record("已支付¥16.00", key = "reused", atMillis = now)
+        assertEquals(NotificationAutoBooker.Outcome.BOOKED, NotificationAutoBooker.book(context, first))
+
+        val second = record("已支付¥28.00", key = "reused", atMillis = now + 60_000L)
+        assertNull(second.autoBookedEntryUuid)
+        assertEquals(NotificationAutoBooker.Outcome.BOOKED, NotificationAutoBooker.book(context, second))
+        LedgerStore(context).use { ledger ->
+            assertEquals(listOf(1_600L, 2_800L), ledger.queryVisibleEntries().map { it.amountCents }.sorted())
+        }
     }
 
     @Test

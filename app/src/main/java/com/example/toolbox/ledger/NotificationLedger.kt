@@ -157,6 +157,12 @@ class NotificationLedgerStore(context: Context) {
             .joinToString("") { "%02x".format(it) }
         synchronized(lock) {
             val previous = readRecords().firstOrNull { it.id == digest }
+            val isRepost = previous != null &&
+                previous.title == title &&
+                previous.text == text &&
+                previous.payment == payment &&
+                kotlin.math.abs(occurredAtMillis - previous.occurredAtMillis) <=
+                REPOST_WINDOW_MILLIS
             val item = NotificationLedgerCandidate(
                 id = digest,
                 packageName = packageName,
@@ -166,9 +172,9 @@ class NotificationLedgerStore(context: Context) {
                 text = text,
                 skipReason = result.skipReason,
                 payment = payment,
-                // A reposted notification keeps its auto-book marker so the
-                // same payment is never booked twice.
-                autoBookedEntryUuid = previous?.autoBookedEntryUuid,
+                // Only an actual repost keeps the auto-book marker. Payment
+                // apps may reuse a notification key for a later transaction.
+                autoBookedEntryUuid = previous?.autoBookedEntryUuid?.takeIf { isRepost },
             )
             saveRecords((listOf(item) + readRecords().filterNot { it.id == digest }).trimmed())
             return item
@@ -242,6 +248,7 @@ class NotificationLedgerStore(context: Context) {
         const val MAX_IGNORED = 15
         const val MAX_FIELD_CHARS = 800
         const val MAX_AGE_MILLIS = 7L * 24 * 60 * 60 * 1_000
+        const val REPOST_WINDOW_MILLIS = 10_000L
 
         /**
          * Extracts the fields the listener needs, on the thread that received
