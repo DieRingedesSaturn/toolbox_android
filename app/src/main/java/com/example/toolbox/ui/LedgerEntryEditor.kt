@@ -87,7 +87,6 @@ import java.time.ZoneId
 import java.util.Currency
 import java.util.Locale
 import java.util.UUID
-import kotlin.math.roundToLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -282,11 +281,11 @@ internal fun LedgerEntryEditor(
     val isTransfer = entryType == LedgerEntryType.TRANSFER
     val isAdjustment = entryType == LedgerEntryType.ADJUSTMENT
     // Adjustments are signed corrections; income/expense amounts stay positive.
-    val previewAmountCents = ((amountText.replace(',', '.').toDoubleOrNull() ?: 0.0) * 100.0)
-        .roundToLong().let { if (isAdjustment) it else it.coerceAtLeast(0L) }
+    val previewAmountCents = (LedgerCalculator.parseMoneyToCents(amountText) ?: 0L)
+        .let { if (isAdjustment) it else it.coerceAtLeast(0L) }
     val amountValid = if (isAdjustment) previewAmountCents != 0L else previewAmountCents > 0L
-    val previewSalvageCents = ((salvageText.replace(',', '.').toDoubleOrNull() ?: 0.0) * 100.0)
-        .roundToLong().coerceAtLeast(0L)
+    val previewSalvageCents = (LedgerCalculator.parseMoneyToCents(salvageText) ?: 0L)
+        .coerceAtLeast(0L)
     val originalOccurredAtMillis = initialEntry?.occurredAtMillis ?: draftOccurredAtMillis
     val occurredAtMillis = if (originalOccurredAtMillis != null && selectedDate == initialDate) {
         originalOccurredAtMillis
@@ -332,8 +331,7 @@ internal fun LedgerEntryEditor(
             if (accountAmountText.isNotEmpty()) accountAmountText = ""
             return@LaunchedEffect
         }
-        val cents = amountText.replace(',', '.').toDoubleOrNull()
-            ?.times(100)?.toLong() ?: return@LaunchedEffect
+        val cents = LedgerCalculator.parseMoneyToCents(amountText) ?: return@LaunchedEffect
         val accRate = if (acc.currency == "CNY") {
             1.0
         } else {
@@ -413,8 +411,7 @@ internal fun LedgerEntryEditor(
             !isTransfer && !isAdjustment && pickedAccount != null &&
             pickedAccount.currency != effectiveCurrency
         ) {
-            accountAmountText.replace(',', '.')
-                .toDoubleOrNull()?.times(100)?.toLong()
+            LedgerCalculator.parseMoneyToCents(accountAmountText)
         } else {
             null
         },
@@ -423,8 +420,7 @@ internal fun LedgerEntryEditor(
             isTransfer && pickedToAccount != null &&
             pickedToAccount.currency != effectiveCurrency
         ) {
-            toAmountText.replace(',', '.')
-                .toDoubleOrNull()?.times(100)?.toLong()
+            LedgerCalculator.parseMoneyToCents(toAmountText)
         } else {
             null
         },

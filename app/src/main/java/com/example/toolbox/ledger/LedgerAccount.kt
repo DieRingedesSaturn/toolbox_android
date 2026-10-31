@@ -121,7 +121,7 @@ object LedgerAccounts {
             } else {
                 val rate = rates?.cnyPerUnit(account.currency)
                 if (rate != null && rate > 0) {
-                    total += (balance * rate).toLong()
+                    total += (balance * rate).roundToLong()
                 } else {
                     allConverted = false
                 }
@@ -138,5 +138,5 @@ object LedgerAccounts {
         amountCents: Long,
         entryCnyRate: Double,
         accountCnyRate: Double,
-    ): Long = (amountCents * entryCnyRate / accountCnyRate).toLong()
+    ): Long = (amountCents * entryCnyRate / accountCnyRate).roundToLong()
 }

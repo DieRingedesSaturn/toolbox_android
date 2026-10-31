@@ -186,10 +186,12 @@ class SubscriptionRenewalsTest {
         val due = DueRenewal(subscription, 2, LocalDate.of(2026, 9, 22), "r-uuid")
         val renewal = SubscriptionRenewals.buildRenewal(
             subscription, due, 0.0450, "2026-09-22", "ecb", zone, 1234L,
+            accountAmountCents = 5_555L,
         )
         assertEquals("r-uuid", renewal.uuid)
         assertEquals(subscription.title, renewal.title)
         assertEquals(subscription.amountCents, renewal.amountCents)
+        assertEquals(5_555L, renewal.accountAmountCents)
         assertEquals("JPY", renewal.currency)
         assertEquals(0.0450, renewal.fxRateToCny, 0.0001)
         assertEquals("2026-09-22", renewal.fxRateDate)

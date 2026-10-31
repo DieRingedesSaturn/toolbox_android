@@ -101,8 +101,8 @@ internal fun LedgerDisposalDialog(
     }
 
     val disposalDate = LocalDate.ofEpochDay(dateEpochDay)
-    val saleCents = ((amountText.replace(',', '.').toDoubleOrNull() ?: 0.0) * 100.0)
-        .roundToLong().coerceAtLeast(0L)
+    val saleCents = (LedgerCalculator.parseMoneyToCents(amountText) ?: 0L)
+        .coerceAtLeast(0L)
     val manualRate = if (useManualRate) {
         manualRateText.replace(',', '.').toDoubleOrNull()
     } else {

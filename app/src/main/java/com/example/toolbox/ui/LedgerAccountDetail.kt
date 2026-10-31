@@ -194,8 +194,7 @@ internal fun LedgerAccountDetail(
                 }
                 Button(
                     onClick = {
-                        val cents = openingText.replace(',', '.')
-                            .toDoubleOrNull()?.times(100)?.toLong()
+                        val cents = LedgerCalculator.parseMoneyToCents(openingText)
                         if (nameText.isNotBlank() && cents != null) {
                             val date = runCatching { LocalDate.parse(openingDate) }
                                 .getOrDefault(LocalDate.now(zone))
@@ -263,8 +262,7 @@ internal fun LedgerAccountDetail(
             confirmButton = {
                 Button(
                     onClick = {
-                        val cents = reconcileText.replace(',', '.')
-                            .toDoubleOrNull()?.times(100)?.toLong()
+                        val cents = LedgerCalculator.parseMoneyToCents(reconcileText)
                         if (cents != null) {
                             onReconcile(account, cents)
                             showReconcile = false

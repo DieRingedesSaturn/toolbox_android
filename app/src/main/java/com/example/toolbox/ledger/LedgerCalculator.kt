@@ -1,5 +1,7 @@
 package com.example.toolbox.ledger
 
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -494,6 +496,18 @@ object LedgerCalculator {
 
     fun formatCurrency(amountYuan: Double, symbol: String = "¥"): String =
         "$symbol%.2f".format(Locale.US, amountYuan)
+
+    /** Parses a decimal amount into cents without binary floating-point truncation. */
+    fun parseMoneyToCents(text: String): Long? {
+        val normalized = text.trim().replace(',', '.')
+        if (normalized.isEmpty()) return null
+        return runCatching {
+            BigDecimal(normalized)
+                .movePointRight(2)
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact()
+        }.getOrNull()
+    }
 
     /**
      * Formats an amount in the entry's own currency (not the CNY base).

@@ -179,6 +179,50 @@ class LedgerBackupTest {
     }
 
     @Test
+    fun testPlanReplaceKeepsReferencedLegacyAccountAndTag() {
+        val now = 5_000L
+        val account = LedgerAccount(
+            uuid = LedgerAccounts.DEFAULT_ACCOUNT_UUID,
+            name = "Default",
+            currency = "CNY",
+            openingBalanceCents = 0L,
+            openingAtMillis = 0L,
+            colorArgb = 1,
+        )
+        val unusedAccount = account.copy(uuid = "unused-account", name = "Unused")
+        val tag = LedgerTag(
+            uuid = "food-tag",
+            name = "Food",
+            colorArgb = 2,
+            sortOrder = 0,
+            createdAtMillis = 0L,
+            updatedAtMillis = 0L,
+        )
+        val unusedTag = tag.copy(uuid = "unused-tag", name = "Unused")
+        val incoming = listOf(
+            entry("legacy", updatedAt = 100L).copy(
+                accountUuid = LedgerAccounts.DEFAULT_ACCOUNT_UUID,
+                tagUuids = listOf("food-tag"),
+            ),
+        )
+
+        val plan = LedgerBackup.planReplace(
+            local = emptyList(),
+            incoming = incoming,
+            localTags = listOf(tag, unusedTag),
+            incomingTags = emptyList(),
+            localAccounts = listOf(account, unusedAccount),
+            incomingAccounts = emptyList(),
+            nowMillis = now,
+        )
+
+        assertTrue(plan.accountWrites.none { it.uuid == account.uuid })
+        assertTrue(plan.tagWrites.none { it.uuid == tag.uuid })
+        assertEquals(now, plan.accountWrites.single { it.uuid == unusedAccount.uuid }.deletedAtMillis)
+        assertEquals(now, plan.tagWrites.single { it.uuid == unusedTag.uuid }.deletedAtMillis)
+    }
+
+    @Test
     fun testReplaceConvergesWithRemoteOnNextSync() {
         val now = 1_000L
         val fileEntries = listOf(

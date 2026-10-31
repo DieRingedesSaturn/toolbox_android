@@ -998,4 +998,15 @@ class LedgerCalculatorTest {
         // Adjustments are excluded from search.
         assertEquals(emptyList<String>(), search("Balance adjust"))
     }
+
+    @Test
+    fun testParseMoneyToCentsUsesDecimalRounding() {
+        assertEquals(1_999L, LedgerCalculator.parseMoneyToCents("19.99"))
+        assertEquals(435L, LedgerCalculator.parseMoneyToCents("4.35"))
+        assertEquals(-435L, LedgerCalculator.parseMoneyToCents("-4.35"))
+        assertEquals(115L, LedgerCalculator.parseMoneyToCents("1,15"))
+        assertEquals(0L, LedgerCalculator.parseMoneyToCents("0"))
+        assertNull(LedgerCalculator.parseMoneyToCents(""))
+        assertNull(LedgerCalculator.parseMoneyToCents("not money"))
+    }
 }

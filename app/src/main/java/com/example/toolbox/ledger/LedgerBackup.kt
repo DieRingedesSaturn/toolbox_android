@@ -102,6 +102,11 @@ object LedgerBackup {
             )
         }
         val incomingTagUuids = incomingTags.mapTo(HashSet()) { it.uuid }
+        // Legacy files predate tags/accounts. Keep any local row still
+        // referenced by an incoming entry instead of tombstoning it and
+        // leaving that entry pointing at a deleted or missing target.
+        val referencedTagUuids = incoming
+            .flatMapTo(HashSet()) { it.tagUuids }
         val tagWrites = incomingTags.map {
             it.copy(
                 updatedAtMillis = nowMillis,
@@ -110,7 +115,11 @@ object LedgerBackup {
         }.toMutableList()
         var deletedTagCount = 0
         for (tag in localTags) {
-            if (tag.uuid in incomingTagUuids || tag.deletedAtMillis != null) continue
+            if (tag.uuid in incomingTagUuids || tag.uuid in referencedTagUuids ||
+                tag.deletedAtMillis != null
+            ) {
+                continue
+            }
             deletedTagCount++
             tagWrites += tag.copy(
                 deletedAtMillis = nowMillis,
@@ -119,6 +128,9 @@ object LedgerBackup {
             )
         }
         val incomingAccountUuids = incomingAccounts.mapTo(HashSet()) { it.uuid }
+        val referencedAccountUuids = incoming.flatMapTo(HashSet()) { entry ->
+            listOfNotNull(entry.accountUuid, entry.toAccountUuid)
+        }
         val accountWrites = incomingAccounts.map {
             it.copy(
                 updatedAtMillis = nowMillis,
@@ -128,6 +140,7 @@ object LedgerBackup {
         var deletedAccountCount = 0
         for (account in localAccounts) {
             if (account.uuid in incomingAccountUuids ||
+                account.uuid in referencedAccountUuids ||
                 account.deletedAtMillis != null
             ) {
                 continue

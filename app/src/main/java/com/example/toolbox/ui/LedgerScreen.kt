@@ -124,6 +124,7 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import kotlin.math.roundToLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -515,26 +516,57 @@ internal fun LedgerScreen(
         val stillUnresolved = mutableSetOf<LocalDate>()
         for (due in dues) {
             val sub = due.subscription
-            if (sub.currency == "CNY") {
-                built += SubscriptionRenewals.buildRenewal(
-                    sub, due, 1.0, null, null, zone, now,
-                )
+            val rates = ratesByDate[due.date]
+            // The chain-resolved rate always wins; the manual input only
+            // covers dates the chain could not resolve.
+            val cny = if (sub.currency == "CNY") {
+                1.0
+            } else {
+                rates?.cnyPerUnit(sub.currency)?.takeIf { it > 0 } ?: manualRate
+            }
+            if (cny == null || cny <= 0) {
+                stillUnresolved += due.date
                 continue
             }
-            val rates = ratesByDate[due.date]
-            val cny = rates?.cnyPerUnit(sub.currency)?.takeIf { it > 0 }
-            when {
-                // The chain-resolved rate always wins; the manual input only
-                // covers dates the chain could not resolve.
-                cny != null -> built += SubscriptionRenewals.buildRenewal(
-                    sub, due, cny, rates.date, rates.source.id, zone, now,
-                )
-                manualRate != null && manualRate > 0 ->
-                    built += SubscriptionRenewals.buildRenewal(
-                        sub, due, manualRate, null, FX_SOURCE_MANUAL, zone, now,
-                    )
-                else -> stillUnresolved += due.date
+            val account = accounts.firstOrNull {
+                it.uuid == (sub.accountUuid ?: LedgerAccounts.DEFAULT_ACCOUNT_UUID) &&
+                    it.deletedAtMillis == null
             }
+            val needsAccountConversion = account != null && account.currency != sub.currency
+            val accountRate = if (needsAccountConversion) {
+                if (account.currency == "CNY") {
+                    1.0
+                } else {
+                    rates?.cnyPerUnit(account.currency)?.takeIf { it > 0 }
+                }
+            } else {
+                null
+            }
+            if (needsAccountConversion && accountRate == null) {
+                // Never post a renewal using the previous cycle's account
+                // amount while the base amount uses this cycle's rate.
+                stillUnresolved += due.date
+                continue
+            }
+            val accountAmountCents = if (needsAccountConversion) {
+                LedgerAccounts.accountAmountForEntry(sub.amountCents, cny, accountRate!!)
+            } else {
+                null
+            }
+            val date = if (sub.currency == "CNY") null else rates?.date
+            val source = if (sub.currency == "CNY") null else {
+                rates?.source?.id ?: FX_SOURCE_MANUAL
+            }
+            built += SubscriptionRenewals.buildRenewal(
+                sub,
+                due,
+                cny,
+                date,
+                source,
+                zone,
+                now,
+                accountAmountCents = accountAmountCents,
+            )
         }
         if (stillUnresolved.isNotEmpty()) {
             // Nothing is written until every date has a rate — reopen the
@@ -573,21 +605,30 @@ internal fun LedgerScreen(
         scope.launch {
             var attempts: List<Pair<FxSource, FxFailure>> = emptyList()
             val outcome = withContext(Dispatchers.IO) {
-                val foreignDates = dues
-                    .filter { it.subscription.currency != "CNY" }
+                val datesNeedingRates = dues
+                    .filter { due ->
+                        val sub = due.subscription
+                        val account = accounts.firstOrNull {
+                            it.uuid == (sub.accountUuid ?: LedgerAccounts.DEFAULT_ACCOUNT_UUID) &&
+                                it.deletedAtMillis == null
+                        }
+                        sub.currency != "CNY" ||
+                            (account != null && account.currency != sub.currency &&
+                                account.currency != "CNY")
+                    }
                     .map { it.date }
                     .toSet()
-                val resolved = if (foreignDates.isEmpty()) {
+                val resolved = if (datesNeedingRates.isEmpty()) {
                     emptyMap()
                 } else {
                     try {
-                        fxStore.ratesForDates(foreignDates, fetchIfMissing = true)
+                        fxStore.ratesForDates(datesNeedingRates, fetchIfMissing = true)
                     } catch (e: FxException) {
                         attempts = e.attempts
                         emptyMap()
                     }
                 }
-                val unresolved = foreignDates.filter { it !in resolved }.sorted()
+                val unresolved = datesNeedingRates.filter { it !in resolved }.sorted()
                 resolved to unresolved
             }
             renewalBusy = false
@@ -660,7 +701,7 @@ internal fun LedgerScreen(
                 val saleAccountCents = if (
                     saleAccount != null && saleAccount.currency != currency
                 ) {
-                    val saleBase = (saleCents * fxRateToCny).toLong()
+                    val saleBase = (saleCents * fxRateToCny).roundToLong()
                     val accRate = if (saleAccount.currency == "CNY") {
                         1.0
                     } else {

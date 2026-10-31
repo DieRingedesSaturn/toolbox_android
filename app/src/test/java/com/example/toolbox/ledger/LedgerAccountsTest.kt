@@ -232,15 +232,15 @@ class LedgerAccountsTest {
     @Test
     fun testCrossRateAutoFill() {
         // 1,000 entry cents at CNY rate 1.0 → account units at 7.1 CNY/unit:
-        // 1000 / 7.1 = 140.84… → truncated to 140.
+        // 1000 / 7.1 = 140.84… → rounded to 141.
         assertEquals(
-            140L,
+            141L,
             LedgerAccounts.accountAmountForEntry(1_000L, 1.0, 7.1),
         )
         // Entry in JPY (0.048 CNY/unit) into USD account (7.1 CNY/unit):
-        // 10000 × 0.048 / 7.1 = 67.60… → 67.
+        // 10000 × 0.048 / 7.1 = 67.60… → 68.
         assertEquals(
-            67L,
+            68L,
             LedgerAccounts.accountAmountForEntry(10_000L, 0.048, 7.1),
         )
     }

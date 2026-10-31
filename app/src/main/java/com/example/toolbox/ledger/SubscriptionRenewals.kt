@@ -128,6 +128,7 @@ object SubscriptionRenewals {
         fxRateSource: String?,
         zone: ZoneId,
         nowMillis: Long,
+        accountAmountCents: Long? = null,
     ): LedgerEntry = LedgerEntry(
         uuid = due.uuid,
         title = sub.title,
@@ -146,7 +147,7 @@ object SubscriptionRenewals {
         linkType = LINK_TYPE_RENEWAL,
         renewalIndex = due.index,
         accountUuid = sub.accountUuid,
-        accountAmountCents = sub.accountAmountCents,
+        accountAmountCents = accountAmountCents,
         createdAtMillis = nowMillis,
         updatedAtMillis = nowMillis,
         deletedAtMillis = null,
