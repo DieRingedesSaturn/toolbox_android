@@ -750,6 +750,27 @@ class LedgerCalculatorTest {
     }
 
     @Test
+    fun testRemainingBookValueStraightLine() {
+        assertEquals(
+            2500.0,
+            LedgerCalculator.remainingBookValueYuan(5000.0, 365, 730)!!,
+            0.001,
+        )
+        assertEquals(
+            0.0,
+            LedgerCalculator.remainingBookValueYuan(5000.0, 730, 730)!!,
+            0.001,
+        )
+        assertEquals(
+            0.0,
+            LedgerCalculator.remainingBookValueYuan(5000.0, 800, 730)!!,
+            0.001,
+        )
+        assertNull(LedgerCalculator.remainingBookValueYuan(5000.0, 10, null))
+        assertNull(LedgerCalculator.remainingBookValueYuan(5000.0, 10, 0))
+    }
+
+    @Test
     fun testSoldAssetExcludedFromBurnAndSaleCountsAsIncome() {
         val zone = ZoneId.of("UTC")
         val monthStart = YearMonth.now(zone).atDay(1)

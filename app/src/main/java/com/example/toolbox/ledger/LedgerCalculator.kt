@@ -529,4 +529,19 @@ object LedgerCalculator {
         }.getOrDefault(2).coerceAtLeast(0)
         return symbol + String.format(Locale.US, "%.${digits}f", amountCents / 100.0)
     }
+
+    /**
+     * Straight-line remaining book value while a one-time asset is inside its
+     * planned horizon. Returns 0 once [daysHeld] reaches [plannedDays], and
+     * null when there is no positive plan.
+     */
+    fun remainingBookValueYuan(
+        netCostYuan: Double,
+        daysHeld: Int,
+        plannedDays: Int?,
+    ): Double? {
+        val planned = plannedDays?.takeIf { it > 0 } ?: return null
+        if (daysHeld >= planned) return 0.0
+        return netCostYuan * (planned - daysHeld) / planned
+    }
 }

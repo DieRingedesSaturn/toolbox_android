@@ -52,17 +52,19 @@ import java.util.Locale
 import kotlin.math.roundToLong
 
 /**
- * Sell / scrap dialog for a one-time asset: picks the disposal type and date,
+ * Resell / scrap dialog for a one-time asset: picks the disposal type and date,
  * and for a sale the amount/currency/rate (with the fallback chain on
  * confirm). [onConfirm] receives (disposalType, date, saleAmountCents,
  * currency, fxRateToCny, fxRateDate, fxRateSource) — the sale fields are only
- * meaningful for DISPOSAL_SOLD.
+ * meaningful for DISPOSAL_SOLD. [initialIsSale] selects the segmented mode
+ * when the dialog opens; the salvage estimate prefills the resale amount.
  */
 @Composable
 internal fun LedgerDisposalDialog(
     strings: ToolboxStrings,
     asset: LedgerEntry,
     accounts: List<LedgerAccount> = emptyList(),
+    initialIsSale: Boolean = true,
     onConfirm: (
         disposalType: String,
         date: LocalDate,
@@ -82,12 +84,22 @@ internal fun LedgerDisposalDialog(
     val purchaseDate = Instant.ofEpochMilli(asset.occurredAtMillis)
         .atZone(zone).toLocalDate()
 
-    var isSale by rememberSaveable { mutableStateOf(true) }
+    var isSale by rememberSaveable(asset.uuid, initialIsSale) {
+        mutableStateOf(initialIsSale)
+    }
     var dateEpochDay by rememberSaveable {
         mutableLongStateOf(today.toEpochDay())
     }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
-    var amountText by rememberSaveable { mutableStateOf("") }
+    var amountText by rememberSaveable(asset.uuid) {
+        mutableStateOf(
+            if (asset.salvageValueCents > 0L) {
+                "%.2f".format(Locale.US, asset.salvageValue).removeSuffix(".00")
+            } else {
+                ""
+            },
+        )
+    }
     var currency by rememberSaveable { mutableStateOf(asset.currency) }
     var useManualRate by rememberSaveable { mutableStateOf(false) }
     var manualRateText by rememberSaveable { mutableStateOf("") }
@@ -138,7 +150,7 @@ internal fun LedgerDisposalDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(strings.endUseAction.removeSuffix("…").removeSuffix("...")) },
+        title = { Text(if (isSale) strings.sellOption else strings.scrapOption) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),

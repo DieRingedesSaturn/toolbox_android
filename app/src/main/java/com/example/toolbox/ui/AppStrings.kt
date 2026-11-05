@@ -1802,6 +1802,29 @@ class ToolboxStrings(val language: AppLanguage) {
         }
     }
 
+    fun purchasedOn(date: String): String =
+        if (chinese) "购入 $date" else "Bought $date"
+    val assetPriceLabel: String
+        get() = if (chinese) "购入价" else "Price"
+    val assetCnyLabel: String
+        get() = if (chinese) "合人民币" else "CNY"
+    val assetSalvageLabel: String
+        get() = if (chinese) "残值" else "Salvage"
+    val assetNetCostLabel: String
+        get() = if (chinese) "净成本" else "Net cost"
+    val assetHeldLabel: String
+        get() = if (chinese) "已持有" else "Held"
+    val assetRemainingDaysLabel: String
+        get() = if (chinese) "剩余" else "Left"
+    val assetRemainingBookLabel: String
+        get() = if (chinese) "剩余账面" else "Book value"
+    val assetActualDailyLabel: String
+        get() = if (chinese) "至今实际" else "Actual"
+    val assetYearlyLabel: String
+        get() = if (chinese) "年摊销" else "Yearly"
+    fun daysCount(days: Int): String =
+        if (chinese) "${days}天" else "${days}d"
+
 
     // Tags
     val manageTagsMenu: String
@@ -2096,19 +2119,19 @@ class ToolboxStrings(val language: AppLanguage) {
     val endUseAction: String
         get() = if (chinese) "结束使用…" else "End use…"
     val sellOption: String
-        get() = if (chinese) "卖出" else "Sell"
+        get() = if (chinese) "转卖二手" else "Resell"
     val scrapOption: String
         get() = if (chinese) "报废 · 停用" else "Scrap · retire"
     val disposalDateLabel: String
         get() = if (chinese) "结束日期" else "End date"
     val saleAmountLabel: String
-        get() = if (chinese) "卖出金额" else "Sale amount"
+        get() = if (chinese) "转卖金额" else "Resale amount"
     fun soldLine(date: String, amount: String): String =
-        if (chinese) "已卖出 $date · $amount" else "Sold $date · $amount"
+        if (chinese) "已转卖 $date · $amount" else "Resold $date · $amount"
     fun scrappedLine(date: String): String =
         if (chinese) "已报废 $date" else "Scrapped $date"
     fun soldTitlePrefix(title: String): String =
-        if (chinese) "卖出：$title" else "Sold: $title"
+        if (chinese) "转卖：$title" else "Resold: $title"
     val undoDisposalAction: String
         get() = if (chinese) "撤销" else "Undo"
     val undoDisposalConfirm: String

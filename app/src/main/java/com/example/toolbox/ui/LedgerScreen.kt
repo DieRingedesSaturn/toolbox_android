@@ -252,6 +252,7 @@ internal fun LedgerScreen(
     // navigate to the editor); false when opened from inside the editor.
     var tagsDialogEntryNav by remember { mutableStateOf(true) }
     var disposalTarget by remember { mutableStateOf<LedgerEntry?>(null) }
+    var disposalStartAsSale by remember { mutableStateOf(true) }
     var undoDisposalTarget by remember { mutableStateOf<LedgerEntry?>(null) }
     var stopSubTarget by remember { mutableStateOf<LedgerEntry?>(null) }
     var showTagsDialog by remember { mutableStateOf(false) }
@@ -1562,7 +1563,10 @@ internal fun LedgerScreen(
                             },
                             onRecordRenewals = ::recordRenewals,
                             onSkipRenewals = { confirmSkipDues = it },
-                            onDispose = { disposalTarget = it },
+                            onDispose = { entry, startAsSale ->
+                                disposalStartAsSale = startAsSale
+                                disposalTarget = entry
+                            },
                             onUndoDisposal = { undoDisposalTarget = it },
                             onStopSubscription = { stopSubTarget = it },
                             onResume = ::toggleActive,
@@ -1984,6 +1988,7 @@ internal fun LedgerScreen(
             strings = strings,
             asset = asset,
             accounts = accounts.filter { it.deletedAtMillis == null },
+            initialIsSale = disposalStartAsSale,
             onConfirm = { type, date, cents, currency, rate, rateDate, rateSource, acctUuid ->
                 applyDisposal(
                     asset, type, date, cents, currency, rate, rateDate, rateSource,

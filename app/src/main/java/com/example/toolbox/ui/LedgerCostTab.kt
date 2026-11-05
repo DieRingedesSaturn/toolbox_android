@@ -1,6 +1,7 @@
 package com.example.toolbox.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.FilterChip
 import com.example.toolbox.ledger.CostBreakdown
@@ -82,7 +84,7 @@ internal fun LedgerCostTab(
     onClearFilter: () -> Unit,
     onRecordRenewals: (List<DueRenewal>) -> Unit,
     onSkipRenewals: (List<DueRenewal>) -> Unit,
-    onDispose: (LedgerEntry) -> Unit,
+    onDispose: (LedgerEntry, startAsSale: Boolean) -> Unit,
     onUndoDisposal: (LedgerEntry) -> Unit,
     onStopSubscription: (LedgerEntry) -> Unit,
     onResume: (LedgerEntry) -> Unit,
@@ -223,7 +225,7 @@ internal fun LedgerCostTab(
                     strings = strings,
                     entry = entry,
                     breakdown = breakdown,
-                    onDispose = { onDispose(entry) },
+                    onDispose = { startAsSale -> onDispose(entry, startAsSale) },
                     onUndoDisposal = { onUndoDisposal(entry) },
                     onResume = { onResume(entry) },
                     onOpen = { onOpenEntry(entry) },
@@ -281,21 +283,120 @@ internal fun LedgerCostTab(
     }
 }
 
+@Composable
+private fun CompactMetricGrid(
+    cells: List<Pair<String, String>>,
+    onCopy: (label: String, value: String) -> Unit,
+    columns: Int = 3,
+) {
+    if (cells.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        cells.chunked(columns).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                row.forEach { (label, value) ->
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onCopy(label, value) }
+                            .padding(vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = value,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                repeat(columns - row.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CostAssetCard(
     strings: ToolboxStrings,
     entry: LedgerEntry,
     breakdown: CostBreakdown,
-    onDispose: () -> Unit,
+    onDispose: (startAsSale: Boolean) -> Unit,
     onUndoDisposal: () -> Unit,
     onResume: () -> Unit,
     onOpen: () -> Unit,
     onCopy: () -> Unit,
 ) {
+    val context = LocalContext.current
     val zone = remember { ZoneId.systemDefault() }
     val dailyStr = "${LedgerCalculator.formatCurrency(breakdown.dailyCostYuan)}${strings.perDayUnit}"
     val monthlyStr = "${LedgerCalculator.formatCurrency(breakdown.monthlyCostYuan)}${strings.perMonthUnit}"
+    val purchased = Instant.ofEpochMilli(entry.occurredAtMillis)
+        .atZone(zone).toLocalDate().toString()
+    val metricCells = buildList {
+        add(
+            strings.assetPriceLabel to
+                LedgerCalculator.formatMoney(entry.amountCents, entry.currency),
+        )
+        if (entry.currency != "CNY") {
+            add(
+                strings.assetCnyLabel to
+                    LedgerCalculator.formatCurrency(entry.baseAmountCents / 100.0),
+            )
+        }
+        if (entry.salvageValueCents > 0L) {
+            add(
+                strings.assetSalvageLabel to
+                    LedgerCalculator.formatMoney(entry.salvageValueCents, entry.currency),
+            )
+        }
+        add(
+            strings.assetNetCostLabel to
+                LedgerCalculator.formatCurrency(breakdown.netCostYuan),
+        )
+        add(strings.assetHeldLabel to strings.daysCount(breakdown.daysHeld))
+        val planned = breakdown.targetDays
+        if (planned != null && entry.disposalType == null) {
+            add(
+                strings.assetRemainingDaysLabel to
+                    strings.daysCount((planned - breakdown.daysHeld).coerceAtLeast(0)),
+            )
+            LedgerCalculator.remainingBookValueYuan(
+                breakdown.netCostYuan,
+                breakdown.daysHeld,
+                planned,
+            )?.let { book ->
+                add(
+                    strings.assetRemainingBookLabel to
+                        LedgerCalculator.formatCurrency(book),
+                )
+            }
+        }
+        breakdown.targetDailyCostYuan
+            ?.takeIf { breakdown.targetDays != null }
+            ?.let { actual ->
+                add(
+                    strings.assetActualDailyLabel to
+                        "${LedgerCalculator.formatCurrency(actual)}${strings.perDayUnit}",
+                )
+            }
+        add(
+            strings.assetYearlyLabel to
+                "${LedgerCalculator.formatCurrency(breakdown.yearlyCostYuan)}${strings.perYearUnit}",
+        )
+    }
 
     Card(
         modifier = Modifier
@@ -309,8 +410,8 @@ private fun CostAssetCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -321,6 +422,8 @@ private fun CostAssetCard(
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 LedgerStatusChip(
                     text = when {
@@ -351,28 +454,42 @@ private fun CostAssetCard(
             }
 
             Text(
-                text = strings.oneTimeHeldInfo(
-                    price = LedgerCalculator.formatMoney(
-                        entry.amountCents,
-                        entry.currency,
-                    ),
-                    salvage = entry.salvageValueCents.takeIf { it > 0 }
-                        ?.let {
-                            LedgerCalculator.formatMoney(
-                                entry.salvageValueCents,
-                                entry.currency,
+                text = buildString {
+                    append(strings.purchasedOn(purchased))
+                    if (entry.isActiveCost && entry.disposalType == null) {
+                        entry.costEndsAtMillis?.let { endMillis ->
+                            val endDate = Instant.ofEpochMilli(endMillis)
+                                .atZone(zone).toLocalDate().toString()
+                            append(" · ")
+                            append(
+                                if (breakdown.isActive) {
+                                    strings.amortizesUntil(endDate)
+                                } else {
+                                    strings.amortizedOn(endDate)
+                                },
                             )
-                        },
-                    daysHeld = breakdown.daysHeld,
-                    targetDays = null,
-                    actualDaily = null,
-                ),
-                style = MaterialTheme.typography.bodySmall,
+                        }
+                    }
+                },
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            CompactMetricGrid(
+                cells = metricCells,
+                onCopy = { label, value ->
+                    copyToClipboard(
+                        context = context,
+                        label = label,
+                        value = value,
+                        copiedMessage = strings.copied(label),
+                    )
+                },
             )
 
             breakdown.targetDays?.let { target ->
                 val progress = (breakdown.daysHeld.toFloat() / target).coerceIn(0f, 1f)
+                val percent = (progress * 100).toInt()
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier = Modifier
@@ -380,26 +497,10 @@ private fun CostAssetCard(
                         .clip(RoundedCornerShape(4.dp)),
                 )
                 Text(
-                    text = strings.usedDaysTarget(breakdown.daysHeld, target),
+                    text = "${strings.usedDaysTarget(breakdown.daysHeld, target)} · $percent%",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-
-            if (entry.isActiveCost && entry.disposalType == null) {
-                entry.costEndsAtMillis?.let { endMillis ->
-                    val endDate = Instant.ofEpochMilli(endMillis)
-                        .atZone(zone).toLocalDate().toString()
-                    Text(
-                        text = if (breakdown.isActive) {
-                            strings.amortizesUntil(endDate)
-                        } else {
-                            strings.amortizedOn(endDate)
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
 
             entry.disposalType?.let { disposal ->
@@ -423,11 +524,16 @@ private fun CostAssetCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 when {
-                    entry.isActiveCost -> TextButton(onClick = onDispose) {
-                        Text(strings.endUseAction)
+                    entry.isActiveCost -> {
+                        TextButton(onClick = { onDispose(true) }) {
+                            Text(strings.sellOption)
+                        }
+                        TextButton(onClick = { onDispose(false) }) {
+                            Text(strings.scrapOption)
+                        }
                     }
                     entry.disposalType != null -> TextButton(onClick = onUndoDisposal) {
                         Text(strings.undoDisposalAction)
