@@ -1651,6 +1651,7 @@ internal fun LedgerScreen(
                     },
                 saveBusy = entrySaveBusy,
                 tags = tags,
+                entries = entries,
                 accounts = accounts,
                 defaultAccountUuid = if (notificationDraft != null) {
                     notificationDefaults?.accountFor(accounts, notificationLastAccount)

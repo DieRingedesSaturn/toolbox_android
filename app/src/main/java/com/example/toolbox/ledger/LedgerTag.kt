@@ -114,6 +114,37 @@ object LedgerTags {
     fun removeTag(tagUuids: List<String>, tagUuid: String): List<String> =
         tagUuids.filter { it != tagUuid }
 
+    /**
+     * How many live entries carry each tag uuid. An entry with several tags
+     * counts once per tag; tombstones do not count.
+     */
+    fun usageCounts(entries: List<LedgerEntry>): Map<String, Int> {
+        val counts = HashMap<String, Int>()
+        for (entry in entries) {
+            if (entry.deletedAtMillis != null) continue
+            for (uuid in entry.tagUuids) {
+                counts[uuid] = (counts[uuid] ?: 0) + 1
+            }
+        }
+        return counts
+    }
+
+    /**
+     * Candidate order for the entry editor: most-used first. Equal counts
+     * keep the tag-management [LedgerTag.sortOrder], then name.
+     */
+    fun sortedByUsage(
+        tags: List<LedgerTag>,
+        entries: List<LedgerEntry>,
+    ): List<LedgerTag> {
+        val counts = usageCounts(entries)
+        return tags.sortedWith(
+            compareByDescending<LedgerTag> { counts[it.uuid] ?: 0 }
+                .thenBy { it.sortOrder }
+                .thenBy { it.name },
+        )
+    }
+
     /** Per-tag sums for the detail view (live entries, EXPENSE/INCOME only). */
     data class TagStats(
         val entryCount: Int,

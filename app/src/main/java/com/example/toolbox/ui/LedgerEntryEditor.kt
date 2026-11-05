@@ -75,6 +75,7 @@ import com.example.toolbox.ledger.LedgerAccount
 import com.example.toolbox.ledger.LedgerAccounts
 import com.example.toolbox.ledger.LedgerQuickPick
 import com.example.toolbox.ledger.LedgerTag
+import com.example.toolbox.ledger.LedgerTags
 import com.example.toolbox.ledger.LedgerCalculator
 import com.example.toolbox.ledger.LedgerCategory
 import com.example.toolbox.ledger.LedgerEntry
@@ -102,6 +103,7 @@ internal fun LedgerEntryEditor(
     draftDefaults: NotificationLedgerDefaults? = null,
     saveBusy: Boolean = false,
     tags: List<LedgerTag>,
+    entries: List<LedgerEntry> = emptyList(),
     accounts: List<LedgerAccount> = emptyList(),
     defaultAccountUuid: String = LedgerAccounts.DEFAULT_ACCOUNT_UUID,
     quickPicks: List<LedgerQuickPick> = emptyList(),
@@ -138,7 +140,12 @@ internal fun LedgerEntryEditor(
     val selectedTagUuids = tagUuidsText.split(',')
         .filter { it.isNotBlank() }
         .toSet()
-    val liveTags = tags.filter { it.deletedAtMillis == null }
+    val liveTags = remember(tags, entries) {
+        LedgerTags.sortedByUsage(
+            tags.filter { it.deletedAtMillis == null },
+            entries,
+        )
+    }
     val selectedTags = liveTags.filter { it.uuid in selectedTagUuids }
     var showTagCreate by rememberSaveable { mutableStateOf(false) }
 

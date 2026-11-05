@@ -232,6 +232,19 @@ class LedgerTagOpsTest {
         occurredAtMillis = occurredAt,
     )
 
+    private fun tag(
+        uuid: String,
+        name: String = uuid,
+        sortOrder: Int = 0,
+    ) = LedgerTag(
+        uuid = uuid,
+        name = name,
+        colorArgb = 0xFF112233.toInt(),
+        sortOrder = sortOrder,
+        createdAtMillis = 0,
+        updatedAtMillis = 0,
+    )
+
     @Test
     fun testUnusedDefaultTagUuids() {
         val food = defaultTag(LedgerCategory.FOOD)
@@ -271,6 +284,43 @@ class LedgerTagOpsTest {
         assertEquals(listOf("a", "b"), LedgerTags.addTag(listOf("a"), "b"))
         assertEquals(listOf("b"), LedgerTags.removeTag(listOf("a", "b"), "a"))
         assertEquals(listOf("a"), LedgerTags.removeTag(listOf("a"), "z"))
+    }
+
+    @Test
+    fun testSortedByUsageMostUsedFirst() {
+        val food = tag("food", name = "Food", sortOrder = 0)
+        val rent = tag("rent", name = "Rent", sortOrder = 1)
+        val extra = tag("extra", name = "Extra", sortOrder = 2)
+        val ordered = LedgerTags.sortedByUsage(
+            listOf(food, rent, extra),
+            listOf(
+                entry("e1", listOf("rent")),
+                entry("e2", listOf("rent", "food")),
+                entry("e3", listOf("rent")),
+                entry("gone", listOf("extra")).copy(deletedAtMillis = 1L),
+            ),
+        )
+        assertEquals(listOf("rent", "food", "extra"), ordered.map { it.uuid })
+        assertEquals(
+            mapOf("rent" to 3, "food" to 1),
+            LedgerTags.usageCounts(
+                listOf(
+                    entry("e1", listOf("rent")),
+                    entry("e2", listOf("rent", "food")),
+                    entry("e3", listOf("rent")),
+                    entry("gone", listOf("extra")).copy(deletedAtMillis = 1L),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun testSortedByUsageTiesKeepSortOrderThenName() {
+        val beta = tag("b", name = "Beta", sortOrder = 1)
+        val alpha = tag("a", name = "Alpha", sortOrder = 1)
+        val gamma = tag("c", name = "Gamma", sortOrder = 0)
+        val ordered = LedgerTags.sortedByUsage(listOf(beta, alpha, gamma), emptyList())
+        assertEquals(listOf("c", "a", "b"), ordered.map { it.uuid })
     }
 
     @Test
