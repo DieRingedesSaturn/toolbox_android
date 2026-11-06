@@ -47,7 +47,10 @@ app/src/main/java/com/example/toolbox/
 ├── location/
 │   ├── CoordinateFormatter.kt
 │   ├── LocationInfo.kt
-│   └── LocationInfoReader.kt
+│   ├── LocationInfoReader.kt
+│   ├── MockLocationConfig.kt
+│   ├── MockLocationController.kt
+│   └── MockLocationService.kt
 ├── astronomy/
 │   ├── AstronomyCalculator.kt
 │   ├── AstronomyImageExporter.kt
@@ -105,6 +108,8 @@ app/src/main/java/com/example/toolbox/
 │   ├── MonitorScreen.kt
 │   ├── DeviceScreen.kt
 │   ├── LocationScreen.kt
+│   ├── MockLocationCard.kt
+│   ├── MockLocationMapPicker.kt
 │   ├── AstronomyScreen.kt
 │   ├── NetworkScreen.kt
 │   ├── AppUsageScreen.kt
@@ -175,6 +180,7 @@ com/example/toolbox/
 
 - `CoordinateFormatter` 是纯逻辑，已用 JVM 单元测试验证十进制度、DMS、半球和边界值。
 - `LocationInfoReader` 只申请用户主动触发的前台定位，不申请后台定位。
+- `ui/MockLocationMapPicker.kt` 是模拟定位的点按选点对话框。内置资源在 `app/src/main/assets/mockmap/`（自写 `index.html`/`map.js`、MapLibre GL JS 4.7.1 及其 BSD-3-Clause 许可证）。仅在对话框打开时从 OpenFreeMap 拉取瓦片。
 - `NetworkInfoReader` 读取本地连接信息，并用短超时执行用户明确触发的公网 IP 查询。
 - `LanScan` 是局域网扫描的纯逻辑（子网枚举、摄像头端口/厂商表、可疑标记、SSDP/WS-Discovery 解析），有 JVM 测试；`LanScanner` 执行用户主动触发的 ARP 发现、TCP 端口探测和 mDNS/SSDP/ONVIF WS-Discovery 收听，组播锁只在扫描期间持有。
 - 页面仍放在 `ui/`，数据模型和 Android API 读取放在能力包，保持规则统一。
@@ -213,4 +219,4 @@ app/src/test/java/com/example/toolbox/location/CoordinateFormatterTest.kt
 - v0.3：网络工具；测速需要单独评估服务端、流量、算法和许可证。
 - v0.4：高级设备字段；与普通摘要分开，不把 `/proc`、`/sys` 全量内容直接塞进 Device 页。
 
-任何版本都继续遵守：默认无后台服务；Live Monitor 是用户明确要求的例外。仍然无分析、无广告、无账户、无自动网络轮询。
+任何版本都继续遵守：默认无后台服务；Live Monitor 与限时模拟定位会话是用户明确要求的例外。仍然无分析、无广告、无账户、无自动网络轮询。

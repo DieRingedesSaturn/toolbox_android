@@ -134,6 +134,15 @@ fun SettingsScreen(
                     }
                 }
             }
+            item {
+                SettingsCard(title = strings.mockLocationTitle) {
+                    Text(
+                        text = strings.mockLocationSettingsHint,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }

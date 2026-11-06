@@ -72,6 +72,7 @@ import com.example.toolbox.astronomy.MoonPhaseInfo
 import com.example.toolbox.astronomy.NightTimeline
 import com.example.toolbox.location.LocationInfoReader
 import com.example.toolbox.location.formatShortCoordinates
+import com.example.toolbox.location.isMockFix
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -91,6 +92,7 @@ fun AstronomyScreen(
     var latitude by remember { mutableDoubleStateOf(39.9042) }
     var longitude by remember { mutableDoubleStateOf(116.4074) }
     var isUsingDefaultLocation by remember { mutableStateOf(true) }
+    var isUsingMockLocation by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     var referenceTimeMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -114,6 +116,7 @@ fun AstronomyScreen(
             latitude = loc.latitude
             longitude = loc.longitude
             isUsingDefaultLocation = false
+            isUsingMockLocation = loc.isMockFix()
         }
     }
 
@@ -226,6 +229,15 @@ fun AstronomyScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            if (isUsingMockLocation) {
+                item {
+                    Text(
+                        text = strings.mockLocationDataWarning,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
             // 1. Hero Moon Phase Card
             item {
                 MoonPhaseHeroCard(

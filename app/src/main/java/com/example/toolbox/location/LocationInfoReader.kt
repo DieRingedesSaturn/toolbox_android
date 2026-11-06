@@ -292,6 +292,7 @@ class LocationInfoReader(context: Context) {
         },
         altitudeMeters = if (hasAltitude()) altitude else null,
         provider = provider,
+        isMock = isMockFix(),
         timestampMillis = time.takeIf { it > 0L },
         positioningSystems = readPositioningSystems(),
     )
@@ -373,3 +374,9 @@ class LocationInfoReader(context: Context) {
         }
     }
 }
+
+internal fun Location.isMockFix(): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) isMock else {
+        @Suppress("DEPRECATION")
+        isFromMockProvider
+    }

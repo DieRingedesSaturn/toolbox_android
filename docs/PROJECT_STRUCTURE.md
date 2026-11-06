@@ -47,7 +47,10 @@ app/src/main/java/com/example/toolbox/
 ├── location/
 │   ├── CoordinateFormatter.kt
 │   ├── LocationInfo.kt
-│   └── LocationInfoReader.kt
+│   ├── LocationInfoReader.kt
+│   ├── MockLocationConfig.kt
+│   ├── MockLocationController.kt
+│   └── MockLocationService.kt
 ├── astronomy/
 │   ├── AstronomyCalculator.kt
 │   ├── AstronomyImageExporter.kt
@@ -105,6 +108,8 @@ app/src/main/java/com/example/toolbox/
 │   ├── MonitorScreen.kt
 │   ├── DeviceScreen.kt
 │   ├── LocationScreen.kt
+│   ├── MockLocationCard.kt
+│   ├── MockLocationMapPicker.kt
 │   ├── AstronomyScreen.kt
 │   ├── NetworkScreen.kt
 │   ├── AppUsageScreen.kt
@@ -175,6 +180,7 @@ com/example/toolbox/
 
 - `CoordinateFormatter` is pure logic with JVM tests for decimal degrees, DMS, hemispheres, and boundary values.
 - `LocationInfoReader` requests only a foreground, user-triggered location and does not request background location.
+- `ui/MockLocationMapPicker.kt` hosts the mock-location tap-to-pick dialog. Bundled assets live in `app/src/main/assets/mockmap/` (original `index.html`/`map.js`, MapLibre GL JS 4.7.1, and its BSD-3-Clause license). Tiles load from OpenFreeMap only while the dialog is open.
 - `NetworkInfoReader` reads local connection information and performs the explicit public-IP request with a short timeout.
 - `LanScan` holds pure LAN-scan logic (subnet enumeration, camera-port/vendor tables, suspicion flags, SSDP/WS-Discovery parsing) with JVM tests; `LanScanner` performs the user-triggered ARP sweep, TCP port probes, and mDNS/SSDP/ONVIF WS-Discovery listening, holding a multicast lock only during the scan.
 - Screens remain in `ui/`; models and Android API reads remain in their capability packages.
@@ -213,4 +219,4 @@ app/src/test/java/com/example/toolbox/location/CoordinateFormatterTest.kt
 - v0.3: network tools; speed testing requires a separate review of servers, traffic, algorithms, and licenses.
 - v0.4: advanced device fields; keep these separate from the normal summary rather than dumping `/proc` or `/sys` into Device.
 
-Every version continues to prohibit background services by default; the Live Monitor is the explicit user-requested exception. Analytics, advertisements, accounts, and automatic network polling remain prohibited.
+Every version continues to prohibit background services by default; the Live Monitor and time-limited Mock Location sessions are explicit user-requested exceptions. Analytics, advertisements, accounts, and automatic network polling remain prohibited.

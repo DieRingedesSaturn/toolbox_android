@@ -11,6 +11,8 @@ import com.example.toolbox.ledger.CycleUnit
 import com.example.toolbox.ledger.LedgerCategory
 import com.example.toolbox.ledger.WebDavFailure
 import com.example.toolbox.location.LocationReadStatus
+import com.example.toolbox.location.MockLocationPhase
+import com.example.toolbox.location.MockLocationFailure
 import com.example.toolbox.network.NetworkTransport
 import com.example.toolbox.usage.AppCategory
 import com.example.toolbox.usage.UsageSortMode
@@ -65,6 +67,117 @@ enum class DeviceSection {
 }
 
 class ToolboxStrings(val language: AppLanguage) {
+    val mockLocationTitle: String
+        get() = if (chinese) "模拟定位" else "Mock location"
+    val mockLocationDescription: String
+        get() = if (chinese) "向 Android 测试定位接口提交坐标。请在开发者选项的「选择模拟位置信息应用」中选择 Toolbox，再开启会话。" else
+            "Submit coordinates through Android's test-location API. First select Toolbox under Developer options → Select mock location app."
+    val mockLocationDisclaimer: String
+        get() = if (chinese) "仅供学习与合法测试，不可用于违法用途。模拟坐标可被其他应用识别，部分应用可能拒绝使用；这也不能替代目标应用自身的定位权限。" else
+            "For learning and lawful testing only; do not use for illegal purposes. Apps can detect and reject mock coordinates. This does not replace their own location permission."
+    val mockLocationBackgroundHint: String
+        get() = if (chinese) "启动后通过前台通知维持模拟，可切换到其他应用。通知可停止；到时或划掉 Toolbox 任务后停止。不会开机自启；强制停止或杀进程后可能需要手动清理。" else
+            "A foreground notification keeps the session running while you use other apps. Stop there; it also stops at expiry or task dismissal. No boot start. Force-stop or process death may require manual cleanup."
+    val mockLocationIpHint: String
+        get() = if (chinese) "IP 位置只是当前网络出口的大致位置，VPN 或代理会影响结果，不代表实际位置。仅点击下方按钮时联系 ipwho.is，失败时使用 ipapi.co；不会发送设备的 GPS 坐标。" else
+            "IP location is approximate and follows your network exit, including a VPN or proxy. Only this button contacts ipwho.is, with ipapi.co as fallback; no device GPS coordinates are sent."
+    val mockLocationIpButton: String
+        get() = if (chinese) "用当前 IP 的大致位置填入" else "Fill from current IP location"
+    val mockLocationPickOnMap: String
+        get() = if (chinese) "在地图上选择" else "Pick on map"
+    val mockLocationMapTapToPick: String
+        get() = if (chinese) "点按地图选择位置" else "Tap the map to pick a location"
+    val mockLocationMapLoading: String
+        get() = if (chinese) "正在加载地图…" else "Loading map…"
+    val mockLocationMapFailed: String
+        get() = if (chinese) "地图未能加载。请检查网络后重试，或返回手填坐标。" else
+            "The map could not load. Check the network and retry, or go back and enter coordinates."
+    val mockLocationMapRetry: String
+        get() = if (chinese) "重试" else "Retry"
+    val mockLocationMapConfirm: String
+        get() = if (chinese) "使用此位置" else "Use this location"
+    val mockLocationMapAttribution: String
+        get() = if (chinese) "地图数据 © OpenStreetMap 贡献者 · OpenFreeMap" else
+            "Map data © OpenStreetMap contributors · OpenFreeMap"
+    val mockLocationConfigure: String
+        get() = if (chinese) "设置模拟位置" else "Configure mock location"
+    val mockLocationDeveloperSettings: String
+        get() = if (chinese) "打开开发者选项" else "Open Developer options"
+    val mockLocationAccessReady: String
+        get() = if (chinese) "已选 Toolbox 为模拟位置应用" else "Toolbox is selected as the mock location app"
+    val mockLocationAccessNeeded: String
+        get() = if (chinese) "尚未选中 Toolbox，请先在开发者选项中选择" else "Select Toolbox in Developer options first"
+    val mockLocationServicesNeeded: String
+        get() = if (chinese) "请开启系统位置开关" else "Turn on system location"
+    val mockLocationAccuracy: String
+        get() = if (chinese) "精度半径 (m)" else "Accuracy radius (m)"
+    val mockLocationAccuracyHint: String
+        get() = if (chinese) "精度半径是填写的模拟值，不是测得的误差。上次使用的精度会自动记住。" else
+            "The accuracy radius is a simulated value, not a measured error. The last value is remembered."
+    val mockLocationMapHint: String
+        get() = if (chinese) "「在地图上选择」仅在打开选点页时向 tiles.openfreemap.org 拉取 OpenFreeMap 矢量瓦片；无地理编码、无 API 密钥。" else
+            "Pick on map loads OpenFreeMap vector tiles from tiles.openfreemap.org only while the picker is open. No geocoder and no API key."
+    val mockLocationNotesTitle: String
+        get() = if (chinese) "模拟定位说明" else "Mock location notes"
+    val mockLocationSettingsHint: String
+        get() = if (chinese) "上次使用的精度半径会自动记住。用途限制、IP 预填、地图瓦片和清理说明见关于。" else
+            "The last accuracy radius is remembered. Limits, IP lookup, map tiles, and cleanup notes are in About."
+    val mockLocationDuration: String
+        get() = if (chinese) "自动停止时长" else "Stop automatically after"
+    fun mockLocationMinutes(minutes: Int): String = if (chinese) "$minutes 分钟" else "$minutes min"
+    val mockLocationStart: String
+        get() = if (chinese) "开始模拟" else "Start mock location"
+    val mockLocationStop: String
+        get() = if (chinese) "停止模拟" else "Stop mock location"
+    val mockLocationCleanup: String
+        get() = if (chinese) "清理上次模拟" else "Clean up previous session"
+    val mockLocationCleanupHint: String
+        get() = if (chinese) "上次模拟可能未清理干净" else "Previous session may still need cleanup"
+    val mockLocationRecoveryHint: String
+        get() = if (chinese) "停止会移除本次测试定位源；真实定位仍需重新获取，其他应用可能暂时保留旧坐标。" else
+            "Stopping removes this session's test providers. Real positioning still needs a fresh fix; other apps may temporarily retain cached coordinates."
+    val mockLocationCleanupNotes: String
+        get() = if (chinese) "若会话中断，测试定位源可能残留。请选择 Toolbox 后清理；仍失败则在开发者选项中撤销模拟应用，再重新获取真实位置。其他应用的缓存可能需要刷新。" else
+            "An interrupted session may leave test providers. Select Toolbox and clean up. If that fails, deselect the mock app in Developer options and request a fresh real fix. Other apps may need to refresh cached positions."
+    val mockLocationDataWarning: String
+        get() = if (chinese) "当前读到的是模拟位置，不代表设备实际所在位置。" else
+            "This is a mock position, not the device's actual location."
+    val mockLocationInvalid: String
+        get() = if (chinese) "请输入有效坐标：纬度 −90～90、经度 −180～180；精度 1～1000000 m，小数使用点号。" else
+            "Enter valid coordinates: latitude −90…90, longitude −180…180, accuracy 1…1000000 m. Use a decimal point."
+    val mockLocationIpFailed: String
+        get() = if (chinese) "未取得有效 IP 坐标，请重试或手填；已有坐标已保留。" else "No valid IP coordinates. Retry or enter manually; existing fields are kept."
+    val mockLocationNotificationNeeded: String
+        get() = if (chinese) "请允许通知，以便在其他应用中看到和停止模拟" else
+            "Allow notifications so you can see and stop the session from other apps"
+    val mockLocationNotificationSettings: String
+        get() = if (chinese) "打开通知设置" else "Open notification settings"
+    val mockLocationRunning: String
+        get() = if (chinese) "正在提供模拟位置" else "Providing mock location"
+    val mockLocationOn: String
+        get() = if (chinese) "模拟定位已开启" else "Mock location is on"
+    val mockLocationEndsAt: String
+        get() = if (chinese) "预计结束时间" else "Scheduled end"
+    fun mockLocationNotification(coordinates: String, remainingMinutes: Int): String = if (chinese) {
+        "$coordinates · 还剩 $remainingMinutes 分钟"
+    } else {
+        "$coordinates · $remainingMinutes min left"
+    }
+    fun mockLocationPhase(phase: MockLocationPhase): String = when (phase) {
+        MockLocationPhase.STOPPED -> if (chinese) "模拟未运行" else "Mock location is stopped"
+        MockLocationPhase.STARTING -> if (chinese) "正在启用测试定位源…" else "Starting test providers…"
+        MockLocationPhase.RUNNING -> mockLocationRunning
+        MockLocationPhase.STOPPING -> if (chinese) "正在停止并清理…" else "Stopping and cleaning up…"
+        MockLocationPhase.ERROR -> if (chinese) "模拟已停止，发生错误" else "Session stopped after an error"
+        MockLocationPhase.CLEANUP_REQUIRED -> if (chinese) "需要清理" else "Cleanup needed"
+    }
+    fun mockLocationFailure(failure: MockLocationFailure): String = when (failure) {
+        MockLocationFailure.ACCESS -> mockLocationAccessNeeded
+        MockLocationFailure.SERVICES_DISABLED -> mockLocationServicesNeeded
+        MockLocationFailure.NOTIFICATIONS -> mockLocationNotificationNeeded
+        MockLocationFailure.PROVIDER -> if (chinese) "系统拒绝了测试定位源，请检查开发者选项后重试。" else "The system rejected a test provider. Check Developer options and retry."
+        MockLocationFailure.START -> if (chinese) "无法启动模拟服务，请返回此页面重试。" else "Could not start the mock service. Return to this page and retry."
+    }
     private val chinese: Boolean
         get() = language == AppLanguage.CHINESE
 
@@ -328,6 +441,7 @@ class ToolboxStrings(val language: AppLanguage) {
                 "设备信息：处理器、图形、内存、存储、显示和电池",
                 "实时监控：悬浮窗性能图表、多主题与自定义背景",
                 "位置导航：地理坐标、定位精度、海拔与星空雷达图",
+                "模拟定位：开发者测试坐标、地图选点与限时会话（说明见本页）",
                 "网络状态：连接详情、本地地址与公网 IP 地理位置",
                 "天文观测：今夜行星可见时段、月相与观测图导出",
                 "应用与流量：前台屏幕时长、蜂窝/WLAN 分网统计与分类筛选",
@@ -338,6 +452,7 @@ class ToolboxStrings(val language: AppLanguage) {
                 "Device Info: CPU, GPU, memory, storage, display, and battery",
                 "Live Monitor: overlay performance graphs, themes, and custom colors",
                 "Location: coordinates, accuracy, terrain elevation, and sky view radar",
+                "Mock location: developer test coordinates, map picker, and timed sessions (notes on this page)",
                 "Network: connection details, local IPs, and public IP geolocation",
                 "Astronomy: tonight's planet visibility windows, moon phase, and chart export",
                 "App usage & data: screen time, cellular/Wi-Fi stats, and category filters",

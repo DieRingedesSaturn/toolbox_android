@@ -3,6 +3,7 @@ package com.example.toolbox.ui
 import android.content.Context
 import androidx.core.content.edit
 import com.example.toolbox.fx.FxPinnedCurrencies
+import com.example.toolbox.location.MockLocationConfig
 import com.example.toolbox.monitor.MonitorCpuDisplayMode
 import com.example.toolbox.monitor.MonitorMetric
 import com.example.toolbox.monitor.MonitorOverlayTheme
@@ -21,6 +22,7 @@ private const val MONITOR_OVERLAY_OPACITY_KEY = "monitor_overlay_opacity"
 private const val LEDGER_LAST_ACCOUNT_KEY = "ledger_last_account"
 private const val LEDGER_OVERVIEW_ORDER_KEY = "ledger_overview_order"
 private const val FX_PINNED_CURRENCIES_KEY = "fx_pinned_currencies"
+private const val MOCK_LOCATION_ACCURACY_KEY = "mock_location_accuracy"
 
 /** Retired accent presets seed the custom accent instead of reverting. */
 private val LEGACY_ACCENT_SEEDS = mapOf(
@@ -155,5 +157,18 @@ class AppPreferences(context: Context) {
 
     fun saveFxPinnedCurrencies(value: List<String>) {
         preferences.edit { putString(FX_PINNED_CURRENCIES_KEY, FxPinnedCurrencies.format(value)) }
+    }
+
+    fun mockLocationAccuracyText(): String {
+        val saved = preferences.getString(MOCK_LOCATION_ACCURACY_KEY, null)
+            ?: return MockLocationConfig.DEFAULT_ACCURACY_TEXT
+        return saved.takeIf { MockLocationConfig.parseAccuracyMeters(it) != null }
+            ?: MockLocationConfig.DEFAULT_ACCURACY_TEXT
+    }
+
+    fun saveMockLocationAccuracyText(value: String) {
+        val trimmed = value.trim()
+        if (MockLocationConfig.parseAccuracyMeters(trimmed) == null) return
+        preferences.edit { putString(MOCK_LOCATION_ACCURACY_KEY, trimmed) }
     }
 }

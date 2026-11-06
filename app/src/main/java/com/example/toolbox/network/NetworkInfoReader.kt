@@ -10,6 +10,8 @@ import java.net.NetworkInterface
 import java.net.URL
 import java.util.Collections
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
@@ -51,6 +53,18 @@ class NetworkInfoReader(context: Context) {
     }
 
     suspend fun readPublicIp(): String? = readPublicIpDetails()?.ip
+
+    /** Explicit GeoIP action; no proxy/risk requests and no device coordinates sent. */
+    suspend fun readPublicIpLocation(): PublicIpLocation? = withContext(Dispatchers.IO) {
+        for ((url, source) in listOf(IPWHOIS_URL to "ipwho.is", IPAPICO_URL to "ipapi.co")) {
+            currentCoroutineContext().ensureActive()
+            val body = fetchUrl(url)
+            currentCoroutineContext().ensureActive()
+            val result = body?.let { runCatching { parseIpLocation(it, source) }.getOrNull() }
+            if (result != null) return@withContext result
+        }
+        null
+    }
 
     suspend fun readPublicIpDetails(): PublicIpDetails? = withContext(Dispatchers.IO) {
         val base = fetchUrl(IPWHOIS_URL)?.let { body ->
@@ -128,6 +142,25 @@ class NetworkInfoReader(context: Context) {
         const val IPAPICO_URL = "https://ipapi.co/json/"
         const val IPIFY_URL = "https://api64.ipify.org?format=text"
         const val PROXYCHECK_URL = "https://proxycheck.io/v2/"
+
+        fun parseIpLocation(body: String, source: String): PublicIpLocation? {
+            val details = when (source) {
+                "ipwho.is" -> parseIpWhoIs(body)
+                "ipapi.co" -> parseIpApiCo(body)
+                else -> null
+            } ?: return null
+            val json = JSONObject(body)
+            // optDouble alone accepts numeric strings; reject absent/null/boolean values.
+            fun coordinate(key: String): Double? = when (val value = json.opt(key)) {
+                is Number -> value.toDouble()
+                is String -> value.toDoubleOrNull()
+                else -> null
+            }
+            val lat = coordinate("latitude") ?: return null
+            val lon = coordinate("longitude") ?: return null
+            if (!lat.isFinite() || lat !in -90.0..90.0 || !lon.isFinite() || lon !in -180.0..180.0) return null
+            return PublicIpLocation(lat, lon, details.formatLocation(), source)
+        }
 
         fun parseIpWhoIs(jsonString: String): PublicIpDetails? {
             val json = JSONObject(jsonString)

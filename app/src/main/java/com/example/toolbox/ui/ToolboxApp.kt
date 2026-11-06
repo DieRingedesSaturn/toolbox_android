@@ -37,6 +37,7 @@ import com.example.toolbox.fx.FxRates
 import com.example.toolbox.ledger.ACTION_ADD_LEDGER_ENTRY
 import com.example.toolbox.ledger.ACTION_OPEN_LEDGER
 import com.example.toolbox.ledger.LedgerWidget
+import com.example.toolbox.location.ACTION_OPEN_MOCK_LOCATION
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -93,6 +94,7 @@ fun ToolboxApp(
 
     LaunchedEffect(launchAction) {
         when (launchAction) {
+            ACTION_OPEN_MOCK_LOCATION -> moduleName = ToolboxModule.LOCATION.name
             ACTION_OPEN_LEDGER -> moduleName = ToolboxModule.LEDGER.name
             ACTION_ADD_LEDGER_ENTRY -> {
                 moduleName = ToolboxModule.LEDGER.name

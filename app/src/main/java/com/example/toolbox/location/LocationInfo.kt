@@ -30,6 +30,7 @@ data class LocationInfo(
     val provider: String? = null,
     val timestampMillis: Long? = null,
     val positioningSystems: PositioningSystemInfo? = null,
+    val isMock: Boolean = false,
 )
 
 enum class GnssConstellation {

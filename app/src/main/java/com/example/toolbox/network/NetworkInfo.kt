@@ -25,6 +25,13 @@ enum class PublicIpRiskLevel {
     HIGH,
 }
 
+data class PublicIpLocation(
+    val latitude: Double,
+    val longitude: Double,
+    val place: String?,
+    val source: String,
+)
+
 data class PublicIpDetails(
     val ip: String,
     val country: String? = null,

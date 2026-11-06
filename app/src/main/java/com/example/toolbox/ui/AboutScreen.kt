@@ -43,6 +43,11 @@ fun AboutScreen(
                 }
             }
             item {
+                InfoCard(strings.mockLocationNotesTitle) {
+                    MockLocationNotes(strings)
+                }
+            }
+            item {
                 Text(
                     text = strings.aboutScopeTitle,
                     modifier = Modifier.padding(horizontal = 8.dp),

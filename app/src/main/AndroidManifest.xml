@@ -48,6 +48,15 @@
         </service>
 
         <service
+            android:name=".location.MockLocationService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started time-limited injection of Android test-provider coordinates for developer testing, without reading real location, with a visible stop notification" />
+        </service>
+
+        <service
             android:name=".ledger.LedgerNotificationListener"
             android:exported="false"
             android:label="@string/ledger_notification_listener_label"

@@ -224,6 +224,7 @@ fun LocationScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item { MockLocationCard(strings) }
             item {
                 InfoCard(strings.location) {
                     Text(strings.locationDescription, style = MaterialTheme.typography.bodyLarge)
@@ -347,6 +348,9 @@ private fun LocationDataCard(
             return@InfoCard
         }
 
+        if (valid.isMock) {
+            Text(strings.mockLocationDataWarning, color = MaterialTheme.colorScheme.error)
+        }
         CopyableLocationRow(
             context,
             strings,
