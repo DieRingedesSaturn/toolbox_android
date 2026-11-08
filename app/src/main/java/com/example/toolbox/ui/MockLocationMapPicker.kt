@@ -264,7 +264,7 @@ private fun createMockMapWebView(
         settings.allowFileAccess = false
         settings.allowContentAccess = false
         settings.mediaPlaybackRequiresUserGesture = true
-        settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         settings.userAgentString = settings.userAgentString + TOOLBOX_USER_AGENT
         setLayerType(View.LAYER_TYPE_HARDWARE, null)
         overScrollMode = View.OVER_SCROLL_NEVER
