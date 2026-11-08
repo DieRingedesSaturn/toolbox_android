@@ -94,6 +94,8 @@ class WebDavClient(
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
                 useCaches = false
+                // Never forward Basic credentials or conditional writes to a 3xx target.
+                instanceFollowRedirects = false
                 requestMethod = method
                 setRequestProperty("Authorization", authHeader)
             }
