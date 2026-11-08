@@ -147,11 +147,6 @@ fun NetworkScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                InfoCard(strings.network) {
-                    Text(strings.networkDescription, style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-            item {
                 NetworkDetailsCard(
                     context = context,
                     strings = strings,
@@ -181,15 +176,6 @@ fun NetworkScreen(
             }
             items(lanResult?.devices.orEmpty(), key = { it.ip }) { device ->
                 LanDeviceCard(context, strings, device)
-            }
-            item {
-                InfoCard(strings.networkPermissionTitle) {
-                    Text(
-                        strings.networkPermissionDescription,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
         }
     }

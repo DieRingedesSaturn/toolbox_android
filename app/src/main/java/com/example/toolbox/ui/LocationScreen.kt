@@ -41,6 +41,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -58,11 +59,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.toolbox.location.GnssConstellation
 import com.example.toolbox.location.GnssSkyViewStatus
 import com.example.toolbox.location.LocationInfo
 import com.example.toolbox.location.LocationInfoReader
 import com.example.toolbox.location.LocationReadStatus
+import com.example.toolbox.location.PlaceNameReader
 import com.example.toolbox.location.PositioningSystemInfo
 import com.example.toolbox.location.SatelliteInfo
 import com.example.toolbox.location.TerrainElevationInfo
@@ -75,6 +78,8 @@ import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -85,10 +90,16 @@ fun LocationScreen(
 ) {
     val context = LocalContext.current
     val reader = remember(context) { LocationInfoReader(context) }
+    val placeReader = remember(context) { PlaceNameReader(context) }
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var hasPermission by remember { mutableStateOf(reader.hasLocationPermission()) }
     var hasFinePermission by remember { mutableStateOf(reader.hasFineLocationPermission()) }
     var locationInfo by remember { mutableStateOf<LocationInfo?>(null) }
+    var placeName by remember { mutableStateOf<String?>(null) }
+    var lookingUpPlace by remember { mutableStateOf(false) }
+    var locationRequestId by remember { mutableIntStateOf(0) }
+    var namedRequestId by remember { mutableIntStateOf(-1) }
     var isLoading by remember { mutableStateOf(false) }
     var terrainElevation by remember { mutableStateOf<TerrainElevationInfo?>(null) }
     var isLoadingElevation by remember { mutableStateOf(false) }
@@ -101,13 +112,44 @@ fun LocationScreen(
 
     fun readLocation() {
         if (isLoading) return
+        locationRequestId += 1
         isLoading = true
         terrainElevation = null
         elevationRequested = false
+        placeName = null
+        lookingUpPlace = false
         scope.launch {
-            locationInfo = runCatching { reader.readCurrentLocation() }
-                .getOrElse { LocationInfo(LocationReadStatus.ERROR, positioningSystems = reader.readPositioningSystems()) }
-            isLoading = false
+            try {
+                locationInfo = reader.readCurrentLocation()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                locationInfo = LocationInfo(LocationReadStatus.ERROR)
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(locationRequestId, isLoading, locationInfo, lifecycleOwner) {
+        val requestId = locationRequestId
+        val info = locationInfo
+        if (isLoading || info?.status != LocationReadStatus.SUCCESS) return@LaunchedEffect
+        val latitude = info.latitude ?: return@LaunchedEffect
+        val longitude = info.longitude ?: return@LaunchedEffect
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            if (namedRequestId == requestId) return@repeatOnLifecycle
+            try {
+                lookingUpPlace = true
+                val name = placeReader.lookup(latitude, longitude)
+                ensureActive()
+                if (locationRequestId == requestId && !isLoading) {
+                    placeName = name
+                    namedRequestId = requestId
+                }
+            } finally {
+                if (locationRequestId == requestId) lookingUpPlace = false
+            }
         }
     }
 
@@ -171,7 +213,6 @@ fun LocationScreen(
         }
     }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -226,73 +267,19 @@ fun LocationScreen(
         ) {
             item { MockLocationCard(strings) }
             item {
-                InfoCard(strings.location) {
-                    Text(strings.locationDescription, style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = when {
-                            isLoading -> strings.locationLoading
-                            locationInfo != null -> strings.locationStatus(locationInfo!!.status)
-                            else -> strings.notReadYet
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Button(
-                        onClick = ::requestOrReadLocation,
-                        enabled = !isLoading,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = LocalContentColor.current,
-                            )
-                            Spacer(modifier = Modifier.size(8.dp))
-                        }
-                        Text(if (isLoading) strings.locationLoading else strings.getCurrentLocation)
-                    }
-                    if (locationInfo?.status == LocationReadStatus.SERVICES_DISABLED) {
-                        TextButton(
-                            onClick = {
-                                context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                            },
-                        ) {
-                            Text(strings.locationOpenSettings)
-                        }
-                    }
-                }
-            }
-            item {
-                InfoCard(strings.locationPermissionTitle) {
-                    Text(
-                        text = if (hasPermission) strings.locationPermissionGranted else strings.locationPermissionNotGranted,
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        text = strings.locationPermissionDescription,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (hasPermission) {
-                        CopyableLocationRow(
-                            context,
-                            strings,
-                            strings.locationPrecision,
-                            if (hasFinePermission) strings.preciseLocation else strings.approximateLocation,
-                        )
-                    } else {
-                        TextButton(onClick = ::requestOrReadLocation) {
-                            Text(strings.requestLocationPermission)
-                        }
-                    }
-                }
-            }
-            item {
                 LocationDataCard(
                     context = context,
                     strings = strings,
                     info = locationInfo,
+                    placeName = placeName,
+                    lookingUpPlace = lookingUpPlace,
+                    hasPermission = hasPermission,
+                    hasFinePermission = hasFinePermission,
+                    isLoading = isLoading,
+                    onGetLocation = ::requestOrReadLocation,
+                    onOpenLocationSettings = {
+                        context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                    },
                 )
             }
             val valid = locationInfo?.takeIf { it.status == LocationReadStatus.SUCCESS }
@@ -336,21 +323,78 @@ private fun LocationDataCard(
     context: Context,
     strings: ToolboxStrings,
     info: LocationInfo?,
+    placeName: String?,
+    lookingUpPlace: Boolean,
+    hasPermission: Boolean,
+    hasFinePermission: Boolean,
+    isLoading: Boolean,
+    onGetLocation: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
 ) {
     InfoCard(strings.currentLocationTitle) {
+        if (!hasPermission) {
+            IssueActionRow(
+                message = strings.locationPermissionNotGranted,
+                action = strings.requestLocationPermission,
+                onAction = onGetLocation,
+            )
+        } else {
+            CopyableLocationRow(
+                context,
+                strings,
+                strings.locationPrecision,
+                if (hasFinePermission) strings.preciseLocation else strings.approximateLocation,
+            )
+        }
+        if (info?.status == LocationReadStatus.SERVICES_DISABLED) {
+            IssueActionRow(
+                message = strings.locationStatus(LocationReadStatus.SERVICES_DISABLED),
+                action = strings.locationOpenSettings,
+                onAction = onOpenLocationSettings,
+            )
+        }
         val valid = info?.takeIf { it.status == LocationReadStatus.SUCCESS }
         if (valid == null) {
             Text(
-                text = strings.locationDataUnavailable,
-                style = MaterialTheme.typography.bodyMedium,
+                text = when {
+                    isLoading -> strings.locationLoading
+                    info != null -> strings.locationStatus(info.status)
+                    else -> strings.notReadYet
+                },
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Button(
+                onClick = onGetLocation,
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = LocalContentColor.current,
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                }
+                Text(if (isLoading) strings.locationLoading else strings.getCurrentLocation)
+            }
             return@InfoCard
         }
 
         if (valid.isMock) {
             Text(strings.mockLocationDataWarning, color = MaterialTheme.colorScheme.error)
         }
+        CopyableLocationRow(
+            context,
+            strings,
+            strings.placeName,
+            when {
+                !placeName.isNullOrBlank() -> placeName
+                lookingUpPlace -> strings.lookingUpPlace
+                else -> strings.notAvailable
+            },
+        )
         CopyableLocationRow(
             context,
             strings,
@@ -506,12 +550,6 @@ private fun GnssSkyViewCard(
     onStop: () -> Unit,
 ) {
     InfoCard(strings.gnssSkyViewTitle) {
-        Text(
-            text = strings.gnssObservationHint,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
         if (isObserving) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

@@ -28,13 +28,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import com.example.toolbox.monitor.CpuCoreFrequency
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -48,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,15 +53,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import java.util.Locale
@@ -71,14 +70,17 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.example.toolbox.monitor.CpuCoreFrequency
 import com.example.toolbox.monitor.MonitorCpuDisplayMode
 import com.example.toolbox.monitor.MonitorMetric
-import com.example.toolbox.monitor.MonitorOverlayColors
 import com.example.toolbox.monitor.MonitorOverlayService
 import com.example.toolbox.monitor.MonitorOverlayTheme
 import com.example.toolbox.monitor.MonitorOverlayThemeHelper
 import com.example.toolbox.monitor.MonitorReader
 import com.example.toolbox.monitor.MonitorSample
+import com.example.toolbox.monitor.chartValue
+import com.example.toolbox.monitor.frequencyLoadPercent
+import com.example.toolbox.monitor.weightedCpuFrequencyPercent
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -114,6 +116,7 @@ fun MonitorScreen(
     }
     var isRunning by remember { mutableStateOf(MonitorOverlayService.running) }
     var latestSample by remember { mutableStateOf<MonitorSample?>(null) }
+    val sampleHistory = remember { mutableStateListOf<MonitorSample>() }
     var overlayGranted by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var notificationGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
     var pendingStart by remember { mutableStateOf(false) }
@@ -140,9 +143,15 @@ fun MonitorScreen(
     LaunchedEffect(monitorReader, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
-                latestSample = runCatching {
+                val sample = runCatching {
                     withContext(Dispatchers.IO) { monitorReader.read() }
                 }.getOrNull()
+                latestSample = sample
+                if (sample != null) {
+                    sampleHistory.add(sample)
+                    val extra = sampleHistory.size - HISTORY_LIMIT
+                    if (extra > 0) sampleHistory.removeRange(0, extra)
+                }
                 isRunning = MonitorOverlayService.running
                 delay(SAMPLE_INTERVAL_MILLIS)
             }
@@ -225,14 +234,17 @@ fun MonitorScreen(
         ) {
             item {
                 InfoCard(strings.monitor) {
-                    Text(
-                        text = strings.monitorDescription,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        text = if (isRunning) strings.monitorRunning(overlayFixed) else strings.gpuFallbackHint,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (isRunning) {
+                        Text(
+                            text = strings.monitorRunning(overlayFixed),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    MonitorLiveMetrics(
+                        strings = strings,
+                        sample = latestSample,
+                        history = sampleHistory,
                     )
                 }
             }
@@ -252,11 +264,6 @@ fun MonitorScreen(
             }
             item {
                 InfoCard(strings.cpuDisplayModeTitle) {
-                    Text(
-                        text = strings.cpuDisplayModeHint,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -301,6 +308,7 @@ fun MonitorScreen(
                                 text = strings.overlayFixedPositionDescription,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
                             )
                         }
                         Switch(
@@ -372,59 +380,37 @@ fun MonitorScreen(
                     sample = latestSample,
                 )
             }
-            item {
-                InfoCard(strings.permissionsTitle) {
-                    Text(
-                        text = strings.overlayPermissionTitle,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = if (overlayGranted) strings.overlayReady else strings.overlayPermissionDescription,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (!overlayGranted) {
-                        TextButton(
-                            onClick = {
-                                context.startActivity(
-                                    Intent(
-                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                        "package:${context.packageName}".toUri(),
-                                    ),
-                                )
-                            },
+            if (!overlayGranted ||
+                (!notificationGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            ) {
+                item {
+                    InfoCard(strings.permissionsTitle) {
+                        if (!overlayGranted) {
+                            IssueActionRow(
+                                message = strings.overlayPermissionDescription,
+                                action = strings.openOverlaySettings,
+                                onAction = {
+                                    context.startActivity(
+                                        Intent(
+                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                            "package:${context.packageName}".toUri(),
+                                        ),
+                                    )
+                                },
+                            )
+                        }
+                        if (!notificationGranted &&
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                         ) {
-                            Text(strings.openOverlaySettings)
+                            IssueActionRow(
+                                message = strings.notificationPermissionHint,
+                                action = strings.requestNotificationPermission,
+                                onAction = {
+                                    notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                },
+                            )
                         }
                     }
-                    Text(
-                        text = strings.notificationPermissionTitle,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = if (notificationGranted) strings.notificationReady else strings.notificationPermissionHint,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (!notificationGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        TextButton(onClick = {
-                            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }) {
-                            Text(strings.requestNotificationPermission)
-                        }
-                    }
-                    Text(
-                        text = strings.foregroundServicePermissionTitle,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = strings.foregroundServiceReady,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
             item {
@@ -457,11 +443,6 @@ private fun ThermalCard(
         CopyableMonitorRow(context, strings, strings.batteryTemperature, batteryTemperature)
         CopyableMonitorRow(context, strings, strings.thermalStatusTitle, thermalStatus)
         CopyableMonitorRow(context, strings, strings.thermalHeadroomTitle, thermalHeadroom)
-        Text(
-            text = strings.thermalSensorNote,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -482,11 +463,6 @@ private fun FpsCard(
     InfoCard(strings.fpsTitle) {
         CopyableMonitorRow(context, strings, strings.currentFps, currentFps)
         CopyableMonitorRow(context, strings, strings.supportedRefreshRates, supportedRates)
-        Text(
-            text = strings.fpsSourceNote,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -528,32 +504,51 @@ private enum class CpuTopologyViewType {
     GRID,
 }
 
-private fun getCoreClusterColor(maxMhz: Int?): Color {
+private fun clusterLabel(strings: ToolboxStrings, maxMhz: Int?): String {
     val ghz = (maxMhz ?: 0) / 1000.0
     return when {
-        ghz >= 3.2 -> Color(0xFFE91E63) // Super Prime / Prime: Crimson Magenta
-        ghz >= 2.6 -> Color(0xFFFF7043) // Big Performance: Coral Orange
-        ghz >= 2.0 -> Color(0xFFFFB300) // Mid: Golden Amber
-        else -> Color(0xFF26A69A)       // Little Efficiency: Mint Teal
+        ghz >= 3.2 -> strings.primeCore
+        ghz >= 2.6 -> strings.bigCore
+        ghz >= 2.0 -> strings.midCore
+        else -> strings.littleCore
     }
 }
 
 private fun buildClusterSummary(strings: ToolboxStrings, cores: List<CpuCoreFrequency>): String {
     if (cores.isEmpty()) return ""
     val clusters = cores.groupBy { it.maximumFrequencyMhz ?: 0 }.toSortedMap()
-    val parts = clusters.map { (maxMhz, group) ->
-        val count = group.size
+    return clusters.entries.joinToString(" · ") { (maxMhz, group) ->
         val ghz = maxMhz / 1000.0
-        val label = when {
-            ghz >= 3.2 -> strings.primeCore
-            ghz >= 2.6 -> strings.bigCore
-            ghz >= 2.0 -> strings.midCore
-            else -> strings.littleCore
+        val freqStr = if (ghz >= 1.0) {
+            String.format(Locale.US, "%.2f GHz", ghz)
+        } else {
+            "$maxMhz MHz"
         }
-        val freqStr = if (ghz >= 1.0) "%.2f GHz".format(Locale.US, ghz) else "$maxMhz MHz"
-        "${count}x $label ($freqStr)"
+        "${group.size}×${clusterLabel(strings, maxMhz)} $freqStr"
     }
-    return parts.joinToString(" + ")
+}
+
+private fun formatCoreGhz(mhz: Int?): String {
+    val value = mhz ?: return "—"
+    return String.format(Locale.US, "%.2f", value / 1000.0)
+}
+
+private fun coreFillFraction(core: CpuCoreFrequency, displayMode: CpuTopologyDisplayMode): Float {
+    val curMhz = core.currentFrequencyMhz
+    val isOffline = curMhz == null || curMhz <= 0
+    if (isOffline) return 0f
+    return when (displayMode) {
+        CpuTopologyDisplayMode.FREQUENCY -> {
+            val minMhz = core.minimumFrequencyMhz ?: 0
+            val maxMhz = core.maximumFrequencyMhz ?: return 0f
+            if (maxMhz > minMhz) {
+                ((curMhz - minMhz).toFloat() / (maxMhz - minMhz).toFloat()).coerceIn(0f, 1f)
+            } else {
+                (curMhz.toFloat() / maxMhz.toFloat()).coerceIn(0f, 1f)
+            }
+        }
+        CpuTopologyDisplayMode.USAGE -> (core.usagePercent ?: 0f).div(100f).coerceIn(0f, 1f)
+    }
 }
 
 @Composable
@@ -568,28 +563,12 @@ private fun CpuFrequencyCard(
     val clusterSummary = remember(cores, strings) { buildClusterSummary(strings, cores) }
 
     InfoCard(strings.cpuTopologyTitle) {
-        Text(
-            text = strings.cpuTopologyDescription,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
         if (clusterSummary.isNotBlank()) {
-            Box(
-                modifier = Modifier
-                    .background(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(8.dp),
-                    )
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    text = clusterSummary,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
+            Text(
+                text = clusterSummary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         if (cores.isEmpty()) {
@@ -599,37 +578,41 @@ private fun CpuFrequencyCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            // View & Mode Control Row
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Topology Matrix vs Data Grid toggle
                 FilterChip(
-                    selected = viewType == CpuTopologyViewType.MATRIX,
-                    onClick = { viewType = CpuTopologyViewType.MATRIX },
-                    label = { Text(strings.matrixView) },
+                    selected = displayMode == CpuTopologyDisplayMode.FREQUENCY,
+                    onClick = {
+                        displayMode = CpuTopologyDisplayMode.FREQUENCY
+                        viewType = CpuTopologyViewType.MATRIX
+                    },
+                    label = { Text(strings.frequencyMode) },
                 )
                 FilterChip(
-                    selected = viewType == CpuTopologyViewType.GRID,
-                    onClick = { viewType = CpuTopologyViewType.GRID },
-                    label = { Text(strings.gridView) },
+                    selected = displayMode == CpuTopologyDisplayMode.USAGE,
+                    onClick = {
+                        displayMode = CpuTopologyDisplayMode.USAGE
+                        viewType = CpuTopologyViewType.MATRIX
+                    },
+                    label = { Text(strings.usageMode) },
                 )
-
-                if (viewType == CpuTopologyViewType.MATRIX) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    FilterChip(
-                        selected = displayMode == CpuTopologyDisplayMode.FREQUENCY,
-                        onClick = { displayMode = CpuTopologyDisplayMode.FREQUENCY },
-                        label = { Text(strings.frequencyMode) },
-                    )
-                    FilterChip(
-                        selected = displayMode == CpuTopologyDisplayMode.USAGE,
-                        onClick = { displayMode = CpuTopologyDisplayMode.USAGE },
-                        label = { Text(strings.usageMode) },
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    viewType = if (viewType == CpuTopologyViewType.MATRIX) {
+                        CpuTopologyViewType.GRID
+                    } else {
+                        CpuTopologyViewType.MATRIX
+                    }
+                }) {
+                    Text(
+                        if (viewType == CpuTopologyViewType.MATRIX) {
+                            strings.gridView
+                        } else {
+                            strings.matrixView
+                        },
                     )
                 }
             }
@@ -642,15 +625,8 @@ private fun CpuFrequencyCard(
                     onCoreClick = { core ->
                         val maxMhz = core.maximumFrequencyMhz ?: 0
                         val curMhz = core.currentFrequencyMhz
-                        val ghz = maxMhz / 1000.0
-                        val clusterLabel = when {
-                            ghz >= 3.2 -> strings.primeCore
-                            ghz >= 2.6 -> strings.bigCore
-                            ghz >= 2.0 -> strings.midCore
-                            else -> strings.littleCore
-                        }
                         val copyText = buildString {
-                            appendLine("${strings.cpuCoreName}: C${core.index} ($clusterLabel)")
+                            appendLine("${strings.cpuCoreName}: C${core.index} (${clusterLabel(strings, maxMhz)})")
                             appendLine("${strings.currentFrequencyLabel}: ${curMhz?.let { "$it MHz" } ?: strings.offlineCore}")
                             appendLine("${strings.cpuMaxFrequency}: $maxMhz MHz")
                             if (core.usagePercent != null) {
@@ -661,7 +637,7 @@ private fun CpuFrequencyCard(
                     },
                 )
             } else {
-                CpuCoreGrid(
+                CpuCoreTable(
                     strings = strings,
                     cores = cores,
                 )
@@ -678,149 +654,75 @@ private fun CpuTopologyMatrix(
     onCoreClick: (CpuCoreFrequency) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val minMaxMhz = cores.minOfOrNull { it.maximumFrequencyMhz ?: 1000 }?.coerceAtLeast(100) ?: 1000
+    val groups = remember(cores) {
+        cores.groupBy { it.maximumFrequencyMhz ?: 0 }.toSortedMap().values.toList()
+    }
+    val fillColor = MaterialTheme.colorScheme.primary
+    val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum")
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(170.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.35f))
-            .padding(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .height(128.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        cores.forEach { core ->
-            val minMhz = core.minimumFrequencyMhz ?: 0
-            val maxMhz = core.maximumFrequencyMhz ?: minMaxMhz
-            val curMhz = core.currentFrequencyMhz
-            val usage = core.usagePercent
-            val isOffline = curMhz == null || curMhz <= 0
-
-            // Width weight proportional to max frequency capability
-            val weight = (maxMhz.toFloat() / minMaxMhz.toFloat()).coerceIn(1.0f, 2.4f)
-            val clusterColor = getCoreClusterColor(maxMhz)
-
-            // Fill fraction from effective baseline (min_freq -> max_freq)
-            val targetFraction = when (displayMode) {
-                CpuTopologyDisplayMode.FREQUENCY -> {
-                    if (isOffline) 0f
-                    else if (maxMhz > minMhz) ((curMhz - minMhz).toFloat() / (maxMhz - minMhz).toFloat()).coerceIn(0f, 1f)
-                    else (curMhz.toFloat() / maxMhz.toFloat()).coerceIn(0f, 1f)
-                }
-                CpuTopologyDisplayMode.USAGE -> {
-                    if (isOffline || usage == null) 0f
-                    else (usage / 100f).coerceIn(0f, 1f)
-                }
+        groups.forEachIndexed { groupIndex, group ->
+            if (groupIndex > 0) {
+                Spacer(modifier = Modifier.width(8.dp))
             }
-
-            val animatedFraction by animateFloatAsState(
-                targetValue = targetFraction,
-                animationSpec = tween(durationMillis = 250),
-                label = "Core${core.index}Fill",
-            )
-
-            // Individual Core Column Block
-            Box(
-                modifier = Modifier
-                    .weight(weight)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                    .clickable { onCoreClick(core) },
-            ) {
-                // Background Track with 25%, 50%, 75% tick marks
+            group.forEach { core ->
+                val isOffline = core.currentFrequencyMhz == null || core.currentFrequencyMhz <= 0
+                val animatedFraction by animateFloatAsState(
+                    targetValue = coreFillFraction(core, displayMode),
+                    animationSpec = tween(durationMillis = 220),
+                    label = "Core${core.index}Fill",
+                )
+                val liveLabel = when {
+                    isOffline -> "—"
+                    displayMode == CpuTopologyDisplayMode.USAGE ->
+                        "${core.usagePercent?.roundToInt() ?: 0}%"
+                    else -> formatCoreGhz(core.currentFrequencyMhz)
+                }
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 2.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable { onCoreClick(core) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    repeat(4) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
-                        )
-                    }
-                }
-
-                // Vertical Fill Bar from Bottom (Baseline = 0)
-                if (!isOffline && animatedFraction > 0.005f) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(animatedFraction)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        clusterColor,
-                                        clusterColor.copy(alpha = 0.65f),
-                                    ),
-                                ),
-                                shape = RoundedCornerShape(4.dp),
-                            ),
-                    )
-                }
-
-                // Content Overlay (Core Header at Top, Live Metric at Bottom)
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 2.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    // Header: Core Name + Max Freq
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "C${core.index}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isOffline) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface,
-                        )
-                        val maxGhzStr = if (maxMhz >= 1000) "%.1fG".format(Locale.US, maxMhz / 1000.0) else "${maxMhz}M"
-                        Text(
-                            text = maxGhzStr,
-                            fontSize = 8.sp,
-                            color = clusterColor.copy(alpha = 0.9f),
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-
-                    // Footer: Real-time Metric
-                    if (isOffline) {
-                        Text(
-                            text = "—",
-                            fontSize = 11.sp,
-                        )
-                    } else {
-                        val liveStr = when (displayMode) {
-                            CpuTopologyDisplayMode.FREQUENCY -> {
-                                if (curMhz >= 1000) "%.2fG".format(Locale.US, curMhz / 1000.0)
-                                else "${curMhz}M"
-                            }
-                            CpuTopologyDisplayMode.USAGE -> {
-                                "${usage?.roundToInt() ?: 0}%"
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                                    shape = RoundedCornerShape(3.dp),
-                                )
-                                .padding(horizontal = 2.dp, vertical = 1.dp),
-                        ) {
-                            Text(
-                                text = liveStr,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
+                            .weight(1f)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(trackColor),
+                    ) {
+                        if (animatedFraction > 0.008f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(animatedFraction)
+                                    .align(Alignment.BottomCenter)
+                                    .background(fillColor.copy(alpha = if (isOffline) 0.25f else 0.92f)),
                             )
                         }
                     }
+                    Text(
+                        text = strings.cpuCore(core.index),
+                        modifier = Modifier.padding(top = 6.dp),
+                        style = labelStyle,
+                        color = if (isOffline) muted.copy(alpha = 0.55f) else muted,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = liveLabel,
+                        style = labelStyle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                    )
                 }
             }
         }
@@ -828,48 +730,185 @@ private fun CpuTopologyMatrix(
 }
 
 @Composable
-private fun CpuCoreGrid(
+private fun CpuCoreTable(
     strings: ToolboxStrings,
     cores: List<CpuCoreFrequency>,
 ) {
-    cores.chunked(2).forEach { row ->
+    val tabular = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum")
+    cores.forEach { core ->
+        val offline = core.currentFrequencyMhz == null || core.currentFrequencyMhz <= 0
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            row.forEach { core ->
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                            text = strings.cpuCore(core.index),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            text = core.currentFrequencyMhz?.let { "$it MHz" }
-                                ?: strings.noFrequencyData,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        core.maximumFrequencyMhz?.let { maximum ->
-                            Text(
-                                text = "${strings.maximumFrequency} $maximum MHz",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-            if (row.size == 1) {
-                Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = strings.cpuCore(core.index),
+                modifier = Modifier.width(32.dp),
+                style = tabular,
+            )
+            Text(
+                text = clusterLabel(strings, core.maximumFrequencyMhz),
+                modifier = Modifier.width(48.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            Text(
+                text = if (offline) {
+                    strings.offlineCore
+                } else {
+                    "${core.currentFrequencyMhz} MHz"
+                },
+                modifier = Modifier.weight(1f),
+                style = tabular,
+                maxLines = 1,
+            )
+            Text(
+                text = core.maximumFrequencyMhz?.let { "${strings.maximumFrequency} $it" } ?: "",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            core.usagePercent?.let { usage ->
+                Text(
+                    text = "${usage.roundToInt()}%",
+                    style = tabular,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun MonitorLiveMetrics(
+    strings: ToolboxStrings,
+    sample: MonitorSample?,
+    history: List<MonitorSample>,
+) {
+    val color = MaterialTheme.colorScheme.primary
+    MonitorMetric.entries.forEach { metric ->
+        val series = history.mapNotNull { it.chartValue(metric) }
+        MonitorMetricRow(
+            label = liveMetricLabel(strings, metric),
+            value = formatLiveMetric(sample, metric, strings),
+            values = series,
+            color = color,
+        )
+    }
+}
+
+@Composable
+private fun MonitorMetricRow(
+    label: String,
+    value: String,
+    values: List<Float>,
+    color: Color,
+) {
+    val tabular = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum")
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.width(52.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        Text(
+            text = value,
+            modifier = Modifier.width(84.dp),
+            style = tabular,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        MonitorSparkline(
+            values = values,
+            color = color,
+            modifier = Modifier
+                .weight(1f)
+                .height(28.dp),
+        )
+    }
+}
+
+@Composable
+private fun MonitorSparkline(
+    values: List<Float>,
+    color: Color,
+    modifier: Modifier = Modifier,
+    trackColor: Color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+) {
+    Canvas(modifier = modifier) {
+        val baseline = size.height - 1.dp.toPx()
+        drawLine(
+            color = trackColor,
+            start = Offset(0f, baseline),
+            end = Offset(size.width, baseline),
+            strokeWidth = 1.dp.toPx(),
+        )
+        if (values.size < 2) return@Canvas
+        val lastIndex = (values.lastIndex).coerceAtLeast(1)
+        val stroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val line = Path()
+        val fill = Path()
+        values.forEachIndexed { index, raw ->
+            val x = size.width * index / lastIndex
+            val y = size.height * (1f - raw.coerceIn(0f, 100f) / 100f)
+            if (index == 0) {
+                line.moveTo(x, y)
+                fill.moveTo(x, size.height)
+                fill.lineTo(x, y)
+            } else {
+                line.lineTo(x, y)
+                fill.lineTo(x, y)
+            }
+        }
+        fill.lineTo(size.width, size.height)
+        fill.close()
+        drawPath(fill, color = color.copy(alpha = 0.12f))
+        drawPath(line, color = color, style = stroke)
+    }
+}
+
+private fun liveMetricLabel(strings: ToolboxStrings, metric: MonitorMetric): String = when (metric) {
+    MonitorMetric.CPU -> "CPU"
+    MonitorMetric.GPU -> "GPU"
+    MonitorMetric.MEMORY -> if (strings.language == AppLanguage.CHINESE) "内存" else "Mem"
+    MonitorMetric.BATTERY -> if (strings.language == AppLanguage.CHINESE) "电量" else "Batt"
+    MonitorMetric.FPS -> "FPS"
+}
+
+internal fun formatLiveMetric(
+    sample: MonitorSample?,
+    metric: MonitorMetric,
+    strings: ToolboxStrings,
+): String {
+    if (sample == null) return strings.waitingForData
+    return when (metric) {
+        MonitorMetric.CPU -> sample.chartValue(metric)?.let {
+            "${if (sample.cpuUsagePercent == null) "≈" else ""}${it.roundToInt()}%"
+        }
+            ?: strings.notAvailable
+        MonitorMetric.GPU -> sample.gpuUsagePercent?.let { "${it.roundToInt()}%" }
+            ?: sample.frequencyLoadPercent(MonitorMetric.GPU)?.let { "≈${it.roundToInt()}%" }
+            ?: strings.notAvailable
+        MonitorMetric.MEMORY -> sample.memoryUsagePercent?.let { "${it.roundToInt()}%" }
+            ?: strings.notAvailable
+        MonitorMetric.BATTERY -> {
+            val level = sample.batteryLevelPercent?.let { "${it.roundToInt()}%" }
+                ?: return strings.notAvailable
+            val power = sample.batteryPowerMw?.let { " ${it.roundToInt()} mW" }.orEmpty()
+            level + power
+        }
+        MonitorMetric.FPS -> sample.displayRefreshRateHz?.let { "${it.roundToInt()} Hz" }
+            ?: strings.notAvailable
     }
 }
 
@@ -890,12 +929,6 @@ private fun OverlayAppearanceCard(
     }
 
     InfoCard(strings.overlayAppearanceTitle) {
-        Text(
-            text = strings.overlayAppearanceDescription,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1040,41 +1073,20 @@ private fun OverlayAppearanceCard(
                         Text(
                             text = "32%",
                             color = Color(colors.secondaryTextColor),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFeatureSettings = "tnum",
+                            ),
                         )
                     }
 
-                    Canvas(
+                    MonitorSparkline(
+                        values = PREVIEW_SPARK,
+                        color = accentColor.swatch(customAccentRgb),
+                        trackColor = Color(colors.gridColor),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(24.dp),
-                    ) {
-                        val w = size.width
-                        val h = size.height
-                        val linePaintColor = Color(colors.gridColor)
-                        drawLine(
-                            color = linePaintColor,
-                            start = androidx.compose.ui.geometry.Offset(0f, h),
-                            end = androidx.compose.ui.geometry.Offset(w, h),
-                            strokeWidth = 1.dp.toPx(),
-                        )
-                        drawLine(
-                            color = linePaintColor,
-                            start = androidx.compose.ui.geometry.Offset(0f, h / 2f),
-                            end = androidx.compose.ui.geometry.Offset(w, h / 2f),
-                            strokeWidth = 1.dp.toPx(),
-                        )
-                        val strokeColor = accentColor.swatch(customAccentRgb)
-                        val path = Path().apply {
-                            moveTo(0f, h * 0.7f)
-                            lineTo(w * 0.2f, h * 0.5f)
-                            lineTo(w * 0.4f, h * 0.8f)
-                            lineTo(w * 0.6f, h * 0.3f)
-                            lineTo(w * 0.8f, h * 0.45f)
-                            lineTo(w, h * 0.32f)
-                        }
-                        drawPath(path, color = strokeColor, style = Stroke(width = 2.dp.toPx()))
-                    }
+                            .height(28.dp),
+                    )
                 }
             }
         }
@@ -1082,3 +1094,7 @@ private fun OverlayAppearanceCard(
 }
 
 private const val SAMPLE_INTERVAL_MILLIS = 1000L
+private const val HISTORY_LIMIT = 60
+private val PREVIEW_SPARK = listOf(
+    42f, 38f, 55f, 48f, 62f, 44f, 58f, 51f, 47f, 53f, 49f, 56f,
+)

@@ -87,6 +87,8 @@ class MockLocationController(context: Context) {
         return saveOwned() && owned.isEmpty()
     }
 
+    // The legacy overload accepts the same integer values (1); these constants are inlined.
+    @SuppressLint("InlinedApi")
     private fun addProvider(provider: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             manager.addTestProvider(provider, ProviderProperties.Builder()
@@ -96,7 +98,7 @@ class MockLocationController(context: Context) {
         } else {
             @Suppress("DEPRECATION")
             manager.addTestProvider(provider, false, false, false, false, false, false, false,
-                android.location.Criteria.POWER_LOW, android.location.Criteria.ACCURACY_FINE)
+                ProviderProperties.POWER_USAGE_LOW, ProviderProperties.ACCURACY_FINE)
         }
     }
 

@@ -82,9 +82,11 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "IP 位置只是当前网络出口的大致位置，VPN 或代理会影响结果，不代表实际位置。仅点击下方按钮时联系 ipwho.is，失败时使用 ipapi.co；不会发送设备的 GPS 坐标。" else
             "IP location is approximate and follows your network exit, including a VPN or proxy. Only this button contacts ipwho.is, with ipapi.co as fallback; no device GPS coordinates are sent."
     val mockLocationIpButton: String
-        get() = if (chinese) "用当前 IP 的大致位置填入" else "Fill from current IP location"
+        get() = if (chinese) "IP 位置" else "From IP"
     val mockLocationPickOnMap: String
         get() = if (chinese) "在地图上选择" else "Pick on map"
+    val mockLocationMapButton: String
+        get() = if (chinese) "地图" else "Map"
     val mockLocationMapTapToPick: String
         get() = if (chinese) "点按地图选择位置" else "Tap the map to pick a location"
     val mockLocationMapLoading: String
@@ -110,13 +112,17 @@ class ToolboxStrings(val language: AppLanguage) {
     val mockLocationServicesNeeded: String
         get() = if (chinese) "请开启系统位置开关" else "Turn on system location"
     val mockLocationAccuracy: String
-        get() = if (chinese) "精度半径 (m)" else "Accuracy radius (m)"
+        get() = if (chinese) "精度 m" else "Acc. m"
+    val mockLatitudeLabel: String
+        get() = if (chinese) "纬度" else "Lat"
+    val mockLongitudeLabel: String
+        get() = if (chinese) "经度" else "Lon"
     val mockLocationAccuracyHint: String
         get() = if (chinese) "精度半径是填写的模拟值，不是测得的误差。上次使用的精度会自动记住。" else
             "The accuracy radius is a simulated value, not a measured error. The last value is remembered."
     val mockLocationMapHint: String
-        get() = if (chinese) "「在地图上选择」仅在打开选点页时向 tiles.openfreemap.org 拉取 OpenFreeMap 矢量瓦片；无地理编码、无 API 密钥。" else
-            "Pick on map loads OpenFreeMap vector tiles from tiles.openfreemap.org only while the picker is open. No geocoder and no API key."
+        get() = if (chinese) "「在地图上选择」仅在打开选点页时向 tiles.openfreemap.org 拉取 OpenFreeMap 矢量瓦片；选点页无搜索框、无 API 密钥。坐标确定后由系统地理编码器解析地点名称。" else
+            "Pick on map loads OpenFreeMap vector tiles from tiles.openfreemap.org only while the picker is open. The picker has no search box and no API key. After coordinates are set, the platform geocoder supplies a place name."
     val mockLocationNotesTitle: String
         get() = if (chinese) "模拟定位说明" else "Mock location notes"
     val mockLocationSettingsHint: String
@@ -124,7 +130,7 @@ class ToolboxStrings(val language: AppLanguage) {
             "The last accuracy radius is remembered. Limits, IP lookup, map tiles, and cleanup notes are in About."
     val mockLocationDuration: String
         get() = if (chinese) "自动停止时长" else "Stop automatically after"
-    fun mockLocationMinutes(minutes: Int): String = if (chinese) "$minutes 分钟" else "$minutes min"
+    fun mockLocationMinutes(minutes: Int): String = if (chinese) "${minutes}分" else "${minutes}m"
     val mockLocationStart: String
         get() = if (chinese) "开始模拟" else "Start mock location"
     val mockLocationStop: String
@@ -143,8 +149,7 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "当前读到的是模拟位置，不代表设备实际所在位置。" else
             "This is a mock position, not the device's actual location."
     val mockLocationInvalid: String
-        get() = if (chinese) "请输入有效坐标：纬度 −90～90、经度 −180～180；精度 1～1000000 m，小数使用点号。" else
-            "Enter valid coordinates: latitude −90…90, longitude −180…180, accuracy 1…1000000 m. Use a decimal point."
+        get() = if (chinese) "坐标或精度无效" else "Invalid coordinates or accuracy"
     val mockLocationIpFailed: String
         get() = if (chinese) "未取得有效 IP 坐标，请重试或手填；已有坐标已保留。" else "No valid IP coordinates. Retry or enter manually; existing fields are kept."
     val mockLocationNotificationNeeded: String
@@ -234,33 +239,33 @@ class ToolboxStrings(val language: AppLanguage) {
     val cpuDisplayModeTitle: String
         get() = if (chinese) "悬浮窗 CPU 显示" else "Overlay CPU display"
     val coreTopologyBars: String
-        get() = if (chinese) "核心拓扑直角柱" else "Core Topology Bars"
+        get() = if (chinese) "核心柱状" else "Core bars"
     val coreFrequencies: String
         get() = if (chinese) "逐核心频率" else "Per-core frequency"
     val weightedCpuUsage: String
         get() = if (chinese) "加权占比折线" else "Weighted usage chart"
     val cpuDisplayModeHint: String
         get() = if (chinese) {
-            "支持核心拓扑直角柱、逐核心频率与加权占比折线图，满足不同监控偏好。受系统权限影响时以 ≈ 标记估算值。"
+            "核心柱状、逐核心频率或加权占比折线。受系统限制时以 ≈ 标记估算值。"
         } else {
-            "Supports Core Topology Bars, Per-core Frequencies, and Weighted Usage Chart."
+            "Core bars, per-core frequencies, or a weighted usage chart. Restricted sources are marked ≈."
         }
     val cpuTopologyTitle: String
-        get() = if (chinese) "CPU 核心拓扑图谱" else "CPU Core Topology"
+        get() = if (chinese) "CPU 核心" else "CPU cores"
     val cpuTopologyDescription: String
         get() = if (chinese) {
-            "按各核心物理算力能级加权分配宽度，基频归零实时呈现各核调频与负载状态。"
+            "按集群分组显示各核当前频率或占用。"
         } else {
-            "Weighted core widths by cluster capacity, showing live frequency and load scaling from baseline 0."
+            "Cores grouped by cluster, showing live frequency or load."
         }
     val frequencyMode: String
-        get() = if (chinese) "实时主频" else "Frequency"
+        get() = if (chinese) "频率" else "Freq"
     val usageMode: String
-        get() = if (chinese) "核心负载" else "Core Load"
+        get() = if (chinese) "占用" else "Load"
     val matrixView: String
-        get() = if (chinese) "图谱视图" else "Topology Matrix"
+        get() = if (chinese) "柱状" else "Bars"
     val gridView: String
-        get() = if (chinese) "数据网格" else "Data Grid"
+        get() = if (chinese) "明细" else "List"
     val offlineCore: String
         get() = if (chinese) "休眠" else "Offline"
     val littleCore: String
@@ -284,17 +289,17 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "固定位置" else "Lock position"
     val overlayFixedPositionDescription: String
         get() = if (chinese) {
-            "开启后悬浮窗固定且触控穿透，不会妨碍背后操作；关闭即可再次拖动。固定时请从监控页或通知停止。"
+            "固定后触控穿透。从本页或通知停止。"
         } else {
-            "Locks the overlay and lets touches pass through; turn it off to drag again. Stop it from the monitor page or notification while locked."
+            "Locked overlay is touch-through. Stop it here or from the notification."
         }
     val overlayAppearanceTitle: String
         get() = if (chinese) "悬浮窗外观" else "Overlay appearance"
     val overlayAppearanceDescription: String
         get() = if (chinese) {
-            "支持深色、浅色、Everforest、纯黑预设，以及自定义背景色与透明度调节。"
+            "主题、背景色与透明度。"
         } else {
-            "Supports Dark, Light, Everforest, Black presets, and custom background color with opacity slider."
+            "Theme, background, and opacity."
         }
     val overlayThemeDark: String
         get() = if (chinese) "深色" else "Dark"
@@ -486,6 +491,10 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "大致" else "Approximate"
     val currentLocationTitle: String
         get() = if (chinese) "当前位置" else "Current location"
+    val placeName: String
+        get() = if (chinese) "地点" else "Place"
+    val lookingUpPlace: String
+        get() = if (chinese) "正在解析地点…" else "Looking up place…"
     val getCurrentLocation: String
         get() = if (chinese) "获取当前位置" else "Get current location"
     val locationLoading: String
@@ -664,16 +673,9 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "在 IPLark 查看完整报告" else "View full report on IPLark"
     val publicIpDescription: String
         get() = if (chinese) {
-            "查询当前网络出口的公网 IP、大致位置、ASN、网络类型与简单的代理/风险提示。" +
-                "仅在点击查询时访问免费数据源（ipwho.is、proxycheck.io 等），且只发送所查询的 IP；" +
-                "代理/VPN 标记针对所查询的出口 IP，不代表本机是否正在使用 VPN；" +
-                "风险评分为第三方启发式结果，仅供参考。「在 IPLark 查看」会在浏览器中打开第三方报告。"
+            "仅点击查询时访问公开数据源，只发送所查 IP。代理/风险针对出口 IP，仅供参考。"
         } else {
-            "Look up the public egress IP, approximate location, ASN, network type, and simple proxy/risk hints. " +
-                "Free sources (ipwho.is, proxycheck.io, etc.) are contacted only when you tap Query, " +
-                "and only the queried IP is sent; the proxy/VPN flag describes the exit IP, not whether this device uses a VPN; " +
-                "the risk score is a third-party heuristic and may be inaccurate. " +
-                "The IPLark button opens a third-party report in your browser."
+            "Sources are contacted only on Query, sending just that IP. Proxy/risk hints describe the exit IP."
         }
 
     fun publicIpNetworkType(value: String): String = when (value.trim().lowercase()) {

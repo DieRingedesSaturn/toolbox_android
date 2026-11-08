@@ -273,31 +273,23 @@ private fun PermissionGuideView(
     ) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
             ),
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = "📊",
-                    fontSize = 48.sp,
-                )
                 Text(
                     text = strings.usagePermissionTitle,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
                     text = strings.usagePermissionDescription,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp,
                 )
                 Button(
                     onClick = onGrantClick,

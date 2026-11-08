@@ -138,7 +138,7 @@ fun SettingsScreen(
                 SettingsCard(title = strings.mockLocationTitle) {
                     Text(
                         text = strings.mockLocationSettingsHint,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -159,8 +159,8 @@ private fun SettingsCard(
         ),
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
                 text = title,

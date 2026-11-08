@@ -48,6 +48,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── CoordinateFormatter.kt
 │   ├── LocationInfo.kt
 │   ├── LocationInfoReader.kt
+│   ├── PlaceNameReader.kt
 │   ├── MockLocationConfig.kt
 │   ├── MockLocationController.kt
 │   └── MockLocationService.kt
@@ -179,6 +180,7 @@ com/example/toolbox/
 ```
 
 - `CoordinateFormatter` 是纯逻辑，已用 JVM 单元测试验证十进制度、DMS、半球和边界值。
+- `PlaceNameReader` 在定位读取或模拟坐标就绪后，通过系统 `Geocoder` 解析地点名称；地址拼装、有界取消和迟到结果丢弃有 JVM 测试；调用方按页面可见生命周期执行，并校验结果对应当前请求。
 - `LocationInfoReader` 只申请用户主动触发的前台定位，不申请后台定位。
 - `ui/MockLocationMapPicker.kt` 是模拟定位的点按选点对话框。内置资源在 `app/src/main/assets/mockmap/`（自写 `index.html`/`map.js`、MapLibre GL JS 4.7.1 及其 BSD-3-Clause 许可证）。仅在对话框打开时从 OpenFreeMap 拉取瓦片。
 - `NetworkInfoReader` 读取本地连接信息，并用短超时执行用户明确触发的公网 IP 查询。

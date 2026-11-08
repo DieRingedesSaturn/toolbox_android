@@ -27,8 +27,16 @@ class MonitorOverlayView @JvmOverloads constructor(
         strokeWidth = dp(1f)
     }
     private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        strokeWidth = dp(2f)
+        strokeWidth = dp(1.5f)
         style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val accentFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    private val sparkFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF202124.toInt()
@@ -38,26 +46,11 @@ class MonitorOverlayView @JvmOverloads constructor(
         color = 0xFF5F6368.toInt()
         textSize = dp(10f)
     }
-    private val clusterPaints = mapOf(
-        0 to Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF26A69A.toInt() },
-        1 to Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFB300.toInt() },
-        2 to Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF7043.toInt() },
-        3 to Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE91E63.toInt() },
-    )
     private val barBackgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x33888888
     }
-    private val barBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(0.8f)
-        color = 0x55888888
-    }
-    private val coreLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFFFFFF.toInt()
-        textSize = dp(7.5f)
-        isFakeBoldText = true
-    }
     private val closeBounds = RectF()
+    private val barRect = RectF()
     private val history = mutableMapOf<MonitorMetric, MutableList<Float>>()
     private var metrics: List<MonitorMetric> = MonitorMetric.entries.toList()
     private var cpuDisplayMode = MonitorCpuDisplayMode.TOPOLOGY_MATRIX
@@ -96,6 +89,8 @@ class MonitorOverlayView @JvmOverloads constructor(
         secondaryTextPaint.color = colors.secondaryTextColor
         gridPaint.color = colors.gridColor
         accentPaint.color = accentColor
+        accentFillPaint.color = accentColor
+        sparkFillPaint.color = (accentColor and 0x00FFFFFF) or 0x1F000000
         history.keys.retainAll(this.metrics.toSet())
         invalidate()
     }
@@ -176,17 +171,28 @@ class MonitorOverlayView @JvmOverloads constructor(
         val chartBottom = top + metricRowHeight(metric) - dp(3f)
         val chartRight = width - padding
         canvas.drawLine(padding, chartBottom, chartRight, chartBottom, gridPaint)
-        canvas.drawLine(padding, (chartTop + chartBottom) / 2f, chartRight, (chartTop + chartBottom) / 2f, gridPaint)
 
         val values = history[metric].orEmpty()
         if (values.size >= 2) {
-            val path = Path()
+            val line = Path()
+            val fill = Path()
+            val lastIndex = values.lastIndex.coerceAtLeast(1)
             values.forEachIndexed { valueIndex, value ->
-                val x = padding + (chartRight - padding) * valueIndex / (values.lastIndex.coerceAtLeast(1))
+                val x = padding + (chartRight - padding) * valueIndex / lastIndex
                 val y = chartBottom - (chartBottom - chartTop) * value / 100f
-                if (valueIndex == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                if (valueIndex == 0) {
+                    line.moveTo(x, y)
+                    fill.moveTo(x, chartBottom)
+                    fill.lineTo(x, y)
+                } else {
+                    line.lineTo(x, y)
+                    fill.lineTo(x, y)
+                }
             }
-            canvas.drawPath(path, accentPaint)
+            fill.lineTo(chartRight, chartBottom)
+            fill.close()
+            canvas.drawPath(fill, sparkFillPaint)
+            canvas.drawPath(line, accentPaint)
         }
     }
 
@@ -196,9 +202,8 @@ class MonitorOverlayView @JvmOverloads constructor(
         top: Float,
         padding: Float,
     ) {
-        val label = if (chinese) "CPU · 拓扑" else "CPU · Topology"
         textPaint.textSize = dp(11f)
-        canvas.drawText(label, padding, top + dp(12f), textPaint)
+        canvas.drawText("CPU", padding, top + dp(12f), textPaint)
 
         val display = displayValue(MonitorMetric.CPU, sample)
         secondaryTextPaint.textSize = dp(10f)
@@ -210,55 +215,44 @@ class MonitorOverlayView @JvmOverloads constructor(
             return
         }
 
+        val groups = cores.groupBy { it.maximumFrequencyMhz ?: 0 }.toSortedMap().values.toList()
         val barTop = top + dp(18f)
         val barBottom = top + metricRowHeight(MonitorMetric.CPU) - dp(4f)
         val barHeight = barBottom - barTop
-        val gap = dp(1.5f)
-        val totalAvailableWidth = (width - padding * 2f) - gap * (cores.size - 1)
-
-        val minMaxMhz = cores.minOfOrNull { it.maximumFrequencyMhz ?: 1000 }?.coerceAtLeast(100) ?: 1000
-        val weights = cores.map { ((it.maximumFrequencyMhz ?: minMaxMhz).toFloat() / minMaxMhz.toFloat()).coerceIn(1.0f, 2.4f) }
-        val sumWeights = weights.sum().coerceAtLeast(1f)
+        val barGap = dp(1.5f)
+        val clusterGap = dp(5f)
+        val innerGaps = (cores.size - 1).coerceAtLeast(0)
+        val extraGaps = (groups.size - 1).coerceAtLeast(0)
+        val totalAvailable = (width - padding * 2f) - barGap * innerGaps - clusterGap * extraGaps
+        val barWidth = if (cores.isEmpty()) 0f else totalAvailable / cores.size
+        val radius = dp(2f)
 
         var curX = padding
-        cores.forEachIndexed { index, core ->
-            val w = totalAvailableWidth * (weights[index] / sumWeights)
-            val left = curX
-            val right = left + w
-            curX = right + gap
+        groups.forEachIndexed { groupIndex, group ->
+            if (groupIndex > 0) curX += clusterGap
+            group.forEach { core ->
+                val left = curX
+                val right = left + barWidth
+                curX = right + barGap
 
-            val minMhz = core.minimumFrequencyMhz ?: 0
-            val maxMhz = core.maximumFrequencyMhz ?: minMaxMhz
-            val curMhz = core.currentFrequencyMhz
-            val isOffline = curMhz == null || curMhz <= 0
+                barRect.set(left, barTop, right, barBottom)
+                canvas.drawRoundRect(barRect, radius, radius, barBackgroundPaint)
 
-            // 1. Crisp outer rectangular background track
-            canvas.drawRect(left, barTop, right, barBottom, barBackgroundPaint)
-
-            // 2. Vertical fill from effective dynamic baseline (min_freq -> max_freq)
-            if (!isOffline && curMhz > minMhz && maxMhz > minMhz) {
-                val ratio = ((curMhz - minMhz).toFloat() / (maxMhz - minMhz).toFloat()).coerceIn(0f, 1f)
-                val fillTop = barBottom - barHeight * ratio
-                val ghz = maxMhz / 1000.0
-                val clusterPaint = when {
-                    ghz >= 3.2 -> clusterPaints[3]!!
-                    ghz >= 2.6 -> clusterPaints[2]!!
-                    ghz >= 2.0 -> clusterPaints[1]!!
-                    else -> clusterPaints[0]!!
+                val minMhz = core.minimumFrequencyMhz ?: 0
+                val maxMhz = core.maximumFrequencyMhz ?: 0
+                val curMhz = core.currentFrequencyMhz
+                val fraction = if (curMhz == null || curMhz <= 0 || maxMhz <= 0) {
+                    0f
+                } else if (maxMhz > minMhz) {
+                    ((curMhz - minMhz).toFloat() / (maxMhz - minMhz).toFloat()).coerceIn(0f, 1f)
+                } else {
+                    (curMhz.toFloat() / maxMhz.toFloat()).coerceIn(0f, 1f)
                 }
-                canvas.drawRect(left, fillTop, right, barBottom, clusterPaint)
-            }
-
-            // 3. Crisp rectangular border
-            canvas.drawRect(left, barTop, right, barBottom, barBorderPaint)
-
-            // 4. Tiny core label inside column
-            if (w >= dp(8.5f)) {
-                val coreText = if (w >= dp(14f)) "C${core.index}" else "${core.index}"
-                val textWidth = coreLabelPaint.measureText(coreText)
-                val textX = left + (w - textWidth) / 2f
-                val textY = barBottom - dp(2f)
-                canvas.drawText(coreText, textX, textY, coreLabelPaint)
+                if (fraction > 0.008f) {
+                    val fillTop = barBottom - barHeight * fraction
+                    barRect.set(left, fillTop, right, barBottom)
+                    canvas.drawRoundRect(barRect, radius, radius, accentFillPaint)
+                }
             }
         }
     }
@@ -270,7 +264,7 @@ class MonitorOverlayView @JvmOverloads constructor(
         padding: Float,
     ) {
         textPaint.textSize = dp(11f)
-        canvas.drawText("CPU · MHz", padding, top + dp(12f), textPaint)
+        canvas.drawText("CPU", padding, top + dp(12f), textPaint)
         val cores = sample?.cpuCores.orEmpty()
         if (cores.isEmpty()) {
             val waiting = waitingLabel()

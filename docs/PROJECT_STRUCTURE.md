@@ -48,6 +48,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── CoordinateFormatter.kt
 │   ├── LocationInfo.kt
 │   ├── LocationInfoReader.kt
+│   ├── PlaceNameReader.kt
 │   ├── MockLocationConfig.kt
 │   ├── MockLocationController.kt
 │   └── MockLocationService.kt
@@ -179,6 +180,7 @@ com/example/toolbox/
 ```
 
 - `CoordinateFormatter` is pure logic with JVM tests for decimal degrees, DMS, hemispheres, and boundary values.
+- `PlaceNameReader` reverse-geocodes a place name through the platform `Geocoder` after a location read or mock coordinates, with JVM tests for address formatting, bounded cancellation and late-result rejection. Callers gate lookups to the visible lifecycle and match results to the current request.
 - `LocationInfoReader` requests only a foreground, user-triggered location and does not request background location.
 - `ui/MockLocationMapPicker.kt` hosts the mock-location tap-to-pick dialog. Bundled assets live in `app/src/main/assets/mockmap/` (original `index.html`/`map.js`, MapLibre GL JS 4.7.1, and its BSD-3-Clause license). Tiles load from OpenFreeMap only while the dialog is open.
 - `NetworkInfoReader` reads local connection information and performs the explicit public-IP request with a short timeout.
