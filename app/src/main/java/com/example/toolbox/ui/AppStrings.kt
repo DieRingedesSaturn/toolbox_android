@@ -1075,9 +1075,9 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "忽略" else "Dismiss"
     val notificationLedgerRecordsHint: String
         get() = if (chinese) {
-            "所选应用的通知会按时间留在这里（含原文，仅本机），点开可核对识别结果"
+            "所选应用的通知会按时间留在这里（验证码类不保留原文，仅本机），点开可核对识别结果"
         } else {
-            "Notifications from selected apps are listed here with their text, kept only on this device; tap one to audit the parse result"
+            "Notifications from selected apps are listed here, kept only on this device; verification-code notices keep no text. Tap one to audit the parse result"
         }
     val notificationLedgerRecordsEmpty: String
         get() = if (chinese) "还没有收到所选应用的通知" else "Nothing received from selected apps yet"
@@ -1088,7 +1088,7 @@ class ToolboxStrings(val language: AppLanguage) {
     val notificationLedgerReasonEmpty: String
         get() = if (chinese) "通知没有可读取的文本" else "No readable text in the notification"
     val notificationLedgerReasonCode: String
-        get() = if (chinese) "验证码类通知，已跳过" else "Verification-code notice; skipped"
+        get() = if (chinese) "验证码类通知，未保留原文" else "Verification-code notice; text not stored"
     val notificationLedgerReasonNoAmount: String
         get() = if (chinese) "没有识别出金额" else "No amount recognized"
     val notificationLedgerDefaults: String

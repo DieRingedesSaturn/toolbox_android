@@ -2,6 +2,7 @@ package com.example.toolbox.ledger
 
 import android.content.Context
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -62,6 +63,34 @@ class NotificationLedgerStoreTest {
             listOf(NotificationSkipReason.VERIFICATION_CODE, NotificationSkipReason.EMPTY_TEXT),
             reasons,
         )
+    }
+
+    @Test
+    fun verificationNoticesKeepNoTextOrPayment() {
+        store.recordParts(
+            "com.pay",
+            "k1",
+            System.currentTimeMillis(),
+            "银行",
+            "验证码 482913，本笔消费 25.00 元",
+        )
+        val record = store.records().single()
+        assertEquals(NotificationSkipReason.VERIFICATION_CODE, record.skipReason)
+        assertTrue(record.amountsCents.isEmpty())
+        assertEquals("", record.title)
+        assertEquals("", record.text)
+        assertNull(record.payment)
+    }
+
+    @Test
+    fun prunesExpiredRecordsWhenAnotherNotificationArrives() {
+        val prefs = context.getSharedPreferences("notification_ledger", Context.MODE_PRIVATE)
+        val eightDaysAgo = System.currentTimeMillis() - 8L * 24 * 60 * 60 * 1_000
+        store.recordParts("com.pay", "old", eightDaysAgo, "旧", "消费 ¥1.00")
+        store.recordParts("com.pay", "new", System.currentTimeMillis(), "新", "消费 ¥2.00")
+        val raw = prefs.getString("candidates", "[]")!!
+        assertFalse(raw.contains("消费 ¥1.00"))
+        assertTrue(raw.contains("消费 ¥2.00"))
     }
 
     @Test

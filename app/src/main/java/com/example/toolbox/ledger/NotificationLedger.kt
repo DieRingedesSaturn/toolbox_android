@@ -42,8 +42,11 @@ data class ParsedNotification(
 
 /**
  * Keeps every notification from selected source apps — extracted amounts plus the
- * title and body so the user can audit what was captured. Records stay local only,
- * expire after [MAX_AGE_MILLIS], and are wiped when the feature is turned off.
+ * title and body so the user can audit what was captured. Verification-code
+ * notices are the exception: they retain only source, time, and skip reason, never
+ * the OTP text. Records stay local only, are pruned after [MAX_AGE_MILLIS] when the
+ * list is read or another notification arrives, and are wiped when the feature is
+ * turned off.
  */
 class NotificationLedgerStore(context: Context) {
     private val appContext = context.applicationContext
@@ -149,17 +152,26 @@ class NotificationLedgerStore(context: Context) {
         } else {
             NotificationAmountParser.parseDetailed(body)
         }
-        val payment = if (body.isBlank()) null else {
+        // A verification-code notice keeps no body and never reaches payment
+        // parsing: the one-time code is the sensitive part.
+        val keepText = result.skipReason != NotificationSkipReason.VERIFICATION_CODE
+        val storedTitle = if (keepText) title else ""
+        val storedText = if (keepText) text else ""
+        val payment = if (body.isBlank() || !keepText) null else {
             PaymentNotificationParser.parse(packageName, title, text)
         }
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(key.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
         synchronized(lock) {
-            val previous = readRecords().firstOrNull { it.id == digest }
+            val nowMillis = System.currentTimeMillis()
+            val existing = readRecords().filter {
+                nowMillis - it.occurredAtMillis in 0..MAX_AGE_MILLIS
+            }
+            val previous = existing.firstOrNull { it.id == digest }
             val isRepost = previous != null &&
-                previous.title == title &&
-                previous.text == text &&
+                previous.title == storedTitle &&
+                previous.text == storedText &&
                 previous.payment == payment &&
                 kotlin.math.abs(occurredAtMillis - previous.occurredAtMillis) <=
                 REPOST_WINDOW_MILLIS
@@ -168,15 +180,15 @@ class NotificationLedgerStore(context: Context) {
                 packageName = packageName,
                 occurredAtMillis = occurredAtMillis,
                 amountsCents = result.amountsCents,
-                title = title,
-                text = text,
+                title = storedTitle,
+                text = storedText,
                 skipReason = result.skipReason,
                 payment = payment,
                 // Only an actual repost keeps the auto-book marker. Payment
                 // apps may reuse a notification key for a later transaction.
                 autoBookedEntryUuid = previous?.autoBookedEntryUuid?.takeIf { isRepost },
             )
-            saveRecords((listOf(item) + readRecords().filterNot { it.id == digest }).trimmed())
+            saveRecords((listOf(item) + existing.filterNot { it.id == digest }).trimmed())
             return item
         }
     }
