@@ -1,1 +1,3 @@
-# v0.1 does not enable shrinking. Keep this file so release configuration is ready.
+# Release builds enable R8 shrinking (see app/build.gradle.kts). The default
+# @JavascriptInterface keep rule covers the map picker bridge. Add project-specific
+# keep rules below only when a verified reflection or JNI path requires them.
