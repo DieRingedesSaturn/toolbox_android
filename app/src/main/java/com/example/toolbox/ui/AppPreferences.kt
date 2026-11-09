@@ -21,6 +21,7 @@ private const val MONITOR_OVERLAY_CUSTOM_COLOR_KEY = "monitor_overlay_custom_col
 private const val MONITOR_OVERLAY_OPACITY_KEY = "monitor_overlay_opacity"
 private const val LEDGER_LAST_ACCOUNT_KEY = "ledger_last_account"
 private const val LEDGER_OVERVIEW_ORDER_KEY = "ledger_overview_order"
+private const val HOME_MODULE_ORDER_KEY = "home_module_order"
 private const val FX_PINNED_CURRENCIES_KEY = "fx_pinned_currencies"
 private const val MOCK_LOCATION_ACCURACY_KEY = "mock_location_accuracy"
 
@@ -150,6 +151,14 @@ class AppPreferences(context: Context) {
 
     fun saveLedgerOverviewOrder(value: List<LedgerOverviewCard>) {
         preferences.edit { putString(LEDGER_OVERVIEW_ORDER_KEY, LedgerOverviewOrder.format(value)) }
+    }
+
+    /** User-defined order of the Home tool modules, with newly added tools appended. */
+    fun homeModuleOrder(): List<ToolboxModule> =
+        HomeModuleOrder.parse(preferences.getString(HOME_MODULE_ORDER_KEY, null))
+
+    fun saveHomeModuleOrder(value: List<ToolboxModule>) {
+        preferences.edit { putString(HOME_MODULE_ORDER_KEY, HomeModuleOrder.format(value)) }
     }
 
     fun fxPinnedCurrencies(): List<String> =

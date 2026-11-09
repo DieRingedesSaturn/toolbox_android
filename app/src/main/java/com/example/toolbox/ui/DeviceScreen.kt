@@ -15,17 +15,21 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.toolbox.device.DeviceInfo
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceScreen(
     strings: ToolboxStrings,
@@ -38,13 +42,16 @@ fun DeviceScreen(
     val context = LocalContext.current
     val columns = if (isExpandedWidth()) 2 else 1
     val sections = DeviceSection.entries.toList().chunked(columns)
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             ToolboxTopBar(
                 title = strings.device,
                 onBack = onBack,
                 backLabel = strings.back,
+                scrollBehavior = scrollBehavior,
                 actions = {
                     TextButton(onClick = onRefresh, enabled = !isLoading) {
                         Text(if (isLoading) strings.refreshing else strings.refresh)

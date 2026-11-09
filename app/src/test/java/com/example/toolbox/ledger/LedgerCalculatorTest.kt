@@ -599,6 +599,8 @@ class LedgerCalculatorTest {
         assertEquals("€12.34", LedgerCalculator.formatMoney(1234L, "EUR"))
         assertEquals("JP¥1500", LedgerCalculator.formatMoney(150_000L, "JPY"))
         assertEquals("XYZ 12.34", LedgerCalculator.formatMoney(1234L, "XYZ"))
+        assertEquals("¥11,098.82", LedgerCalculator.formatCurrency(11_098.82))
+        assertEquals("−¥362.71", LedgerCalculator.formatCurrency(-362.71))
     }
 
     @Test

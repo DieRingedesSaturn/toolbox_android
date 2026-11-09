@@ -27,10 +27,10 @@
     var dark = params.get("dark") === "1";
     var hasStart = Number.isFinite(lat) && Number.isFinite(lng) &&
         lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
-    var start = hasStart ? [lng, lat] : [0, 20];
-    var zoom = hasStart ? 14 : 2;
+    var start = hasStart ? [lng, lat] : [105, 35];
+    var zoom = hasStart ? 14 : 3;
     var style = dark
-        ? "https://tiles.openfreemap.org/styles/dark"
+        ? "https://tiles.openfreemap.org/styles/fiord"
         : "https://tiles.openfreemap.org/styles/liberty";
 
     if (typeof maplibregl === "undefined") {
@@ -72,6 +72,16 @@
             fadeDuration: 0,
         });
         map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+        map.on("styleimagemissing", function (event) {
+            var id = event && event.id;
+            if (id && !map.hasImage(id)) {
+                map.addImage(id, {
+                    width: 1,
+                    height: 1,
+                    data: new Uint8Array([0, 0, 0, 0]),
+                });
+            }
+        });
         map.once("load", function () {
             notify("ready");
             if (hasStart) {

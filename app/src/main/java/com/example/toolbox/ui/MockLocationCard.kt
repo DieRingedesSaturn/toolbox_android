@@ -12,21 +12,22 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -40,10 +41,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -68,7 +71,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun MockLocationCard(strings: ToolboxStrings) {
     val context = LocalContext.current
@@ -262,15 +264,21 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(
+                    FilledTonalButton(
                         enabled = idle,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp),
                         onClick = { showMapPicker = true },
                     ) { Text(strings.mockLocationMapButton) }
-                    TextButton(
+                    FilledTonalButton(
                         enabled = idle,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp),
                         onClick = {
                             fetchingIp = true
                             ipFailed = false
@@ -304,21 +312,21 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 MockField(
                     value = latitude,
                     onValueChange = { latitude = it },
                     label = strings.mockLatitudeLabel,
                     enabled = idle,
-                    modifier = Modifier.weight(1.15f),
+                    modifier = Modifier.weight(1f),
                 )
                 MockField(
                     value = longitude,
                     onValueChange = { longitude = it },
                     label = strings.mockLongitudeLabel,
                     enabled = idle,
-                    modifier = Modifier.weight(1.15f),
+                    modifier = Modifier.weight(1f),
                 )
                 MockField(
                     value = accuracy,
@@ -328,7 +336,7 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
                     },
                     label = strings.mockLocationAccuracy,
                     enabled = !launching,
-                    modifier = Modifier.weight(0.7f),
+                    modifier = Modifier.weight(1f),
                     imeAction = ImeAction.Done,
                 )
             }
@@ -340,17 +348,29 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
                 )
             }
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                FlowRow(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     MockLocationConfig.DURATIONS_MINUTES.forEach { value ->
                         FilterChip(
                             selected = value == minutes,
                             onClick = { minutes = value },
                             enabled = !launching,
-                            label = { Text(strings.mockLocationMinutes(value)) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = !launching,
+                                selected = value == minutes,
+                                borderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f),
+                            ),
+                            label = {
+                                Text(
+                                    text = strings.mockLocationMinutes(value),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center,
+                                )
+                            },
                         )
                     }
                 }
@@ -448,7 +468,6 @@ private fun MockField(
         color = textColor,
         fontFeatureSettings = "tnum",
     )
-    val lineColor = MaterialTheme.colorScheme.outlineVariant
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
@@ -461,14 +480,21 @@ private fun MockField(
         ),
         modifier = modifier,
         decorationBox = { innerTextField ->
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f))
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
-                Box(modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)) {
+                Box {
                     if (value.isEmpty()) {
                         Text(
                             text = "—",
@@ -479,12 +505,6 @@ private fun MockField(
                     }
                     innerTextField()
                 }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(lineColor),
-                )
             }
         },
     )

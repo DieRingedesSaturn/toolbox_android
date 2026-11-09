@@ -9,9 +9,9 @@ enum class UsageTimeRange(val nameZh: String, val nameEn: String) {
 
 enum class UsageSortMode(val nameZh: String, val nameEn: String) {
     DURATION("使用时长", "Duration"),
-    TOTAL_DATA("总流量", "Total Data"),
-    CELLULAR_DATA("蜂窝流量", "Mobile Data"),
-    WIFI_DATA("WLAN流量", "Wi-Fi Data"),
+    TOTAL_DATA("总流量", "Total"),
+    CELLULAR_DATA("蜂窝流量", "Mobile"),
+    WIFI_DATA("WLAN", "Wi-Fi"),
 }
 
 data class AppUsageItem(

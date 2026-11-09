@@ -494,8 +494,10 @@ object LedgerCalculator {
             .sortedByDescending { it.occurredAtMillis }
     }
 
-    fun formatCurrency(amountYuan: Double, symbol: String = "¥"): String =
-        "$symbol%.2f".format(Locale.US, amountYuan)
+    fun formatCurrency(amountYuan: Double, symbol: String = "¥"): String {
+        val sign = if (amountYuan < -0.000_001) "−" else ""
+        return "$sign$symbol%,.2f".format(Locale.US, kotlin.math.abs(amountYuan))
+    }
 
     /** Parses a decimal amount into cents without binary floating-point truncation. */
     fun parseMoneyToCents(text: String): Long? {

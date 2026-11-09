@@ -213,6 +213,8 @@ private fun MonthSummaryCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val expenseText = LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0)
+            val tabularHeadline = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum")
+            val tabularTitle = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum")
             Text(
                 text = strings.monthExpenseLabel,
                 style = MaterialTheme.typography.labelSmall,
@@ -220,7 +222,7 @@ private fun MonthSummaryCard(
             )
             Text(
                 text = expenseText,
-                style = MaterialTheme.typography.headlineMedium,
+                style = tabularHeadline,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.clickable {
@@ -295,12 +297,13 @@ private fun MonthSummaryCard(
                     )
                     Text(
                         text = incomeText,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = tabularTitle,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                val netText = LedgerCalculator.formatCurrency(monthSummary.netCents / 100.0)
+                val netText = (if (monthSummary.netCents > 0) "+" else "") +
+                    LedgerCalculator.formatCurrency(monthSummary.netCents / 100.0)
                 Column(
                     horizontalAlignment = Alignment.End,
                     modifier = Modifier.clickable {
@@ -319,7 +322,7 @@ private fun MonthSummaryCard(
                     )
                     Text(
                         text = netText,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = tabularTitle,
                         fontWeight = FontWeight.SemiBold,
                         color = if (monthSummary.netCents >= 0) {
                             MaterialTheme.colorScheme.primary
@@ -360,14 +363,14 @@ private fun DailyCostCard(
             )
             Text(
                 text = "${LedgerCalculator.formatCurrency(summary.activeDailyBurnRateYuan)}${strings.perDayUnit}",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum"),
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = "${LedgerCalculator.formatCurrency(summary.activeMonthlyBurnRateYuan)}${strings.perMonthUnit}" +
                     " · ${LedgerCalculator.formatCurrency(summary.activeYearlyBurnRateYuan)}${strings.perYearUnit}",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
@@ -551,6 +554,7 @@ private fun RecentEntriesCard(
                         accounts = accounts,
                         onOpen = { onOpenEntry(entry) },
                         onCopy = { onCopyEntry(entry) },
+                        showDateInSubtitle = true,
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))

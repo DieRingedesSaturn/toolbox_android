@@ -49,4 +49,22 @@ class LedgerOverviewOrderTest {
         )
         assertEquals(order, LedgerOverviewOrder.parse(LedgerOverviewOrder.format(order)))
     }
+
+    @Test
+    fun homeModuleOrderKeepsStoredAndAppendsMissing() {
+        assertEquals(HomeModuleOrder.DEFAULT, HomeModuleOrder.parse(null))
+        assertEquals(
+            listOf(
+                ToolboxModule.LEDGER,
+                ToolboxModule.NETWORK,
+                ToolboxModule.MONITOR,
+                ToolboxModule.FX,
+                ToolboxModule.ASTRONOMY,
+                ToolboxModule.USAGE,
+                ToolboxModule.DEVICE,
+                ToolboxModule.LOCATION,
+            ),
+            HomeModuleOrder.parse("LEDGER,NETWORK,LEDGER,HOME,UNKNOWN"),
+        )
+    }
 }

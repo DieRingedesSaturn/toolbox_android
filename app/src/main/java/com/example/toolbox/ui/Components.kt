@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -40,6 +42,7 @@ fun ToolboxTopBar(
     backLabel: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    scrollBehavior: TopAppBarScrollBehavior? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     TopAppBar(
@@ -73,6 +76,7 @@ fun ToolboxTopBar(
             }
         },
         actions = actions,
+        scrollBehavior = scrollBehavior,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.background,
             scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -99,6 +103,7 @@ fun InfoCard(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary,
             )
             content()
@@ -114,6 +119,7 @@ fun InfoRow(
     copyAction: String = "Copy",
     onCopy: (String) -> Unit,
 ) {
+    val tabularBody = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum")
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -132,7 +138,7 @@ fun InfoRow(
         Text(
             text = value,
             modifier = Modifier.weight(1.6f),
-            style = MaterialTheme.typography.bodyMedium,
+            style = tabularBody,
             color = MaterialTheme.colorScheme.onSurface,
         )
     }

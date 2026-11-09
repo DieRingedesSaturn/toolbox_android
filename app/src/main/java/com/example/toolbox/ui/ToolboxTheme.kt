@@ -148,7 +148,7 @@ private fun everforestDarkColorScheme() = darkColorScheme(
 )
 
 private fun everforestLightColorScheme() = lightColorScheme(
-    primary = Color(0xFF4F6452),
+    primary = Color(0xFF3A7D44),
     onPrimary = Color(0xFFFDF6E3),
     primaryContainer = Color(0xFFD3DEC8),
     onPrimaryContainer = Color(0xFF232A2E),
@@ -156,14 +156,14 @@ private fun everforestLightColorScheme() = lightColorScheme(
     onSecondary = Color(0xFFFDF6E3),
     secondaryContainer = Color(0xFFD0E6F0),
     onSecondaryContainer = Color(0xFF232A2E),
-    tertiary = Color(0xFFDF69BA),
+    tertiary = Color(0xFFD26A1B),
     onTertiary = Color(0xFFFDF6E3),
     background = Color(0xFFFDF6E3),
-    onBackground = Color(0xFF5C6A72),
+    onBackground = Color(0xFF4C565C),
     surface = Color(0xFFF4F0D9),
-    onSurface = Color(0xFF5C6A72),
+    onSurface = Color(0xFF3C474D),
     surfaceVariant = Color(0xFFEFEBD4),
-    onSurfaceVariant = Color(0xFF7C8B94),
+    onSurfaceVariant = Color(0xFF708089),
     surfaceContainerLowest = Color(0xFFF8F1DC),
     surfaceContainerLow = Color(0xFFF4ECD6),
     surfaceContainer = Color(0xFFEFEBD4),

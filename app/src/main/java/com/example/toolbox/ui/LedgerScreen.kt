@@ -61,6 +61,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -1179,7 +1180,10 @@ internal fun LedgerScreen(
         return
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             Column {
                 if (searching) {
@@ -1230,8 +1234,10 @@ internal fun LedgerScreen(
                                 )
                             }
                         },
+                        scrollBehavior = scrollBehavior,
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.background,
+                            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                         ),
                     )
                 } else {
@@ -1239,6 +1245,7 @@ internal fun LedgerScreen(
                         title = strings.ledger,
                         onBack = onBack,
                         backLabel = strings.back,
+                        scrollBehavior = scrollBehavior,
                         actions = {
                             IconButton(
                                 onClick = {

@@ -39,6 +39,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,6 +74,7 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppUsageScreen(
     strings: ToolboxStrings,
@@ -119,12 +122,16 @@ fun AppUsageScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             ToolboxTopBar(
                 title = strings.appUsage,
                 onBack = onBack,
                 backLabel = strings.back,
+                scrollBehavior = scrollBehavior,
                 actions = {
                     if (hasPermission) {
                         TextButton(
@@ -521,18 +528,21 @@ private fun CategoryFilterRow(
     ) {
         AppCategory.entries.forEach { category ->
             val isSelected = category == selectedCategory
-            val count = if (category == AppCategory.ALL) {
-                report?.items?.size ?: 0
-            } else {
-                report?.categorySummaries?.find { it.category == category }?.appCount ?: 0
+            val count = report?.let { rep ->
+                if (category == AppCategory.ALL) {
+                    rep.items.size
+                } else {
+                    rep.categorySummaries.find { it.category == category }?.appCount ?: 0
+                }
             }
+            val countSuffix = if (count != null) " $count" else ""
 
             FilterChip(
                 selected = isSelected,
                 onClick = { onSelectCategory(category) },
                 label = {
                     Text(
-                        text = "${category.emoji} ${strings.appCategory(category)} $count",
+                        text = "${category.emoji} ${strings.appCategory(category)}$countSuffix",
                         fontSize = 12.sp,
                     )
                 },
@@ -565,6 +575,8 @@ private fun SortModeTabs(
                         text = strings.usageSortMode(mode),
                         fontSize = 12.sp,
                         fontWeight = if (sortMode == mode) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 },
             )

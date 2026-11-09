@@ -852,6 +852,20 @@ class ToolboxStrings(val language: AppLanguage) {
         ToolboxModule.ABOUT -> about
     }
 
+    fun moduleShortTitle(module: ToolboxModule): String = when (module) {
+        ToolboxModule.HOME -> appName
+        ToolboxModule.DEVICE -> if (chinese) "设备" else "Device"
+        ToolboxModule.LOCATION -> if (chinese) "位置" else "Location"
+        ToolboxModule.NETWORK -> if (chinese) "网络" else "Network"
+        ToolboxModule.MONITOR -> if (chinese) "监控" else "Monitor"
+        ToolboxModule.ASTRONOMY -> if (chinese) "天文" else "Astronomy"
+        ToolboxModule.USAGE -> if (chinese) "统计" else "Usage"
+        ToolboxModule.LEDGER -> if (chinese) "记账" else "Ledger"
+        ToolboxModule.FX -> if (chinese) "汇率" else "FX"
+        ToolboxModule.SETTINGS -> settings
+        ToolboxModule.ABOUT -> about
+    }
+
     val ledger: String
         get() = if (chinese) "记账与成本摊销" else "Ledger & Cost Tracker"
     val ledgerWidgetTitle: String
@@ -936,6 +950,16 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "下移" else "Move down"
     val ledgerOverviewOrderReset: String
         get() = if (chinese) "恢复默认" else "Reset"
+    val homeModulesOrderAction: String
+        get() = if (chinese) "排序" else "Reorder"
+    val homeModulesOrderTitle: String
+        get() = if (chinese) "工具卡片排序" else "Reorder tools"
+    val homeModulesOrderHint: String
+        get() = if (chinese) {
+            "拖动工具调整首页显示顺序，修改会立即保存。"
+        } else {
+            "Drag a tool to reorder the home grid; changes save immediately."
+        }
     val doneAction: String
         get() = if (chinese) "完成" else "Done"
 
@@ -1320,6 +1344,8 @@ class ToolboxStrings(val language: AppLanguage) {
     val fxFetchedLabel: String
         get() = if (chinese) "获取时间" else "Fetched"
     val fxSourceLabel: String
+        get() = if (chinese) "数据源" else "Source"
+    val fxSourceScheduleNote: String
         get() = if (chinese) {
             "欧洲央行参考汇率（Frankfurter），工作日更新"
         } else {
@@ -2134,7 +2160,7 @@ class ToolboxStrings(val language: AppLanguage) {
     }
     fun transferLine(from: String, to: String): String = "$from → $to"
     fun signedAmount(amount: String, negative: Boolean): String =
-        (if (negative) "-" else "+") + amount
+        (if (negative) "−" else "+") + amount
 
     // Tag management v2
     val tagLabel: String

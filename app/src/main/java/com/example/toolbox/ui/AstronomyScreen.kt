@@ -31,11 +31,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
@@ -80,6 +83,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AstronomyScreen(
     strings: ToolboxStrings,
@@ -190,12 +194,16 @@ fun AstronomyScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             ToolboxTopBar(
                 title = strings.astronomy,
                 onBack = onBack,
                 backLabel = strings.back,
+                scrollBehavior = scrollBehavior,
                 subtitle = formatShortCoordinates(latitude, longitude) +
                     if (isUsingDefaultLocation) " ${strings.defaultLocationNote}" else "",
                 actions = {
@@ -460,7 +468,7 @@ private fun NightTimelineShowcaseCard(
                     symbol = "🌅",
                     label = strings.sunsetLabel,
                     time = timeFmt.format(Date(timeline.sunsetMillis)),
-                    color = Color(0xFFFFB74D),
+                    color = MaterialTheme.colorScheme.tertiary,
                 )
 
                 TwilightTimeChip(
@@ -474,7 +482,7 @@ private fun NightTimelineShowcaseCard(
                     symbol = "🌄",
                     label = strings.sunriseLabel,
                     time = timeFmt.format(Date(timeline.sunriseMillis)),
-                    color = Color(0xFFFFB74D),
+                    color = MaterialTheme.colorScheme.tertiary,
                 )
             }
 
@@ -571,8 +579,12 @@ private fun NightTimelineShowcaseCard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                LegendItem(color = Color(0xFF4CAF50), text = strings.legendVisiblePeriod)
-                LegendItem(color = MaterialTheme.colorScheme.surfaceVariant, text = strings.darkNightLabel)
+                LegendItem(color = MaterialTheme.colorScheme.primary, text = strings.legendVisiblePeriod)
+                LegendItem(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                    borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                    text = strings.twilightLabel,
+                )
                 LegendItem(color = MaterialTheme.colorScheme.error, text = strings.legendCurrentTime)
             }
         }
@@ -765,15 +777,26 @@ private fun TwilightTimeChip(
 }
 
 @Composable
-private fun LegendItem(color: Color, text: String) {
+private fun LegendItem(
+    color: Color,
+    text: String,
+    borderColor: Color? = null,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(7.dp)
-                .background(color, CircleShape),
+                .size(8.dp)
+                .background(color, CircleShape)
+                .then(
+                    if (borderColor != null) {
+                        Modifier.border(1.dp, borderColor, CircleShape)
+                    } else {
+                        Modifier
+                    },
+                ),
         )
         Text(
             text = text,

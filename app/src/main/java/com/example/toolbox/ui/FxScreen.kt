@@ -16,6 +16,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -26,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -64,6 +67,7 @@ import kotlinx.coroutines.withContext
  * `latest` snapshot is shown offline; the network is touched only when the user
  * taps refresh or the explicit "get rates" button.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FxScreen(
     strings: ToolboxStrings,
@@ -133,12 +137,16 @@ internal fun FxScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             ToolboxTopBar(
                 title = strings.moduleTitle(ToolboxModule.FX),
                 onBack = onBack,
                 backLabel = strings.back,
+                scrollBehavior = scrollBehavior,
                 actions = {
                     IconButton(onClick = ::refresh, enabled = !fetching) {
                         if (fetching) {
@@ -482,20 +490,22 @@ private fun FxStatusCard(
                     value = strings.fxSourceName(rates.source.id),
                     onCopy = {},
                 )
-                if (rates.source != FxSource.FRANKFURTER) {
-                    Text(
-                        text = listOf(
+                Text(
+                    text = if (rates.source == FxSource.FRANKFURTER) {
+                        strings.fxSourceScheduleNote
+                    } else {
+                        listOf(
                             strings.fxFallbackNote,
                             if (rates.source == FxSource.CURRENCY_API) {
                                 strings.fxCommunityNote
                             } else {
                                 ""
                             },
-                        ).filter { it.isNotBlank() }.joinToString(" · "),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                        ).filter { it.isNotBlank() }.joinToString(" · ")
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             } else if (loaded) {
                 Text(
                     text = strings.fxNoRates,
@@ -542,5 +552,5 @@ private fun formatFxAmount(value: Double, code: String): String {
         Currency.getInstance(code).defaultFractionDigits
     }.getOrDefault(2).coerceAtLeast(0)
     return LedgerCalculator.currencySymbol(code) +
-        String.format(Locale.US, "%.${digits}f", value)
+        String.format(Locale.US, "%,.${digits}f", value)
 }

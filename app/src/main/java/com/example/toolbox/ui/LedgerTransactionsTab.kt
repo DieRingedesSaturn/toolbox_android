@@ -62,7 +62,7 @@ internal fun ledgerEntryLine(
     accountNames: Map<String, String> = emptyMap(),
 ): String {
     val sign = when (entry.type) {
-        LedgerEntryType.EXPENSE -> "-"
+        LedgerEntryType.EXPENSE -> "−"
         LedgerEntryType.INCOME -> "+"
         // Transfers/adjustments are balance moves, not spend/income.
         LedgerEntryType.TRANSFER, LedgerEntryType.ADJUSTMENT -> ""
@@ -105,6 +105,7 @@ internal fun LedgerEntryRow(
     onCopy: () -> Unit,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
+    showDateInSubtitle: Boolean = false,
 ) {
     val liveTags = entry.tagUuids.mapNotNull { uuid ->
         tags.firstOrNull { it.uuid == uuid && it.deletedAtMillis == null }
@@ -125,7 +126,7 @@ internal fun LedgerEntryRow(
             ),
             entry.amountCents < 0,
         )
-        else -> (if (isExpense) "-" else "+") +
+        else -> (if (isExpense) "−" else "+") +
             LedgerCalculator.formatMoney(entry.amountCents, entry.currency)
     }
 
@@ -166,45 +167,65 @@ internal fun LedgerEntryRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val tag = buildString {
-                when (entry.type) {
-                    LedgerEntryType.TRANSFER -> append(
-                        " · " + strings.transferLine(
-                            accountName(accounts, entry.accountUuid),
-                            accountName(accounts, entry.toAccountUuid),
-                        ),
-                    )
-                    LedgerEntryType.ADJUSTMENT -> append(" · ${strings.adjustmentTypeLabel}")
-                    else -> {
-                        when (entry.linkType) {
-                            LINK_TYPE_RENEWAL -> append(" · ${strings.renewalTagLabel}")
-                            LINK_TYPE_SALE -> append(" · ${strings.saleTagLabel}")
-                            else -> when (entry.costTrackingMode) {
-                                CostTrackingMode.ONE_TIME_AMORTIZED ->
-                                    append(" · ${strings.assetTag}")
-                                CostTrackingMode.PERIODIC_SUBSCRIPTION ->
-                                    append(" · ${strings.subTag}")
-                                CostTrackingMode.NONE -> {}
-                            }
-                        }
+            val kindSuffix = when (entry.type) {
+                LedgerEntryType.TRANSFER -> strings.transferLine(
+                    accountName(accounts, entry.accountUuid),
+                    accountName(accounts, entry.toAccountUuid),
+                )
+                LedgerEntryType.ADJUSTMENT -> strings.adjustmentTypeLabel
+                else -> when (entry.linkType) {
+                    LINK_TYPE_RENEWAL -> strings.renewalTagLabel
+                    LINK_TYPE_SALE -> strings.saleTagLabel
+                    else -> when (entry.costTrackingMode) {
+                        CostTrackingMode.ONE_TIME_AMORTIZED -> strings.assetTag
+                        CostTrackingMode.PERIODIC_SUBSCRIPTION -> strings.subTag
+                        CostTrackingMode.NONE -> ""
                     }
                 }
             }
             val tagNames = liveTags.take(2).joinToString("、") { it.name } +
                 if (liveTags.size > 2) " +${liveTags.size - 2}" else ""
-            val noteSuffix = if (entry.note.isNotBlank()) " · ${entry.note}" else ""
-            Text(
-                text = tagNames.ifBlank { strings.untaggedLabel } + tag + noteSuffix,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            val tagPart = tagNames.ifBlank {
+                if (liveTags.isEmpty() && !showDateInSubtitle && kindSuffix.isEmpty() && entry.note.isBlank()) {
+                    strings.untaggedLabel
+                } else {
+                    ""
+                }
+            }.let {
+                if (it == entry.title.trim()) "" else it
+            }
+            val datePart = if (showDateInSubtitle) {
+                strings.formatLedgerDay(
+                    Instant.ofEpochMilli(entry.occurredAtMillis)
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate(),
+                )
+            } else {
+                ""
+            }
+            val acctPart = if (entry.type != LedgerEntryType.TRANSFER) {
+                entry.accountUuid?.let { id -> accounts.firstOrNull { it.uuid == id }?.name }.orEmpty()
+            } else {
+                ""
+            }.let { if (it == entry.title.trim() || it == tagPart) "" else it }
+            val subtitleText = listOf(datePart, tagPart, acctPart, kindSuffix, entry.note.trim())
+                .filter { it.isNotBlank() }
+                .joinToString(" · ")
+            if (subtitleText.isNotBlank()) {
+                Text(
+                    text = subtitleText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
+        val tabularTitle = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum")
         Column(horizontalAlignment = Alignment.End) {
             Text(
                 text = amountStr,
-                style = MaterialTheme.typography.titleSmall,
+                style = tabularTitle,
                 fontWeight = FontWeight.Bold,
                 color = when {
                     isNeutral -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -475,14 +496,14 @@ private fun LedgerDayHeader(
         Text(
             text = buildString {
                 if (expenseCents > 0L) {
-                    append("-${LedgerCalculator.formatCurrency(expenseCents / 100.0)}")
+                    append("−${LedgerCalculator.formatCurrency(expenseCents / 100.0)}")
                 }
                 if (incomeCents > 0L) {
                     if (isNotEmpty()) append("  ")
                     append("+${LedgerCalculator.formatCurrency(incomeCents / 100.0)}")
                 }
             },
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

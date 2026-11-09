@@ -4,7 +4,7 @@ This file applies to the entire repository. Its purpose is to help developers an
 
 ## 1. Project scope
 
-Toolbox is a lightweight Android toolbox, not an always-on telemetry daemon. Current capabilities include:
+Toolbox is a lightweight Android toolbox, not an always-on telemetry daemon. The home screen shows a quick status summary and a user-reorderable grid of compact title cards for the tool modules. Current capabilities include:
 
 - Device: summaries of the device, CPU/GPU, memory, storage, display, battery, and thermals.
 - Location & Astronomy: on-demand coordinate retrieval, formatting, a platform-geocoder place name after a successful read, and solar/lunar ephemeris calculations. Location → Configure mock location injects developer-selected Android test-provider coordinates for an explicit 15/30/60-minute visible `specialUse` session (manual WGS84, a tap-to-pick map using bundled MapLibre GL JS and OpenFreeMap tiles while the picker is open, or an explicit ipwho.is → ipapi.co exit-IP lookup). The mock card shows a place name from the platform Geocoder once coordinates are set. It is for learning and lawful testing only, keeps Android's detectable mock flag, never reads real GPS, and does not start at boot.
