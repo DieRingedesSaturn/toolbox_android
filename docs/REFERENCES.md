@@ -30,6 +30,8 @@ original repository and its license.
 - [LibreSpeed Android](https://github.com/librespeed/speedtest-android) — future speed-test reference; LGPL-3.0.
 - [LibreSpeed Server](https://github.com/librespeed/speedtest) — future self-hosted server reference; LGPL-3.0.
 - [PlainApp](https://github.com/plainhub/plain-app) — larger Compose project and release-process reference; AGPL-3.0.
+- [ZXing Core](https://github.com/zxing/zxing) — local QR code matrix decoding (`com.google.zxing:core:3.5.3`) for TOTP `otpauth://` QR codes; Apache-2.0.
+- [DoriyaNet/2FA](https://github.com/DoriyaNet/2FA) — PBKDF2-HMAC-SHA256 + AES-256-GCM vault envelope reference for TOTP encrypted backups; MIT.
 
 The current monitor uses Android foreground-service and overlay APIs plus
 best-effort system-file reads. It does not add Rust, JNI, a chart library, or
