@@ -2,87 +2,75 @@
 
 [中文说明](README_CN.md)
 
-Toolbox is a lightweight Android utility app that reads information on demand, with optional notification-based quick ledger entry after explicit setup. The local ledger uses SQLite and optional, manually triggered WebDAV sync; the app has no sign-in account or fixed server. The live monitor starts only after the user requests it and uses a visible foreground service.
+Toolbox is a lightweight Android toolbox. It reads device, location, network, and usage data on demand, and it keeps a local ledger, exchange rates, and TOTP tokens on the device. There is no sign-in and no fixed server. Optional pieces (the floating monitor, WebDAV sync, mock location, and others) run only after you turn them on.
 
-Read [AGENTS.md](AGENTS.md) before development. See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for the canonical directory layout and rules for adding future features.
+Current version **0.1** (`minSdk 26`, `targetSdk 36`). This version has no speed test, Shizuku/root integration, process manager, or ads.
 
-## Current scope
+## Features
 
-- `Device`: device identity, Android/API, kernel, SoC/CPU, ABI, core count, memory, storage, display, battery, and a basic GPU capability summary.
-- `Live monitor`: an optional compact, translucent floating line-chart overlay for CPU, GPU, memory, battery, and an FPS reference. The visible metrics are configurable. The monitor page shows current frequency for each CPU core, GPU/display details, and thermal details; the overlay can switch between per-core frequencies and CPU usage weighted by peak frequency. CPU/GPU usage is preferred; when Android exposes only frequency, the overlay marks a frequency-ratio estimate with `≈`, and restricted sources are shown as unavailable.
-- The monitor page reports battery temperature, Android thermal status, thermal headroom, current display refresh rate, and supported display modes when the public APIs provide them. The application supports Everforest and Sage palettes in dark and light modes, plus a dynamic wallpaper-based scheme (Android 12+) and a custom accent color, with automatic contrast adaptation for text and charts. The overlay offers matching Everforest and Sage presets alongside its own dark, light, black, and custom themes. The overlay position can be locked; in locked mode it is touch-through and its last position is saved when it is moved.
-- `Location`: on-demand current location with a platform-geocoder place name, decimal/DMS coordinates, accuracy, provider, GPS provider altitude, timestamp, GNSS constellations observed during an on-demand satellite scan, available/enabled providers, and on-demand terrain elevation (DEM) query. Foreground location permission is requested only after the user starts a location read. The place name is resolved only after that read; if the geocoder is missing or fails, the row shows Not available.
-- `Mock location`: Location → Configure mock location provides manually entered WGS84 coordinates, a tap-to-pick map (bundled MapLibre GL JS 4.7.1 with OpenFreeMap vector tiles from tiles.openfreemap.org, loaded only while the picker is open; the picker has no search box and no API key), or an explicit current-exit-IP lookup (ipwho.is → ipapi.co). After coordinates are set, the card shows a place name from the platform Geocoder (the GeoIP place is shown first after an IP fill). Debug and release builds declare `ACCESS_MOCK_LOCATION` so Toolbox appears in that list; the permission is not a runtime grant and does not enable mocking until you select Toolbox there. First select Toolbox as the mock-location app in Android Developer options. It uses platform test providers (GPS/network, and fused when present), retains Android's detectable mock flag, and cannot grant location access to other apps or guarantee third-party/fused-SDK compatibility. IP coordinates are approximate and may follow a VPN/proxy; filling from IP does not change the accuracy radius. The last accuracy radius is remembered; it is a simulated value, not measured GeoIP accuracy. Explicit 15/30/60-minute sessions use a visible `specialUse` foreground service with an immediate ongoing status notification (title “Mock location is on”, remaining time, coordinates, Stop), inject a fresh timestamp about once a second, and require notifications to remain enabled. This service writes test locations and never reads real GPS, adds no runtime permission beyond the existing on-demand notification permission, no dependency, no background-location permission, and no boot/restart behavior. It stops on timeout, manual Stop, task dismissal, or errors; timers resume after device sleep without a wake lock. Normal cleanup removes owned test providers, but other apps may retain cached locations until they request a fresh fix. Only provider ownership names are journaled for recovery, not a coordinate history; interrupted cleanup remains visible with a retry action. If authorization was revoked, reselect Toolbox for cleanup or deselect the mock app in Developer options and obtain a fresh real fix. The normal location readout labels mock fixes. **For learning and lawful testing only; not for illegal purposes.**
-- `Network`: on-demand connection details including transport, interface, local addresses, DNS, gateways, and metered state. Public IP, approximate location, ISP, ASN, organization, hostname, IP range, network/usage type, and free proxy/VPN/risk hints are a separate explicit action; it contacts ipwho.is and proxycheck.io (with ipapi.co/ipify as fallbacks) only on tap, sends only the queried IP, and the IPLark button opens a fuller third-party report in your browser. The proxy/VPN flag and risk score are third-party heuristics about the queried exit IP, not an assessment of the device's own VPN state. An explicit-scan LAN device list (ARP sweep of the subnet plus TCP probes of a short port list, enriched by mDNS/SSDP/ONVIF WS-Discovery announcements) flags devices exposing camera-typical services or vendor ports (RTSP, Dahua/XiongMai/Hikvision/ONVIF, camera-vendor NIC OUIs) as heuristic hints — it cannot see cameras on their own hotspot, cloud-only cameras, or cameras with closed ports, and honest wording says so in the UI. Scanning joins multicast only while it runs (`CHANGE_WIFI_MULTICAST_STATE`, an install-time permission) and is cancellable.
-- `Ledger & Cost Amortization`: bookkeeping organized into Overview (month totals, recent entries, expense categories, and a six-month spending/income trend whose months open in Transactions; a card-order dialog in the ledger menu lets you drag any of these cards into a custom order, and recent entries start near the top by default), Transactions (per-day history with a month switcher), Costs (asset amortization and subscription burn rate), and Accounts tabs, which can be swiped between, with built-in expense/income categories and an optional average-cost tracker for one-time long-term assets (e.g. phones, laptops with daily/monthly depreciated cost) and periodic subscriptions (weekly, monthly, quarterly, semi-annual, yearly, or a custom every-N days/weeks/months/years cycle). Persisted locally via Android SDK `SQLiteOpenHelper` with `uuid`, millisecond timestamps, and soft-delete tombstones for Last-Write-Wins merge; the app has no dependency on any fixed server. Before each schema upgrade, the previous database file is copied to app-private storage that is never backed up (the newest 3 copies are kept), so the pre-upgrade data survives a faulty migration; the ledger overflow menu lists them under “Restore pre-upgrade copy…”, which validates and migrates the chosen copy in a temporary database, saves a fresh recovery copy of current entries/tags/accounts, then replaces those rows in one SQLite transaction. A failed restore keeps the original ledger, and old copies are pruned only after a successful restore. If a pre-upgrade copy cannot be saved, the upgrade stops and the ledger shows an error with a retry action. A home-screen widget shows the daily cost and this month's spending with a quick add button; it needs no extra permissions, refreshes whenever entries change and about every 3 hours via the system widget scheduler, and runs no background service. Local backup uses the system file picker — JSON export writes a full re-importable backup (deletions included), CSV export produces a spreadsheet — and imports offer Merge or Replace, all without a storage permission. Manual WebDAV backup/sync is also available from the ledger overflow menu: it runs only on an explicit tap, uses HTTPS only, and writes solely to a WebDAV folder you create yourself (`ledger.json`, dated `ledger-backup-*.json` snapshots — the newest 10 are kept, and a snapshot can be restored by downloading it and importing it with Replace — and a `ledger-backups.json` index). The password is stored locally, encrypted with Android Keystore, and the feature adds no permission, dependency, or background work. Because Android auto-backup is disabled for the ledger, the ledger shows a reminder when the data has changed and the last JSON export or WebDAV sync (or, without one, the oldest data) is at least 7 days old; it offers JSON export or WebDAV sync, and Later hides it for 7 days. Optional monthly budgets — an overall CNY amount and per-tag amounts, set from the ledger menu or the Overview month card — show progress bars, the amount left or overspent, and a per-day allowance for the rest of the month; budgets are stored only on this device and are not part of JSON backups or WebDAV sync. When adding an entry, titles recorded at least twice in the last 90 days appear as Frequent chips that fill in the type, title, and the latest amount, currency, tags, and account in one tap; they are derived from existing entries, so nothing extra is stored or synced. Entries carry custom multi-tags (the 12 built-in categories become editable tags only where old entries referenced them; new installs start tagless). Tags can be renamed, recolored, emoji-picked from presets, reordered, merged, and bulk-applied to selected entries; a per-tag detail screen shows counts and totals. Transactions and Costs can be filtered by tags in Any/All mode, and the Overview breaks spending down by tag. Periodic subscriptions and recurring fixed income are confirmed per cycle: a pending card lists due renewals on their calendar dates, each recorded renewal becomes its own transaction locking that day's rate (skipped renewals stay skipped), and stopping a subscription on a date means a renewal on that exact date is not charged. An optional scheduled end date, which must fall after the entry date, works for both cost modes: the item stays live through that day — a renewal falling on or after it is never generated, and a one-time asset amortizes across the days up to it in place of the lifespan-days setting — and afterwards the item counts as ended (assets show as Amortized) and leaves the burn-rate totals. One-time assets can be ended by selling or scrapping on a chosen date — selling records the proceeds as a linked income entry and the final cost is price minus sale; sold or scrapped assets leave the active burn rate, and the disposal can be undone. Entries can be recorded in CNY, JPY, USD, or EUR: the CNY-per-unit rate is locked into each foreign entry when it is saved, so every total, summary, widget figure, and cost computation stays in CNY and never drifts. Rates come from an explicit on-demand fallback chain — Frankfurter (api.frankfurter.dev), then the ECB daily/history feed (www.ecb.europa.eu), then the community currency-api mirror (cdn.jsdelivr.net, then *.currency-api.pages.dev) — each request carries only a date or date range, and the source used is recorded on the entry (or "manual" for a typed rate); if every source fails you can pick the nearest cached rate or enter one manually. Every entry posts to a ledger account — multiple accounts (name, currency, opening balance and date, color, emoji) are managed in the Accounts tab, which shows each balance and a CNY-converted total-assets figure (foreign balances use the cached rate table; accounts missing a rate are excluded and flagged). Entries can be expenses, income, or account-to-account transfers; transfers are excluded from spending/income totals, and a reconcile action in an account's detail writes a signed balance-adjustment entry when the computed balance differs from the real one (adjustments appear only in that account's own entry list, never in Transactions or income/expense totals). Accounts ride the same LWW backup/WebDAV payload as entries and tags.
-- `Notification quick entry`: from the Ledger menu, optionally enable Android notification access and choose source apps. New notifications from those apps are scanned locally for amounts: only numbers marked as money (`¥`/`￥`, `元`, `CNY`/`RMB`/`人民币`) or written with two decimals are kept, numbers right after a balance label are skipped, and notifications mentioning a verification code never produce suggestions while their title and text are never stored, so one-time codes stay out of the local records. Other notifications from a selected app are then kept only on this device for up to seven days — title and text included, up to 30 suggestions plus the 15 most recent skipped ones — and are pruned when the list is next read or another notification arrives, so the Records tab shows what arrived, which amounts were found, and why the rest were skipped (no amount, verification-code notice without stored text, or no text); clearing the list or turning the feature off erases them. A source-aware parser recognizes WeChat Pay and Alipay payment notifications by their explicit verbs (已支付, 付款成功, 收款, 退款, 转账, 支出 …), and labels each suggestion with direction, amount, and — when the text names one — merchant or counterparty. Under Source apps, set a default income/expense type, account and multiple tags for each selected app, and optionally enable auto-book; these local preferences are not part of ledger JSON/WebDAV backups. Auto-book writes only confident expense/income payments straight to the ledger (merchant or channel name as title, the notification time, the source's default account and tags); transfers stay suggestions because they need two accounts, and low-confidence or possible-duplicate notifications still require confirmation. Auto-booked suggestions show an undo action that removes the entry. Tap an amount to prefill the existing ledger editor and review the defaults before saving. Deleted or archived default accounts fall back to a valid last-used/default account, and deleted tags are ignored. Saving a notification suggestion checks current ledger entries for the same amount, currency, type and account within five minutes of the entry time. A possible duplicate prompts you to go back and edit, save anyway, or dismiss the suggestion as already recorded. Notification coverage depends on the payment app: WeChat posts payment messages through its 微信支付 service channel and will not do so when that channel is muted or a scenario chooses not to notify, some in-app or offline payments may never notify, and Alipay offline payments can arrive with a delay. Turning the feature off wipes all notification records and disables the listener, so Android stops delivering notifications to the app even if access is still granted. The system grants notification access broadly; the app filters to selected sources after receipt. No network request or persistent foreground service is started by this feature.
-- `Currency converter`: EUR-base reference rates with a source fallback chain and no API key — Frankfurter (api.frankfurter.dev), then the ECB eurofxref feed (www.ecb.europa.eu), then the community currency-api (cdn.jsdelivr.net, then *.currency-api.pages.dev); the converter labels the source actually used and flags community-source values as potentially differing slightly from the ECB. Enter an amount, pick a source currency (the four ledger currencies up front, plus a "More" list of every published currency with localized names; starring a currency there pins it next to the ledger currencies, both as a source chip and in the result list), and read conversions with each currency's own fraction digits. Rates are fetched only when you tap refresh or the first-use "Get rates" button, are cached locally (latest + recent dated rates) for offline use, and always display their rate date and source; the only data ever sent to these hosts is the requested date.
-- `TOTP Authenticator`: RFC 6238 dynamic token generator (`SHA-1`/`SHA-256`/`SHA-512`, 6/8 digits, 15/30/60s period) supporting live Camera2 QR code scanning (`CAMERA` permission requested on demand), gallery QR screenshot decoding (`com.google.zxing:core` Apache-2.0, no permission), Base32 secrets, and `otpauth://totp/...` URIs (automatically extracting the service issuer such as Cloudflare/GitHub and account name). Tokens are encrypted at rest on the device via Android Keystore (`AES-256-GCM`) in `noBackupFilesDir`, the screen enables `FLAG_SECURE` while visible, and encrypted backups (`PBKDF2-HMAC-SHA256` 600,000 iterations + `AES-256-GCM`) can be exported/imported locally or synced to one or more HTTPS WebDAV backup services configured in Settings.
-- Every information row across the app can be copied.
+- **Device**: model, system, SoC/CPU, memory, storage, display, battery, and a basic GPU summary. Information rows can be copied.
+- **Live monitor**: per-core CPU frequency and usage, plus GPU, memory, battery, and thermal status. An optional translucent floating chart runs as a foreground service and does not start at boot. When the system does not expose real usage, the value is shown as unavailable, or marked with `≈` when it is a frequency-ratio estimate. FPS is the display refresh rate, not a cross-app frame rate. While the floating window is open, the monitor page reuses that sample instead of polling again. The window position is saved when a drag ends.
+- **Location**: on-demand fix, place name, decimal degrees and DMS, accuracy, a GNSS sky plot, and a manual terrain-elevation lookup. **Mock location** (Location → Configure mock location) injects developer-selected test-provider coordinates for 15, 30, or 60 minutes with a visible notification. Select Toolbox in Developer options first. **For learning and lawful testing only.**
+- **Network**: local connection details; public IP / GeoIP / proxy hints only after a tap; a cancellable LAN scan with heuristic camera-port hints, not a complete discovery.
+- **App usage**: needs Usage Access. Foreground time and traffic for today, yesterday, 7 days, and 30 days.
+- **Astronomy**: a night-sky timeline for the chosen coordinates, with image export. Without a location fix it uses a default coordinate (Beijing) and says so on screen.
+- **Ledger and cost amortization**: on-device SQLite ledger with multiple accounts, tags, budgets, subscription amortization, and transfers. JSON and CSV export/import, manual HTTPS WebDAV sync, and a home-screen widget. **Notification quick entry is temporarily disabled** (its menu entry is hidden and the notification listener is off). The code remains so it can be turned back on. Notification bodies are not stored in plaintext, and any body text already saved is cleared on startup.
+- **Exchange rates**: reference rates fetched on demand (Frankfurter → European Central Bank → the community currency-api). Results show the date and source and can be used from the local cache.
+- **TOTP**: RFC 6238 tokens (camera or gallery QR, or manual entry). Stored with Android Keystore, and the screen blocks screenshots. Encrypted backups use a passphrase you choose, locally or on an HTTPS WebDAV folder you configure. If the local vault cannot be decrypted, it is left unchanged and sync will not overwrite it.
 
-Version 0.1 does not include speed tests, Shizuku/root, process management, third-party ORM frameworks, or advertisements. Shizuku-based privileged telemetry is a future plan, not a current dependency.
+## Screenshots
 
-## Monitor permissions
+This repository does not include screenshots yet.
 
-Starting the live monitor requires `SYSTEM_ALERT_WINDOW` so the user can
-allow the overlay in system settings. The monitor also declares the
-foreground-service permissions and requests `POST_NOTIFICATIONS` on Android
-13+ so its running state and stop action remain visible. It samples once per
-second, can be stopped from the monitor page or notification, and does not
-auto-start after boot. Ordinary apps may be blocked from system-wide CPU/GPU
-usage files; the UI reports that limitation instead of fabricating values.
-Battery temperature and thermal status/headroom use public Android APIs. Exact
-CPU/GPU temperatures and vendor-specific GPU utilization may remain unavailable
-without trusted system access. The FPS metric is the current display refresh
-rate as a best-effort reference; real cross-app rendered FPS requires privileged
-SurfaceFlinger access and is reserved for the future Shizuku plan.
+## Build and install
 
-Location uses `ACCESS_COARSE_LOCATION` / `ACCESS_FINE_LOCATION` only for a
-foreground, user-triggered request. A place name is resolved with the platform
-Geocoder only after that read or after mock coordinates are set, while the page is visible; the platform Geocoder may use the network for that lookup. Lookups stop updating the UI on cancellation or after five seconds; a new request cannot be overwritten by an older result. Older Android backends that ignore interruption are limited to one outstanding call with no queued requests. Terrain
-elevation (DEM) is queried only after an explicit user action, sending the coordinate to
-api.open-meteo.com with a fallback to api.open-elevation.com. Network status uses normal
-`ACCESS_NETWORK_STATE` and `INTERNET` permissions; the public IP and GeoIP
-action sends a single request to public address services upon explicit user tap
-and is never polled automatically.
-
-System automatic backup is disabled because the local ledger contains financial
-records. Use the ledger's manual JSON export or WebDAV sync for backup. WebDAV
-sync requires a server that supplies strong ETags for existing `ledger.json`
-files and honors conditional writes; otherwise it stops before overwriting data.
-App traffic totals count each UID once. Tethering traffic recorded under the
-system's special tethering UID is included in the Wi-Fi/Mobile totals and shown
-separately as shared-network traffic; it cannot be assigned to a single local
-app or category. Some vendors may not expose P2P local-side counters. Other
-traffic from shared or unidentified UIDs also stays out of app details, and
-unavailable traffic reads are shown as unavailable. GNSS constellations are
-listed only after an actual satellite observation.
-
-## Development environment
-
-- Android Studio Quail 3 (2026.1.3 Patch 1)
-- Android SDK Platform 36, Build Tools 36.0.0, Platform Tools 37.0.1
-- JDK 21 (Android SDK 36 Robolectric tests require Java 21; app bytecode targets Java 17)
-- Kotlin and Jetpack Compose
-- minSdk 26, targetSdk 36
-
-Open the repository in Android Studio and let Gradle synchronize the configured dependencies. The command-line workflow is:
+Open the project in [Android Studio](https://developer.android.com/studio), or from the command line:
 
 ```bash
 ./gradlew assembleDebug
-./gradlew installDebug
-./gradlew installRelease
-adb logcat
+./gradlew installDebug      # debug build, no R8, slower UI
+./gradlew assembleRelease   # day-to-day build; install it once it is signed
+./gradlew testDebugUnitTest
 ```
 
-Debug builds run Compose without R8 and without the bundled baseline profile, so the UI is noticeably slower; install the release build for day-to-day use. When the untracked `signing/toolbox-debug.keystore` exists, debug and release builds are both signed with it, so either one updates an installed copy in place and keeps its data. Without that file, debug builds fall back to the default debug key and release builds stay unsigned. Release builds are not debuggable, so `adb shell run-as` cannot read the app's files; back up with the in-app JSON export or WebDAV instead.
+Toolchain: JDK 21 (app bytecode still targets Java 17) and Android SDK Platform 36. Put the SDK path in the untracked `local.properties` file.
 
-Unit tests include SQLite migration tests that run on the JVM through Robolectric, a test-only dependency (Apache-2.0) that is not packaged into the app; the first `./gradlew testDebugUnitTest` run downloads its Android framework jar from Maven Central.
+Debug builds are signed with the untracked `signing/toolbox-debug.keystore` when that file exists, and otherwise with the default debug key. Release builds are never signed with the debug key. To sign a release, set either the untracked `keystore.properties` or environment variables:
 
-If JDK 21 and the Android SDK are not already configured in the shell, set `JAVA_HOME` and `ANDROID_SDK_ROOT` to the local installations. Keep the SDK path in the untracked `local.properties` file.
+| `keystore.properties` | Environment variable |
+| --- | --- |
+| `storeFile` | `TOOLBOX_RELEASE_STORE_FILE` |
+| `storePassword` | `TOOLBOX_RELEASE_STORE_PASSWORD` |
+| `keyAlias` | `TOOLBOX_RELEASE_KEY_ALIAS` |
+| `keyPassword` | `TOOLBOX_RELEASE_KEY_PASSWORD` |
 
-## Package structure
+`storeFile` may be absolute or relative to the project root. If those values are missing, or the file is not there, the release APK is left unsigned.
 
-See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for the current package layout.
+## Permissions
 
-See [docs/REFERENCES.md](docs/REFERENCES.md) for project references and licenses.
+All of these are requested when you use the feature, or are install-time declarations that do not turn the feature on by themselves.
+
+| Permission | Use |
+| --- | --- |
+| Fine / coarse location | Location reads and astronomy. Requested only when you start a fix. No background location. |
+| Usage access (`PACKAGE_USAGE_STATS`) | App usage and traffic |
+| Query all packages (`QUERY_ALL_PACKAGES`) | Resolve app names in the usage list. Install-time; Play treats it as a restricted permission. |
+| Overlay, foreground service, notifications | Live monitor window, and the mock-location status notification (Android 13+ asks for notification permission) |
+| Notification listener | Declared for notification quick entry, which is temporarily disabled. The listener component is off. |
+| Camera | TOTP QR scan, requested when you tap scan |
+| Network / network state / multicast | Public IP, exchange rates, elevation, map tiles, WebDAV, and the LAN scan (multicast only while a scan is running) |
+| Mock location (`ACCESS_MOCK_LOCATION`) | So Toolbox can appear in the Developer options mock-app list. Declaring it does not enable mocking. |
+
+Automatic system backup is off, because the ledger and tokens are sensitive. Use in-app JSON export or WebDAV sync.
+
+Place names come from the platform geocoder, which may use the network. Public IP, elevation, exchange rates, map tiles, and WebDAV run only after you ask, and only against that action's own hosts.
+
+## Docs
+
+- Development rules: [AGENTS.md](AGENTS.md)
+- Layout: [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)
+- References and third-party licenses: [docs/REFERENCES.md](docs/REFERENCES.md)
+
+## License
+
+This repository has no `LICENSE` file. Choose one before a public release. Bundled MapLibre GL JS is BSD-3-Clause (`app/src/main/assets/mockmap/LICENSE-maplibre.txt`). ZXing core is Apache-2.0.

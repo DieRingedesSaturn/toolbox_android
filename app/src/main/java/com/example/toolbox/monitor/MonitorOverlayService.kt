@@ -121,6 +121,7 @@ class MonitorOverlayService : Service() {
                 context = this,
                 onStop = ::stopSelf,
                 onMove = ::moveOverlay,
+                onDragEnd = ::persistOverlayPosition,
             )
             val params = WindowManager.LayoutParams(
                 dp(270f),
@@ -157,6 +158,7 @@ class MonitorOverlayService : Service() {
         monitorJob = serviceScope.launch {
             while (isActive) {
                 val sample = withContext(Dispatchers.IO) { reader.read() }
+                MonitorSampleSource.publish(sample)
                 withContext(Dispatchers.Main) { overlayView?.updateSample(sample) }
                 delay(SAMPLE_INTERVAL_MILLIS)
             }
@@ -172,6 +174,10 @@ class MonitorOverlayService : Service() {
         params.y = (params.y + dy.roundToInt())
             .coerceIn(0, (resources.displayMetrics.heightPixels - params.height).coerceAtLeast(0))
         runCatching { windowManager.updateViewLayout(view, params) }
+    }
+
+    private fun persistOverlayPosition() {
+        val params = layoutParams ?: return
         getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE).edit {
             putInt(POSITION_X_KEY, params.x)
             putInt(POSITION_Y_KEY, params.y)
@@ -258,11 +264,13 @@ class MonitorOverlayService : Service() {
     override fun onDestroy() {
         monitorJob?.cancel()
         serviceScope.cancel()
+        persistOverlayPosition()
         overlayView?.let { view -> runCatching { windowManager.removeView(view) } }
         overlayView = null
         layoutParams = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         running = false
+        MonitorSampleSource.clear()
         super.onDestroy()
     }
 
@@ -318,5 +326,23 @@ class MonitorOverlayService : Service() {
         fun stop(context: Context) {
             context.stopService(Intent(context, MonitorOverlayService::class.java))
         }
+    }
+}
+
+/**
+ * Latest sample from the floating monitor. The monitor page reads this while
+ * the overlay is running so the two screens do not each poll /proc and /sys.
+ */
+internal object MonitorSampleSource {
+    @Volatile
+    var latest: MonitorSample? = null
+        private set
+
+    fun publish(sample: MonitorSample) {
+        latest = sample
+    }
+
+    fun clear() {
+        latest = null
     }
 }

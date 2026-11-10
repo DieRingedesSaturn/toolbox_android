@@ -15,6 +15,7 @@ class MonitorOverlayView @JvmOverloads constructor(
     context: Context,
     private val onStop: () -> Unit = {},
     private val onMove: (Float, Float) -> Unit = { _, _ -> },
+    private val onDragEnd: () -> Unit = {},
 ) : View(context) {
     private val density = resources.displayMetrics.density
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -358,8 +359,17 @@ class MonitorOverlayView @JvmOverloads constructor(
                 return true
             }
 
-            MotionEvent.ACTION_UP -> {
-                if (closing && !dragging && closeBounds.contains(event.x, event.y)) performClick()
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val wasDragging = dragging
+                if (wasDragging) onDragEnd()
+                dragging = false
+                if (event.actionMasked == MotionEvent.ACTION_UP &&
+                    closing &&
+                    !wasDragging &&
+                    closeBounds.contains(event.x, event.y)
+                ) {
+                    performClick()
+                }
                 return true
             }
         }

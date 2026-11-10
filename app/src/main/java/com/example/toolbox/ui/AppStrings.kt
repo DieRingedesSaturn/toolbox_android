@@ -2438,6 +2438,12 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "密码至少 8 位" else "At least 8 characters"
     val totpVaultWrongPassphrase: String
         get() = if (chinese) "备份密码错误或文件已损坏" else "Wrong passphrase or corrupted file"
+    val totpLocalVaultUnreadable: String
+        get() = if (chinese) {
+            "无法读取本机令牌（密钥丢失或文件损坏）。已有内容未被改写，同步不会覆盖它们。若要用加密备份替换，请在导入时选择「替换」。"
+        } else {
+            "Couldn't read saved tokens (missing keystore key or damaged file). They were left unchanged, and sync will not overwrite them. Import → Replace can overwrite them with an encrypted backup."
+        }
     fun totpSyncSuccess(total: Int, pulled: Int, pushed: Int): String =
         if (chinese) {
             "共 $total 项（拉取 $pulled · 推送 $pushed）"

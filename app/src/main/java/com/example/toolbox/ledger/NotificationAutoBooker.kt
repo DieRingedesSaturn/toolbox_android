@@ -33,37 +33,40 @@ object NotificationAutoBooker {
         val defaults = notificationStore.defaultsFor(candidate.packageName)
         if (!defaults.autoBook) return Outcome.DISABLED
 
-        val ledgerStore = LedgerStore(context)
-        val accounts = ledgerStore.queryAccounts(includeDeleted = true)
-        val tags = ledgerStore.queryTags(includeDeleted = true)
-        val resolved = defaults.resolve(accounts, tags)
-        val accountUuid = resolved.accountFor(accounts, AppPreferences(context).ledgerLastAccount())
-        val title = payment.label?.trim()?.takeIf { it.isNotBlank() }?.take(MAX_TITLE_CHARS)
-            ?: PaymentNotificationParser.channelLabel(candidate.packageName)
-            ?: candidate.title.trim().take(MAX_TITLE_CHARS)
-        val entry = LedgerEntry(
-            title = title,
-            amountCents = payment.amountCents,
-            type = when (payment.direction) {
-                NotificationPaymentDirection.EXPENSE -> LedgerEntryType.EXPENSE
-                else -> LedgerEntryType.INCOME
-            },
-            occurredAtMillis = candidate.occurredAtMillis,
-            accountUuid = accountUuid,
-            tagUuids = resolved.tagUuids,
-        )
-        if (LedgerDuplicateMatcher.find(entry, ledgerStore.queryVisibleEntries()).isNotEmpty()) {
-            return Outcome.DUPLICATE
+        return LedgerStore(context).use { ledgerStore ->
+            val accounts = ledgerStore.queryAccounts(includeDeleted = true)
+            val tags = ledgerStore.queryTags(includeDeleted = true)
+            val resolved = defaults.resolve(accounts, tags)
+            val accountUuid = resolved.accountFor(accounts, AppPreferences(context).ledgerLastAccount())
+            val title = payment.label?.trim()?.takeIf { it.isNotBlank() }?.take(MAX_TITLE_CHARS)
+                ?: PaymentNotificationParser.channelLabel(candidate.packageName)
+                ?: candidate.title.trim().take(MAX_TITLE_CHARS)
+            val entry = LedgerEntry(
+                title = title,
+                amountCents = payment.amountCents,
+                type = when (payment.direction) {
+                    NotificationPaymentDirection.EXPENSE -> LedgerEntryType.EXPENSE
+                    else -> LedgerEntryType.INCOME
+                },
+                occurredAtMillis = candidate.occurredAtMillis,
+                accountUuid = accountUuid,
+                tagUuids = resolved.tagUuids,
+            )
+            if (LedgerDuplicateMatcher.find(entry, ledgerStore.queryVisibleEntries()).isNotEmpty()) {
+                return Outcome.DUPLICATE
+            }
+            ledgerStore.upsert(entry)
+            AppPreferences(context).saveLedgerLastAccount(accountUuid)
+            notificationStore.markAutoBooked(candidate.id, entry.uuid)
+            Outcome.BOOKED
         }
-        ledgerStore.upsert(entry)
-        AppPreferences(context).saveLedgerLastAccount(accountUuid)
-        notificationStore.markAutoBooked(candidate.id, entry.uuid)
-        return Outcome.BOOKED
     }
 
     /** Soft-deletes the booked entry and clears the candidate's marker. */
     fun undo(context: Context, candidateId: String, entryUuid: String): Boolean {
-        val removed = runCatching { LedgerStore(context).softDelete(entryUuid) }.isSuccess
+        val removed = runCatching {
+            LedgerStore(context).use { it.softDelete(entryUuid) }
+        }.isSuccess
         if (!removed) return false
         NotificationLedgerStore(context).clearAutoBook(candidateId)
         return true

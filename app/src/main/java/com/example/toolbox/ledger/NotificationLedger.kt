@@ -17,6 +17,8 @@ data class NotificationLedgerCandidate(
     val amountsCents: List<Long>,
     val title: String = "",
     val text: String = "",
+    /** SHA-256 of [text], kept so a repost can be recognized without storing the body. */
+    val bodyFingerprint: String = "",
     val skipReason: NotificationSkipReason? = null,
     /** Source-aware parse result; null when no payment template matched. */
     val payment: NotificationPayment? = null,
@@ -42,9 +44,11 @@ data class ParsedNotification(
 
 /**
  * Keeps every notification from selected source apps — extracted amounts plus the
- * title and body so the user can audit what was captured. Verification-code
- * notices are the exception: they retain only source, time, and skip reason, never
- * the OTP text. Records stay local only, are pruned after [MAX_AGE_MILLIS] when the
+ * title so the user can audit what was captured. The notification body is not
+ * written to SharedPreferences; only a SHA-256 fingerprint is kept so a repost
+ * can be recognized. Verification-code notices are the exception that
+ * also drops the title: they retain only source, time, and skip reason, never the
+ * OTP text. Records stay local only, are pruned after [MAX_AGE_MILLIS] when the
  * list is read or another notification arrives, and are wiped when the feature is
  * turned off.
  */
@@ -128,6 +132,34 @@ class NotificationLedgerStore(context: Context) {
         synchronized(lock) { preferences.edit { remove("candidates") } }
     }
 
+    /** Removes notification bodies already stored by older versions. */
+    internal fun redactStoredBodies() {
+        synchronized(lock) {
+            val raw = preferences.getString("candidates", null) ?: return
+            val array = runCatching { JSONArray(raw) }.getOrNull()
+            if (array == null) {
+                if (raw.contains("\"text\"")) {
+                    preferences.edit { remove("candidates") }
+                }
+                return
+            }
+            var changed = false
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                if (item.optString("text").isNotEmpty()) {
+                    if (item.optString("textHash").isEmpty()) {
+                        item.put("textHash", fingerprint(item.optString("text")))
+                    }
+                    item.put("text", "")
+                    changed = true
+                }
+            }
+            if (changed) {
+                preferences.edit { putString("candidates", array.toString()) }
+            }
+        }
+    }
+
     fun record(input: NotificationLedgerInput): NotificationLedgerCandidate? = recordParts(
         packageName = input.packageName,
         key = input.key,
@@ -157,12 +189,11 @@ class NotificationLedgerStore(context: Context) {
         val keepText = result.skipReason != NotificationSkipReason.VERIFICATION_CODE
         val storedTitle = if (keepText) title else ""
         val storedText = if (keepText) text else ""
+        val storedFingerprint = fingerprint(storedText)
         val payment = if (body.isBlank() || !keepText) null else {
             PaymentNotificationParser.parse(packageName, title, text)
         }
-        val digest = MessageDigest.getInstance("SHA-256")
-            .digest(key.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
+        val digest = fingerprint(key)
         synchronized(lock) {
             val nowMillis = System.currentTimeMillis()
             val existing = readRecords().filter {
@@ -171,7 +202,7 @@ class NotificationLedgerStore(context: Context) {
             val previous = existing.firstOrNull { it.id == digest }
             val isRepost = previous != null &&
                 previous.title == storedTitle &&
-                previous.text == storedText &&
+                previous.bodyFingerprint == storedFingerprint &&
                 previous.payment == payment &&
                 kotlin.math.abs(occurredAtMillis - previous.occurredAtMillis) <=
                 REPOST_WINDOW_MILLIS
@@ -182,6 +213,7 @@ class NotificationLedgerStore(context: Context) {
                 amountsCents = result.amountsCents,
                 title = storedTitle,
                 text = storedText,
+                bodyFingerprint = storedFingerprint,
                 skipReason = result.skipReason,
                 payment = payment,
                 // Only an actual repost keeps the auto-book marker. Payment
@@ -202,13 +234,15 @@ class NotificationLedgerStore(context: Context) {
         (0 until array.length()).map { index ->
             val item = array.getJSONObject(index)
             val amounts = item.getJSONArray("amounts")
+            val legacyText = item.optString("text")
             NotificationLedgerCandidate(
                 id = item.getString("id"),
                 packageName = item.getString("package"),
                 occurredAtMillis = item.getLong("time"),
                 amountsCents = (0 until amounts.length()).map { amounts.getLong(it) },
                 title = item.optString("title"),
-                text = item.optString("text"),
+                text = "",
+                bodyFingerprint = item.optString("textHash").ifEmpty { fingerprint(legacyText) },
                 skipReason = item.optString("reason").takeIf { it.isNotEmpty() }
                     ?.let { runCatching { NotificationSkipReason.valueOf(it) }.getOrNull() },
                 payment = item.optJSONObject("pay")?.let(::paymentFromJson),
@@ -226,7 +260,10 @@ class NotificationLedgerStore(context: Context) {
                 put("time", item.occurredAtMillis)
                 put("amounts", JSONArray(item.amountsCents))
                 put("title", item.title)
-                put("text", item.text)
+                // Body text used to be stored in plaintext. Keep the key empty and
+                // store only a hash so reposts can still be recognized.
+                put("text", "")
+                if (item.bodyFingerprint.isNotEmpty()) put("textHash", item.bodyFingerprint)
                 item.skipReason?.let { put("reason", it.name) }
                 item.payment?.let { put("pay", paymentToJson(it)) }
                 item.autoBookedEntryUuid?.let { put("autoEntry", it) }
@@ -234,6 +271,11 @@ class NotificationLedgerStore(context: Context) {
         }
         preferences.edit { putString("candidates", array.toString()) }
     }
+
+    private fun fingerprint(text: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(text.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 
     private fun paymentToJson(payment: NotificationPayment): JSONObject = JSONObject().apply {
         put("direction", payment.direction.name)

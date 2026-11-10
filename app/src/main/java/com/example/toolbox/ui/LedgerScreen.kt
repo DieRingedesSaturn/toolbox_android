@@ -44,6 +44,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -92,6 +93,7 @@ import com.example.toolbox.ledger.LedgerCategory
 import com.example.toolbox.ledger.LedgerCsv
 import com.example.toolbox.ledger.LedgerDbSnapshots
 import com.example.toolbox.ledger.LedgerDuplicateMatcher
+import com.example.toolbox.ledger.NotificationBookkeeping
 import com.example.toolbox.ledger.LedgerEntry
 import com.example.toolbox.ledger.LedgerEntryType
 import com.example.toolbox.ledger.LedgerQuickPicks
@@ -197,6 +199,9 @@ internal fun LedgerScreen(
 ) {
     val context = LocalContext.current
     val store = remember(context) { LedgerStore(context) }
+    DisposableEffect(store) {
+        onDispose { store.close() }
+    }
     val preferences = remember(context) { AppPreferences(context) }
     val scope = rememberCoroutineScope()
     val currentOnSnapshot by rememberUpdatedState(onSnapshot)
@@ -1356,13 +1361,15 @@ internal fun LedgerScreen(
                                             onOpenSettings()
                                         },
                                     )
-                                    DropdownMenuItem(
-                                        text = { Text(strings.notificationLedgerTitle) },
-                                        onClick = {
-                                            menuExpanded = false
-                                            showNotificationLedgerDialog = true
-                                        },
-                                    )
+                                    if (NotificationBookkeeping.ENABLED) {
+                                        DropdownMenuItem(
+                                            text = { Text(strings.notificationLedgerTitle) },
+                                            onClick = {
+                                                menuExpanded = false
+                                                showNotificationLedgerDialog = true
+                                            },
+                                        )
+                                    }
                                     if (webDavTargets.any { it.isComplete } ||
                                         webDavConfig?.isComplete == true
                                     ) {
@@ -1803,7 +1810,7 @@ internal fun LedgerScreen(
         }
     }
 
-    if (showNotificationLedgerDialog && entriesLoaded) {
+    if (NotificationBookkeeping.ENABLED && showNotificationLedgerDialog && entriesLoaded) {
         NotificationLedgerDialog(
             strings = strings,
             accounts = accounts,
