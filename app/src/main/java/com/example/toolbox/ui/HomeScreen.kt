@@ -91,6 +91,7 @@ internal object HomeModuleOrder {
     val DEFAULT: List<ToolboxModule> = listOf(
         ToolboxModule.MONITOR,
         ToolboxModule.LEDGER,
+        ToolboxModule.TOTP,
         ToolboxModule.FX,
         ToolboxModule.ASTRONOMY,
         ToolboxModule.USAGE,
@@ -687,7 +688,7 @@ private fun HomeModuleOrderDialog(
 private fun moduleBadgeColors(module: ToolboxModule): Pair<Color, Color> =
     with(MaterialTheme.colorScheme) {
         when (module) {
-            ToolboxModule.LEDGER, ToolboxModule.LOCATION ->
+            ToolboxModule.LEDGER, ToolboxModule.LOCATION, ToolboxModule.TOTP ->
                 tertiaryContainer to onTertiaryContainer
             ToolboxModule.ASTRONOMY, ToolboxModule.DEVICE, ToolboxModule.FX ->
                 secondaryContainer to onSecondaryContainer
@@ -698,6 +699,7 @@ private fun moduleBadgeColors(module: ToolboxModule): Pair<Color, Color> =
 private val moduleTiles = listOf(
     ModuleTile(ToolboxModule.MONITOR, R.drawable.ic_module_monitor),
     ModuleTile(ToolboxModule.LEDGER, R.drawable.ic_module_ledger),
+    ModuleTile(ToolboxModule.TOTP, R.drawable.ic_module_totp),
     ModuleTile(ToolboxModule.FX, R.drawable.ic_module_fx),
     ModuleTile(ToolboxModule.ASTRONOMY, R.drawable.ic_module_astronomy),
     ModuleTile(ToolboxModule.USAGE, R.drawable.ic_module_usage),

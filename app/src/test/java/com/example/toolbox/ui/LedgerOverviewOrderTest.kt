@@ -58,6 +58,7 @@ class LedgerOverviewOrderTest {
                 ToolboxModule.LEDGER,
                 ToolboxModule.NETWORK,
                 ToolboxModule.MONITOR,
+                ToolboxModule.TOTP,
                 ToolboxModule.FX,
                 ToolboxModule.ASTRONOMY,
                 ToolboxModule.USAGE,

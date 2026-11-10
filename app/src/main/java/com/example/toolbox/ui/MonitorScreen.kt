@@ -953,6 +953,7 @@ private fun OverlayAppearanceCard(
                                 MonitorOverlayTheme.DARK -> strings.overlayThemeDark
                                 MonitorOverlayTheme.LIGHT -> strings.overlayThemeLight
                                 MonitorOverlayTheme.EVERFOREST -> strings.overlayThemeEverforest
+                                MonitorOverlayTheme.SAGE -> strings.overlayThemeSage
                                 MonitorOverlayTheme.BLACK -> strings.overlayThemeBlack
                                 MonitorOverlayTheme.CUSTOM -> strings.overlayThemeCustom
                             },
@@ -963,6 +964,7 @@ private fun OverlayAppearanceCard(
                             MonitorOverlayTheme.DARK -> Color(0xFF1E1E1E)
                             MonitorOverlayTheme.LIGHT -> Color(0xFFFFFFFF)
                             MonitorOverlayTheme.EVERFOREST -> Color(0xFF2D353B)
+                            MonitorOverlayTheme.SAGE -> Color(0xFF232C27)
                             MonitorOverlayTheme.BLACK -> Color(0xFF000000)
                             MonitorOverlayTheme.CUSTOM -> Color(customColor or (0xFF shl 24))
                         }

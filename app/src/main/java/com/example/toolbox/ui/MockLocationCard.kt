@@ -512,25 +512,3 @@ private fun MockField(
 
 private fun formatAccuracyMeters(value: Float): String =
     if (value % 1f == 0f) value.toInt().toString() else value.toString()
-
-@Composable
-internal fun MockLocationNotes(strings: ToolboxStrings) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        listOf(
-            strings.mockLocationDisclaimer,
-            strings.mockLocationDescription,
-            strings.mockLocationAccuracyHint,
-            strings.mockLocationIpHint,
-            strings.mockLocationMapHint,
-            strings.mockLocationBackgroundHint,
-            strings.mockLocationRecoveryHint,
-            strings.mockLocationCleanupNotes,
-        ).forEach { paragraph ->
-            Text(
-                paragraph,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}

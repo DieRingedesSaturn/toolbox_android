@@ -53,6 +53,14 @@ class AccentSchemeTest {
     }
 
     @Test
+    fun `sage preset has its own sage swatch`() {
+        assertEquals(
+            androidx.compose.ui.graphics.Color(0xFF7FAF97.toInt()),
+            AccentColor.SAGE.swatch(),
+        )
+    }
+
+    @Test
     fun `gray seed still produces a tinted accent`() {
         val gray = accentPalette(0x808080, dark = false)
         assertNotEquals(0xFF808080.toInt(), gray.primary)

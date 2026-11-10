@@ -46,6 +46,18 @@ class MonitorOverlayThemeTest {
     }
 
     @Test
+    fun sageThemeResolvesSagePaletteColors() {
+        val colors = MonitorOverlayThemeHelper.resolveColors(
+            theme = MonitorOverlayTheme.SAGE,
+            opacity = 0.85f,
+        )
+        assertEquals(0xD9232C27.toInt(), colors.backgroundColor)
+        assertEquals(0xFFD8E1D6.toInt(), colors.primaryTextColor)
+        assertEquals(0xFFACBBAF.toInt(), colors.secondaryTextColor)
+        assertEquals(0x2AD8E1D6, colors.gridColor)
+    }
+
+    @Test
     fun blackThemeResolvesPureBlackBackgroundAndWhiteText() {
         val colors = MonitorOverlayThemeHelper.resolveColors(
             theme = MonitorOverlayTheme.BLACK,

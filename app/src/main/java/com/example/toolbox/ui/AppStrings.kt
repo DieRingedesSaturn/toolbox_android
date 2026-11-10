@@ -69,18 +69,6 @@ enum class DeviceSection {
 class ToolboxStrings(val language: AppLanguage) {
     val mockLocationTitle: String
         get() = if (chinese) "模拟定位" else "Mock location"
-    val mockLocationDescription: String
-        get() = if (chinese) "向 Android 测试定位接口提交坐标。请在开发者选项的「选择模拟位置信息应用」中选择 Toolbox，再开启会话。" else
-            "Submit coordinates through Android's test-location API. First select Toolbox under Developer options → Select mock location app."
-    val mockLocationDisclaimer: String
-        get() = if (chinese) "仅供学习与合法测试，不可用于违法用途。模拟坐标可被其他应用识别，部分应用可能拒绝使用；这也不能替代目标应用自身的定位权限。" else
-            "For learning and lawful testing only; do not use for illegal purposes. Apps can detect and reject mock coordinates. This does not replace their own location permission."
-    val mockLocationBackgroundHint: String
-        get() = if (chinese) "启动后通过前台通知维持模拟，可切换到其他应用。通知可停止；到时或划掉 Toolbox 任务后停止。不会开机自启；强制停止或杀进程后可能需要手动清理。" else
-            "A foreground notification keeps the session running while you use other apps. Stop there; it also stops at expiry or task dismissal. No boot start. Force-stop or process death may require manual cleanup."
-    val mockLocationIpHint: String
-        get() = if (chinese) "IP 位置只是当前网络出口的大致位置，VPN 或代理会影响结果，不代表实际位置。仅点击下方按钮时联系 ipwho.is，失败时使用 ipapi.co；不会发送设备的 GPS 坐标。" else
-            "IP location is approximate and follows your network exit, including a VPN or proxy. Only this button contacts ipwho.is, with ipapi.co as fallback; no device GPS coordinates are sent."
     val mockLocationIpButton: String
         get() = if (chinese) "IP 位置" else "From IP"
     val mockLocationPickOnMap: String
@@ -117,17 +105,9 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "纬度" else "Lat"
     val mockLongitudeLabel: String
         get() = if (chinese) "经度" else "Lon"
-    val mockLocationAccuracyHint: String
-        get() = if (chinese) "精度半径是填写的模拟值，不是测得的误差。上次使用的精度会自动记住。" else
-            "The accuracy radius is a simulated value, not a measured error. The last value is remembered."
-    val mockLocationMapHint: String
-        get() = if (chinese) "「在地图上选择」仅在打开选点页时向 tiles.openfreemap.org 拉取 OpenFreeMap 矢量瓦片；选点页无搜索框、无 API 密钥。坐标确定后由系统地理编码器解析地点名称。" else
-            "Pick on map loads OpenFreeMap vector tiles from tiles.openfreemap.org only while the picker is open. The picker has no search box and no API key. After coordinates are set, the platform geocoder supplies a place name."
-    val mockLocationNotesTitle: String
-        get() = if (chinese) "模拟定位说明" else "Mock location notes"
     val mockLocationSettingsHint: String
-        get() = if (chinese) "上次使用的精度半径会自动记住。用途限制、IP 预填、地图瓦片和清理说明见关于。" else
-            "The last accuracy radius is remembered. Limits, IP lookup, map tiles, and cleanup notes are in About."
+        get() = if (chinese) "仅用于学习与合法测试；需先在开发者选项中选中 Toolbox，会话会自动停止。"
+        else "For lawful developer testing only; select Toolbox in Developer options first, and sessions stop automatically."
     val mockLocationDuration: String
         get() = if (chinese) "自动停止时长" else "Stop automatically after"
     fun mockLocationMinutes(minutes: Int): String = if (chinese) "${minutes}分" else "${minutes}m"
@@ -139,12 +119,6 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "清理上次模拟" else "Clean up previous session"
     val mockLocationCleanupHint: String
         get() = if (chinese) "上次模拟可能未清理干净" else "Previous session may still need cleanup"
-    val mockLocationRecoveryHint: String
-        get() = if (chinese) "停止会移除本次测试定位源；真实定位仍需重新获取，其他应用可能暂时保留旧坐标。" else
-            "Stopping removes this session's test providers. Real positioning still needs a fresh fix; other apps may temporarily retain cached coordinates."
-    val mockLocationCleanupNotes: String
-        get() = if (chinese) "若会话中断，测试定位源可能残留。请选择 Toolbox 后清理；仍失败则在开发者选项中撤销模拟应用，再重新获取真实位置。其他应用的缓存可能需要刷新。" else
-            "An interrupted session may leave test providers. Select Toolbox and clean up. If that fails, deselect the mock app in Developer options and request a fresh real fix. Other apps may need to refresh cached positions."
     val mockLocationDataWarning: String
         get() = if (chinese) "当前读到的是模拟位置，不代表设备实际所在位置。" else
             "This is a mock position, not the device's actual location."
@@ -307,6 +281,8 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "浅色" else "Light"
     val overlayThemeEverforest: String
         get() = "Everforest"
+    val overlayThemeSage: String
+        get() = if (chinese) "鼠尾草" else "Sage"
     val overlayThemeBlack: String
         get() = if (chinese) "纯黑" else "Black"
     val overlayThemeCustom: String
@@ -417,6 +393,8 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "动态" else "Dynamic"
     val everforest: String
         get() = "Everforest"
+    val sage: String
+        get() = if (chinese) "鼠尾草" else "Sage"
     val custom: String
         get() = if (chinese) "自定义" else "Custom"
     val accentDynamicHint: String
@@ -434,9 +412,9 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "轻量 Android Toolbox" else "A lightweight Android Toolbox"
     val aboutDescription: String
         get() = if (chinese) {
-            "Toolbox 是一款简洁实用的系统工具箱，提供设备硬件信息、实时性能悬浮窗、位置导航与网络状态诊断。"
+            "Toolbox 是一款本地优先的 Android 工具箱，涵盖设备与性能、位置与网络、应用流量、记账、汇率换算和 TOTP 验证器。"
         } else {
-            "Toolbox is a clean system utility providing hardware info, live monitor overlay, location navigation, and network diagnostics."
+            "Toolbox is a local-first Android toolbox covering device and performance data, location and network tools, app usage, bookkeeping, currency rates, and a TOTP authenticator."
         }
     val aboutScopeTitle: String
         get() = if (chinese) "主要功能" else "Key features"
@@ -445,23 +423,25 @@ class ToolboxStrings(val language: AppLanguage) {
             listOf(
                 "设备信息：处理器、图形、内存、存储、显示和电池",
                 "实时监控：悬浮窗性能图表、多主题与自定义背景",
-                "位置导航：地理坐标、定位精度、海拔与星空雷达图",
-                "模拟定位：开发者测试坐标、地图选点与限时会话（说明见本页）",
-                "网络状态：连接详情、本地地址与公网 IP 地理位置",
-                "天文观测：今夜行星可见时段、月相与观测图导出",
-                "应用与流量：前台屏幕时长、蜂窝/WLAN 分网统计与分类筛选",
-                "记账成本：收支明细、大件日均摊销与订阅周期成本",
+                "位置与星空：坐标、定位精度、海拔与卫星分布",
+                "模拟定位：仅供合法测试，支持坐标、地图选点与限时会话",
+                "网络：连接详情、公网 IP 与局域网设备扫描",
+                "应用与流量：屏幕时长、蜂窝/WLAN 与共享网络流量",
+                "记账与成本：多账户、摊销、订阅、备份与 WebDAV",
+                "汇率换算：Frankfurter/ECB 参考汇率",
+                "动态令牌：TOTP 验证码、扫码导入与加密备份",
             )
         } else {
             listOf(
                 "Device Info: CPU, GPU, memory, storage, display, and battery",
                 "Live Monitor: overlay performance graphs, themes, and custom colors",
-                "Location: coordinates, accuracy, terrain elevation, and sky view radar",
-                "Mock location: developer test coordinates, map picker, and timed sessions (notes on this page)",
-                "Network: connection details, local IPs, and public IP geolocation",
-                "Astronomy: tonight's planet visibility windows, moon phase, and chart export",
-                "App usage & data: screen time, cellular/Wi-Fi stats, and category filters",
-                "Ledger & cost tracker: expenses, asset amortization, and subscription costs",
+                "Location & sky: coordinates, accuracy, elevation, and satellite view",
+                "Mock location: lawful testing only; coordinates, map picker, and timed sessions",
+                "Network: connection details, public IP, and LAN device scan",
+                "App usage & data: screen time, cellular/Wi-Fi, and shared-network traffic",
+                "Ledger & cost: multiple accounts, amortization, subscriptions, backup, and WebDAV",
+                "Currency converter: Frankfurter/ECB reference rates",
+                "TOTP authenticator: dynamic codes, QR import, and encrypted backup",
             )
         }
     val version: String
@@ -848,6 +828,7 @@ class ToolboxStrings(val language: AppLanguage) {
         ToolboxModule.USAGE -> appUsage
         ToolboxModule.LEDGER -> ledger
         ToolboxModule.FX -> if (chinese) "汇率换算" else "Currency converter"
+        ToolboxModule.TOTP -> if (chinese) "动态令牌 (TOTP)" else "TOTP Authenticator"
         ToolboxModule.SETTINGS -> settings
         ToolboxModule.ABOUT -> about
     }
@@ -862,6 +843,7 @@ class ToolboxStrings(val language: AppLanguage) {
         ToolboxModule.USAGE -> if (chinese) "统计" else "Usage"
         ToolboxModule.LEDGER -> if (chinese) "记账" else "Ledger"
         ToolboxModule.FX -> if (chinese) "汇率" else "FX"
+        ToolboxModule.TOTP -> if (chinese) "令牌" else "TOTP"
         ToolboxModule.SETTINGS -> settings
         ToolboxModule.ABOUT -> about
     }
@@ -1507,6 +1489,13 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "隐藏密码" else "Hide password"
     val webDavTestConnection: String
         get() = if (chinese) "测试连接" else "Test connection"
+    val webDavConfirmTestTitle: String
+        get() = if (chinese) "确认发送凭据？" else "Send credentials?"
+    fun webDavConfirmTestMessage(url: String): String = if (chinese) {
+        "连接测试会把用户名和密码发送到：\n$url\n\n请确认域名和地址正确。"
+    } else {
+        "The connection test will send the username and password to:\n$url\n\nConfirm that the host and path are correct."
+    }
     val webDavTestOk: String
         get() = if (chinese) "连接成功" else "Connection OK"
     val webDavConfigSaved: String
@@ -1722,6 +1711,7 @@ class ToolboxStrings(val language: AppLanguage) {
         ToolboxModule.USAGE -> if (chinese) "使用时长与分网流量" else "Screen time & cellular/Wi-Fi data"
         ToolboxModule.LEDGER -> if (chinese) "日常收支、大件摊销与订阅日均成本" else "Expenses, asset amortization & subscriptions"
         ToolboxModule.FX -> if (chinese) "欧洲央行参考汇率" else "ECB reference rates"
+        ToolboxModule.TOTP -> if (chinese) "双因素动态验证码与加密备份" else "2FA dynamic codes & encrypted backup"
         ToolboxModule.SETTINGS -> if (chinese) "外观、主题与偏好设置" else "Appearance, theme, and preferences"
         ToolboxModule.ABOUT -> if (chinese) "版本与应用信息" else "Version and app info"
         else -> ""
@@ -2324,5 +2314,134 @@ class ToolboxStrings(val language: AppLanguage) {
             "平均成本折算：$daily$perDayUnit  ·  $monthly$perMonthUnit  ·  $yearly$perYearUnit"
         } else {
             "Average cost: $daily$perDayUnit  ·  $monthly$perMonthUnit  ·  $yearly$perYearUnit"
+        }
+
+    // Multi-WebDAV settings & TOTP
+    val webDavSettingsCardTitle: String
+        get() = if (chinese) "WebDAV 备份" else "WebDAV Backup"
+    val webDavSettingsCardHint: String
+        get() = if (chinese) {
+            "添加 HTTPS WebDAV 服务并为各工具勾选备份目标。"
+        } else {
+            "Add HTTPS WebDAV services and select backup targets per tool."
+        }
+    val webDavServiceNameLabel: String
+        get() = if (chinese) "服务名称" else "Service name"
+    val webDavServiceNameHint: String
+        get() = if (chinese) "如：坚果云、Nextcloud" else "e.g. Nextcloud, NAS"
+    val webDavAddServiceAction: String
+        get() = if (chinese) "＋ 添加 WebDAV 服务" else "+ Add WebDAV service"
+    val webDavEditServiceTitle: String
+        get() = if (chinese) "编辑 WebDAV 服务" else "Edit WebDAV service"
+    val webDavNewServiceTitle: String
+        get() = if (chinese) "添加 WebDAV 服务" else "Add WebDAV service"
+    fun webDavDeleteServiceConfirm(name: String): String =
+        if (chinese) "删除「$name」？" else "Delete \"$name\"?"
+    val webDavTargetLedgerLabel: String
+        get() = if (chinese) "记账备份目标" else "Ledger targets"
+    val webDavTargetTotpLabel: String
+        get() = if (chinese) "令牌备份目标" else "TOTP targets"
+    val webDavNoServiceHint: String
+        get() = if (chinese) "暂未添加服务" else "No services configured"
+    val webDavNoTargetSelectedToast: String
+        get() = if (chinese) "请先在「设置 → WebDAV 备份」中添加并勾选目标" else "Add and select a WebDAV target in Settings first"
+    val webDavOpenSettingsAction: String
+        get() = if (chinese) "设置 WebDAV" else "WebDAV Settings"
+    fun webDavMultiSyncSummary(okCount: Int, totalCount: Int, detail: String): String =
+        if (chinese) {
+            "已同步 $okCount/$totalCount：$detail"
+        } else {
+            "Synced $okCount/$totalCount: $detail"
+        }
+
+    val totpSearchHint: String
+        get() = if (chinese) "搜索服务商或账号" else "Search issuer or account"
+    val totpEmptyHint: String
+        get() = if (chinese) "暂无令牌，可扫码或手动添加。" else "No tokens yet. Scan a QR code or add manually."
+    val totpAddShort: String
+        get() = if (chinese) "添加" else "Add"
+    val totpScanQrAction: String
+        get() = if (chinese) "扫码添加" else "Scan QR"
+    val totpManualAddAction: String
+        get() = if (chinese) "手动编辑" else "Manual input"
+    val totpPickQrImageAction: String
+        get() = if (chinese) "相册选图" else "From image"
+    val totpScanDialogTitle: String
+        get() = if (chinese) "扫码添加令牌" else "Scan QR Code"
+    val totpScanDialogHint: String
+        get() = if (chinese) "对准二维码自动添加，或从相册选择截图。" else "Point at a QR code or pick a screenshot."
+    val totpCameraPermissionDenied: String
+        get() = if (chinese) "未授予相机权限，可使用「相册选图」" else "Camera permission denied; use 'From image'"
+    val totpQrNoCodeFound: String
+        get() = if (chinese) "未识别到有效二维码" else "No valid QR code found"
+    fun totpQrAddedToast(title: String): String =
+        if (chinese) "已添加：$title" else "Added: $title"
+    val totpNewTitle: String
+        get() = if (chinese) "添加令牌" else "Add token"
+    val totpEditTitle: String
+        get() = if (chinese) "编辑令牌" else "Edit token"
+    val totpUriFieldLabel: String
+        get() = if (chinese) "otpauth:// 链接" else "otpauth:// URI"
+    val totpParseUriButton: String
+        get() = if (chinese) "粘贴并解析链接" else "Paste & parse URI"
+    val totpUriParsedToast: String
+        get() = if (chinese) "已解析填入" else "Parsed from URI"
+    val totpUriInvalidError: String
+        get() = if (chinese) "无效的 otpauth:// 链接" else "Invalid otpauth:// URI"
+    val totpIssuerLabel: String
+        get() = if (chinese) "服务商" else "Service / Issuer"
+    val totpIssuerHint: String
+        get() = if (chinese) "如 Cloudflare、GitHub" else "e.g. Cloudflare, GitHub"
+    val totpAccountLabel: String
+        get() = if (chinese) "账号" else "Account"
+    val totpAccountHint: String
+        get() = if (chinese) "如 user@example.com" else "e.g. user@example.com"
+    val totpSecretLabel: String
+        get() = if (chinese) "Base32 密钥" else "Base32 secret"
+    val totpSecretInvalidError: String
+        get() = if (chinese) "密钥格式无效（仅限 A-Z、2-7）" else "Invalid Base32 secret (A-Z, 2-7)"
+    val totpAdvancedOptionsLabel: String
+        get() = if (chinese) "高级选项" else "Advanced"
+    val totpAlgorithmLabel: String
+        get() = if (chinese) "算法" else "Algorithm"
+    val totpDigitsLabel: String
+        get() = if (chinese) "位数" else "Digits"
+    val totpPeriodLabel: String
+        get() = if (chinese) "周期" else "Period"
+    val totpCopyCodeLabel: String
+        get() = if (chinese) "已复制验证码" else "Code copied"
+    val totpCopyUriAction: String
+        get() = if (chinese) "复制链接" else "Copy URI"
+    val totpShowAllCodes: String
+        get() = if (chinese) "显示全部验证码" else "Show all codes"
+    val totpHideAllCodes: String
+        get() = if (chinese) "隐藏全部验证码" else "Hide all codes"
+    fun totpDeleteConfirm(name: String): String =
+        if (chinese) "删除令牌「$name」？" else "Delete token \"$name\"?"
+    val totpExportEncryptedMenu: String
+        get() = if (chinese) "导出加密备份" else "Export backup"
+    val totpImportEncryptedMenu: String
+        get() = if (chinese) "导入加密备份" else "Import backup"
+    val totpVaultPassphraseTitle: String
+        get() = if (chinese) "备份加密密码" else "Backup Passphrase"
+    val totpVaultPassphraseHint: String
+        get() = if (chinese) {
+            "仅用于 WebDAV 同步与导出备份文件时的端到端加密（本机存储已由系统硬件密钥自动加密）。"
+        } else {
+            "Used for end-to-end encryption when syncing to WebDAV or exporting backup files."
+        }
+    val totpVaultPassphraseLabel: String
+        get() = if (chinese) "备份密码" else "Backup passphrase"
+    val totpVaultPassphraseRemember: String
+        get() = if (chinese) "在本机记住此密码" else "Remember on this device"
+    val totpVaultPassphraseTooShort: String
+        get() = if (chinese) "密码至少 8 位" else "At least 8 characters"
+    val totpVaultWrongPassphrase: String
+        get() = if (chinese) "备份密码错误或文件已损坏" else "Wrong passphrase or corrupted file"
+    fun totpSyncSuccess(total: Int, pulled: Int, pushed: Int): String =
+        if (chinese) {
+            "共 $total 项（拉取 $pulled · 推送 $pushed）"
+        } else {
+            "$total tokens (pulled $pulled · pushed $pushed)"
         }
 }

@@ -56,6 +56,7 @@ enum class ToolboxModule {
     USAGE,
     LEDGER,
     FX,
+    TOTP,
     SETTINGS,
     ABOUT,
 }
@@ -275,6 +276,7 @@ fun ToolboxApp(
                     ToolboxModule.LEDGER -> LedgerScreen(
                         strings = strings,
                         onBack = { moduleName = ToolboxModule.HOME.name },
+                        onOpenSettings = { moduleName = ToolboxModule.SETTINGS.name },
                         openEditorRequested = ledgerEditorRequested,
                         onEditorRequestHandled = { ledgerEditorRequested = false },
                         tabRequest = ledgerTabRequest,
@@ -288,6 +290,12 @@ fun ToolboxApp(
                         onBack = { moduleName = ToolboxModule.HOME.name },
                         cachedRates = fxRates,
                         onRatesChange = { fxRates = it },
+                    )
+
+                    ToolboxModule.TOTP -> TotpScreen(
+                        strings = strings,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
+                        onOpenSettings = { moduleName = ToolboxModule.SETTINGS.name },
                     )
 
                     ToolboxModule.SETTINGS -> SettingsScreen(

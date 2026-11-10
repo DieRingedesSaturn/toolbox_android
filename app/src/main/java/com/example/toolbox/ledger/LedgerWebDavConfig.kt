@@ -8,10 +8,35 @@ import androidx.core.content.edit
 import java.net.URI
 import java.net.URLEncoder
 import java.security.KeyStore
+import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import org.json.JSONArray
+import org.json.JSONObject
+
+enum class BackupTool(val key: String) {
+    LEDGER("ledger"),
+    TOTP("totp"),
+}
+
+data class WebDavServiceProfile(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val folderUrl: String,
+    val username: String,
+    val password: String,
+) {
+    val isComplete: Boolean
+        get() = folderUrl.isNotBlank() && username.isNotBlank() && password.isNotEmpty()
+
+    fun toWebDavConfig(): WebDavConfig = WebDavConfig(
+        folderUrl = folderUrl,
+        username = username,
+        password = password,
+    )
+}
 
 data class WebDavConfig(
     val folderUrl: String,
@@ -34,6 +59,9 @@ object WebDavPaths {
         return if (ascii.endsWith("/")) ascii else "$ascii/"
     }
 
+    fun defaultServiceName(folderUrl: String): String =
+        runCatching { URI(folderUrl).host?.takeIf { it.isNotBlank() } }.getOrNull() ?: "WebDAV"
+
     fun fileUrl(folderUrl: String, name: String): String =
         folderUrl + URLEncoder.encode(name, Charsets.UTF_8.name()).replace("+", "%20")
 
@@ -43,8 +71,10 @@ object WebDavPaths {
 }
 
 /**
- * Persists the WebDAV endpoint locally. The password is encrypted with an
- * Android Keystore AES/GCM key before it touches SharedPreferences.
+ * Persists one or more WebDAV endpoints locally and tracks which tools
+ * ([BackupTool.LEDGER], [BackupTool.TOTP]) back up to each service.
+ * Every password is encrypted with an Android Keystore AES/GCM key before it
+ * touches SharedPreferences.
  */
 class WebDavConfigStore(context: Context) {
 
@@ -53,38 +83,195 @@ class WebDavConfigStore(context: Context) {
         Context.MODE_PRIVATE,
     )
 
-    fun load(): WebDavConfig = WebDavConfig(
-        folderUrl = prefs.getString(KEY_FOLDER_URL, "") ?: "",
-        username = prefs.getString(KEY_USERNAME, "") ?: "",
-        password = prefs.getString(KEY_PASSWORD_ENC, null)?.let { decrypt(it) } ?: "",
-    )
+    private fun ensureMigrated() {
+        if (prefs.contains(KEY_SERVICES_JSON)) return
+        val legacyUrl = prefs.getString(KEY_FOLDER_URL, "")?.trim().orEmpty()
+        val legacyUser = prefs.getString(KEY_USERNAME, "")?.trim().orEmpty()
+        val legacyPassEnc = prefs.getString(KEY_PASSWORD_ENC, null)
+        if (legacyUrl.isEmpty() && legacyUser.isEmpty() && legacyPassEnc == null) return
+        val legacyId = "legacy-default"
+        val item = JSONObject()
+            .put("id", legacyId)
+            .put("name", WebDavPaths.defaultServiceName(legacyUrl))
+            .put("folderUrl", legacyUrl)
+            .put("username", legacyUser)
+        if (!legacyPassEnc.isNullOrEmpty()) {
+            item.put("passwordEnc", legacyPassEnc)
+        }
+        val array = JSONArray().put(item)
+        prefs.edit {
+            putString(KEY_SERVICES_JSON, array.toString())
+            putStringSet(toolBindKey(BackupTool.LEDGER), setOf(legacyId))
+        }
+    }
+
+    fun loadServices(): List<WebDavServiceProfile> {
+        ensureMigrated()
+        val raw = prefs.getString(KEY_SERVICES_JSON, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList {
+                for (i in 0 until array.length()) {
+                    val obj = array.optJSONObject(i) ?: continue
+                    val id = obj.optString("id").trim().takeIf { it.isNotEmpty() } ?: continue
+                    val folderUrl = obj.optString("folderUrl").trim()
+                    val name = obj.optString("name").trim()
+                        .ifEmpty { WebDavPaths.defaultServiceName(folderUrl) }
+                    val username = obj.optString("username").trim()
+                    val passwordEnc = obj.optString("passwordEnc").takeIf { it.isNotEmpty() }
+                    val password = passwordEnc?.let { decrypt(it) } ?: ""
+                    add(
+                        WebDavServiceProfile(
+                            id = id,
+                            name = name,
+                            folderUrl = folderUrl,
+                            username = username,
+                            password = password,
+                        ),
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun writeServices(services: List<WebDavServiceProfile>) {
+        val array = JSONArray()
+        for (service in services) {
+            val obj = JSONObject()
+                .put("id", service.id)
+                .put("name", service.name.trim().ifEmpty { WebDavPaths.defaultServiceName(service.folderUrl) })
+                .put("folderUrl", service.folderUrl)
+                .put("username", service.username)
+            if (service.password.isNotEmpty()) {
+                obj.put("passwordEnc", encrypt(service.password))
+            }
+            array.put(obj)
+        }
+        val first = services.firstOrNull()
+        prefs.edit {
+            putString(KEY_SERVICES_JSON, array.toString())
+            if (first != null) {
+                putString(KEY_FOLDER_URL, first.folderUrl)
+                putString(KEY_USERNAME, first.username)
+                if (first.password.isEmpty()) {
+                    remove(KEY_PASSWORD_ENC)
+                } else {
+                    putString(KEY_PASSWORD_ENC, encrypt(first.password))
+                }
+            } else {
+                remove(KEY_FOLDER_URL)
+                remove(KEY_USERNAME)
+                remove(KEY_PASSWORD_ENC)
+            }
+        }
+    }
+
+    fun upsertService(
+        profile: WebDavServiceProfile,
+        defaultTools: Set<BackupTool> = emptySet(),
+    ) {
+        val current = loadServices().toMutableList()
+        val index = current.indexOfFirst { it.id == profile.id }
+        val isNew = index < 0
+        if (index >= 0) {
+            current[index] = profile
+        } else {
+            current.add(profile)
+        }
+        writeServices(current)
+        if (isNew && defaultTools.isNotEmpty()) {
+            defaultTools.forEach { tool ->
+                setServiceSelected(tool, profile.id, true)
+            }
+        }
+    }
+
+    fun deleteService(id: String) {
+        val next = loadServices().filterNot { it.id == id }
+        writeServices(next)
+        BackupTool.entries.forEach { tool ->
+            val updated = selectedServiceIds(tool) - id
+            prefs.edit { putStringSet(toolBindKey(tool), updated) }
+        }
+    }
+
+    fun selectedServiceIds(tool: BackupTool): Set<String> {
+        ensureMigrated()
+        val validIds = loadServices().map { it.id }.toSet()
+        val stored = prefs.getStringSet(toolBindKey(tool), null).orEmpty()
+        return stored.intersect(validIds)
+    }
+
+    fun setServiceSelected(tool: BackupTool, serviceId: String, selected: Boolean) {
+        val current = selectedServiceIds(tool).toMutableSet()
+        if (selected) current.add(serviceId) else current.remove(serviceId)
+        prefs.edit { putStringSet(toolBindKey(tool), current) }
+    }
+
+    fun selectedServices(tool: BackupTool): List<WebDavServiceProfile> {
+        val ids = selectedServiceIds(tool)
+        return loadServices().filter { it.id in ids && it.isComplete }
+    }
+
+    fun load(): WebDavConfig {
+        val selected = selectedServices(BackupTool.LEDGER).firstOrNull()
+            ?: loadServices().firstOrNull()
+        return selected?.toWebDavConfig() ?: WebDavConfig(
+            folderUrl = prefs.getString(KEY_FOLDER_URL, "") ?: "",
+            username = prefs.getString(KEY_USERNAME, "") ?: "",
+            password = prefs.getString(KEY_PASSWORD_ENC, null)?.let { decrypt(it) } ?: "",
+        )
+    }
 
     fun isPasswordUnavailable(): Boolean {
+        ensureMigrated()
+        val raw = prefs.getString(KEY_SERVICES_JSON, null)
+        if (raw != null) {
+            return runCatching {
+                val array = JSONArray(raw)
+                (0 until array.length()).any { i ->
+                    val enc = array.optJSONObject(i)?.optString("passwordEnc")
+                        ?.takeIf { it.isNotEmpty() }
+                    enc != null && decrypt(enc) == null
+                }
+            }.getOrDefault(false)
+        }
         val encoded = prefs.getString(KEY_PASSWORD_ENC, null) ?: return false
         return decrypt(encoded) == null
     }
 
     fun save(config: WebDavConfig) {
-        prefs.edit {
-            putString(KEY_FOLDER_URL, config.folderUrl)
-            putString(KEY_USERNAME, config.username)
-            if (config.password.isEmpty()) {
-                remove(KEY_PASSWORD_ENC)
-            } else {
-                putString(KEY_PASSWORD_ENC, encrypt(config.password))
-            }
-        }
+        val existing = selectedServices(BackupTool.LEDGER).firstOrNull()
+            ?: loadServices().firstOrNull()
+        val profile = WebDavServiceProfile(
+            id = existing?.id ?: "legacy-default",
+            name = existing?.name ?: WebDavPaths.defaultServiceName(config.folderUrl),
+            folderUrl = config.folderUrl,
+            username = config.username,
+            password = config.password,
+        )
+        upsertService(profile, defaultTools = setOf(BackupTool.LEDGER))
+        setServiceSelected(BackupTool.LEDGER, profile.id, true)
     }
 
     fun clear() {
         prefs.edit { clear() }
     }
 
-    fun lastSyncAtMillis(): Long? =
-        if (prefs.contains(KEY_LAST_SYNC_AT)) prefs.getLong(KEY_LAST_SYNC_AT, 0L) else null
+    fun lastSyncAtMillis(tool: BackupTool = BackupTool.LEDGER): Long? {
+        val key = when (tool) {
+            BackupTool.LEDGER -> KEY_LAST_SYNC_AT
+            BackupTool.TOTP -> KEY_LAST_TOTP_SYNC_AT
+        }
+        return if (prefs.contains(key)) prefs.getLong(key, 0L) else null
+    }
 
-    fun saveLastSync(millis: Long) {
-        prefs.edit { putLong(KEY_LAST_SYNC_AT, millis) }
+    fun saveLastSync(millis: Long, tool: BackupTool = BackupTool.LEDGER) {
+        val key = when (tool) {
+            BackupTool.LEDGER -> KEY_LAST_SYNC_AT
+            BackupTool.TOTP -> KEY_LAST_TOTP_SYNC_AT
+        }
+        prefs.edit { putLong(key, millis) }
     }
 
     private fun secretKey(): SecretKey {
@@ -132,11 +319,15 @@ class WebDavConfigStore(context: Context) {
         private const val KEY_FOLDER_URL = "folder_url"
         private const val KEY_USERNAME = "username"
         private const val KEY_PASSWORD_ENC = "password_enc"
+        private const val KEY_SERVICES_JSON = "services_json"
         private const val KEY_LAST_SYNC_AT = "last_sync_at"
+        private const val KEY_LAST_TOTP_SYNC_AT = "last_totp_sync_at"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEY_ALIAS = "toolbox_ledger_webdav"
         private const val AES_GCM = "AES/GCM/NoPadding"
         private const val GCM_IV_BYTES = 12
         private const val GCM_TAG_BITS = 128
+
+        private fun toolBindKey(tool: BackupTool): String = "tool_services_${tool.key}"
     }
 }

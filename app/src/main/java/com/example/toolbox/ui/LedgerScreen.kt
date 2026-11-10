@@ -102,6 +102,7 @@ import com.example.toolbox.ledger.LedgerSyncSerializer
 import com.example.toolbox.ledger.LedgerSyncStatus
 import com.example.toolbox.ledger.LedgerTag
 import com.example.toolbox.ledger.LedgerTags
+import com.example.toolbox.ledger.BackupTool
 import com.example.toolbox.ledger.LedgerWebDavSync
 import com.example.toolbox.ledger.NotificationLedgerCandidate
 import com.example.toolbox.ledger.NotificationLedgerDefaults
@@ -115,6 +116,7 @@ import com.example.toolbox.ledger.WebDavConfig
 import com.example.toolbox.ledger.WebDavConfigStore
 import com.example.toolbox.ledger.WebDavException
 import com.example.toolbox.ledger.WebDavFailure
+import com.example.toolbox.ledger.WebDavServiceProfile
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -185,6 +187,7 @@ internal data class LedgerSnapshot(
 internal fun LedgerScreen(
     strings: ToolboxStrings,
     onBack: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     openEditorRequested: Boolean = false,
     onEditorRequestHandled: () -> Unit = {},
     tabRequest: Int? = null,
@@ -227,6 +230,7 @@ internal fun LedgerScreen(
     val webDavStore = remember(context) { WebDavConfigStore(context) }
     var webDavConfigVersion by remember { mutableIntStateOf(0) }
     var webDavConfig by remember { mutableStateOf<WebDavConfig?>(null) }
+    var webDavTargets by remember { mutableStateOf<List<WebDavServiceProfile>>(emptyList()) }
     var webDavPasswordUnavailable by remember { mutableStateOf(false) }
     var webDavLastSyncAt by remember { mutableStateOf<Long?>(null) }
     var webDavStatusLoaded by remember { mutableStateOf(false) }
@@ -289,15 +293,17 @@ internal fun LedgerScreen(
 
     LaunchedEffect(webDavConfigVersion) {
         val loaded = withContext(Dispatchers.IO) {
-            Triple(
-                webDavStore.load(),
-                webDavStore.isPasswordUnavailable(),
-                webDavStore.lastSyncAtMillis(),
-            )
+            val targets = webDavStore.selectedServices(BackupTool.LEDGER)
+            val cfg = webDavStore.load()
+            val unavailable = webDavStore.isPasswordUnavailable()
+            val lastSync = webDavStore.lastSyncAtMillis()
+            listOf(targets, cfg, unavailable, lastSync)
         }
-        webDavConfig = loaded.first
-        webDavPasswordUnavailable = loaded.second
-        webDavLastSyncAt = loaded.third
+        @Suppress("UNCHECKED_CAST")
+        webDavTargets = loaded[0] as List<WebDavServiceProfile>
+        webDavConfig = loaded[1] as? WebDavConfig
+        webDavPasswordUnavailable = loaded[2] as Boolean
+        webDavLastSyncAt = loaded[3] as? Long
         webDavStatusLoaded = true
     }
 
@@ -901,6 +907,75 @@ internal fun LedgerScreen(
         }
     }
 
+    fun runSelectedWebDavSync(toastResult: Boolean) {
+        val targets = webDavTargets.filter { it.isComplete }
+        if (targets.isEmpty()) {
+            val single = webDavConfig?.takeIf { it.isComplete }
+            if (single != null) {
+                runWebDavSync(single, toastResult)
+            } else {
+                onOpenSettings()
+            }
+            return
+        }
+        if (targets.size == 1) {
+            runWebDavSync(targets.first().toWebDavConfig(), toastResult)
+            return
+        }
+        if (webDavBusyAction != null) return
+        webDavBusyAction = WebDavBusyAction.SYNC
+        webDavLastResult = null
+        scope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                var okCount = 0
+                val messages = mutableListOf<String>()
+                val now = System.currentTimeMillis()
+                for (service in targets) {
+                    val res = runCatching {
+                        LedgerWebDavSync(
+                            client = WebDavClient(
+                                service.folderUrl,
+                                service.username,
+                                service.password,
+                            ),
+                            loadLocal = { store.queryAllEntriesForSync() },
+                            loadLocalTags = { store.queryTags(includeDeleted = true) },
+                            loadLocalAccounts = { store.queryAccounts(includeDeleted = true) },
+                            applyMerged = { merged -> store.importSyncPayload(merged) },
+                        ).sync()
+                    }
+                    res.onSuccess { r ->
+                        okCount++
+                        messages += "${service.name}: " + strings.webDavSyncSuccess(
+                            total = r.totalEntries,
+                            pulled = r.pulledCount,
+                            pushed = r.pushedCount,
+                            snapshotName = r.snapshotName,
+                        )
+                    }.onFailure { err ->
+                        messages += "${service.name}: ${webDavErrorMessage(err)}"
+                    }
+                }
+                if (okCount > 0) {
+                    webDavStore.saveLastSync(now, BackupTool.LEDGER)
+                }
+                Triple(okCount, targets.size, messages.joinToString("\n"))
+            }
+            webDavConfigVersion++
+            webDavBusyAction = null
+            val summaryMsg = strings.webDavMultiSyncSummary(
+                outcome.first,
+                outcome.second,
+                outcome.third,
+            )
+            webDavLastResult = summaryMsg
+            if (outcome.first > 0) reloadEntries()
+            if (toastResult) {
+                Toast.makeText(context, summaryMsg, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     fun backupFileName(pattern: String, suffix: String): String =
         "toolbox-ledger-" +
             LocalDateTime.now().format(DateTimeFormatter.ofPattern(pattern)) +
@@ -1125,6 +1200,9 @@ internal fun LedgerScreen(
     ) { uri -> uri?.let(::startImport) }
 
     val searching = searchQuery != null
+    BackHandler(enabled = searching) {
+        searchQuery = null
+    }
     val searchFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(searching) {
@@ -1275,7 +1353,7 @@ internal fun LedgerScreen(
                                         text = { Text(strings.webDavBackupMenu) },
                                         onClick = {
                                             menuExpanded = false
-                                            showWebDavDialog = true
+                                            onOpenSettings()
                                         },
                                     )
                                     DropdownMenuItem(
@@ -1285,21 +1363,19 @@ internal fun LedgerScreen(
                                             showNotificationLedgerDialog = true
                                         },
                                     )
-                                    webDavConfig?.takeIf { it.isComplete }
-                                        ?.let { config ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(strings.webDavSyncNow)
-                                                },
-                                                onClick = {
-                                                    menuExpanded = false
-                                                    runWebDavSync(
-                                                        config,
-                                                        toastResult = true,
-                                                    )
-                                                },
-                                            )
-                                        }
+                                    if (webDavTargets.any { it.isComplete } ||
+                                        webDavConfig?.isComplete == true
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(strings.webDavSyncNow)
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                runSelectedWebDavSync(toastResult = true)
+                                            },
+                                        )
+                                    }
                                     HorizontalDivider()
                                     DropdownMenuItem(
                                         text = { Text(strings.manageTagsMenu) },
@@ -1410,16 +1486,15 @@ internal fun LedgerScreen(
                             daysSinceBackup = lastBackupAt?.let {
                                 LedgerBackupReminder.daysSince(it, System.currentTimeMillis())
                             },
-                            webDavAvailable = webDavConfig?.isComplete == true,
+                            webDavAvailable = webDavTargets.any { it.isComplete } ||
+                                webDavConfig?.isComplete == true,
                             onExport = {
                                 exportJsonLauncher.launch(
                                     backupFileName("yyyyMMdd-HHmmss", ".json"),
                                 )
                             },
                             onWebDavSync = {
-                                webDavConfig?.takeIf { it.isComplete }?.let {
-                                    runWebDavSync(it, toastResult = true)
-                                }
+                                runSelectedWebDavSync(toastResult = true)
                             },
                             onLater = {
                                 val until = LedgerBackupReminder.snoozeUntil(

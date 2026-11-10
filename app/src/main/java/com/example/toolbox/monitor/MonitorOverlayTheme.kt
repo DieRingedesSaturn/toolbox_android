@@ -6,6 +6,7 @@ enum class MonitorOverlayTheme {
     DARK,
     LIGHT,
     EVERFOREST,
+    SAGE,
     BLACK,
     CUSTOM,
 }
@@ -68,6 +69,15 @@ object MonitorOverlayThemeHelper {
                     primaryTextColor = 0xFFD3C6AA.toInt(),
                     secondaryTextColor = 0xFF9DA9A0.toInt(),
                     gridColor = 0x2AD3C6AA,
+                )
+            }
+
+            MonitorOverlayTheme.SAGE -> {
+                MonitorOverlayColors(
+                    backgroundColor = (alpha shl 24) or 0x232C27,
+                    primaryTextColor = 0xFFD8E1D6.toInt(),
+                    secondaryTextColor = 0xFFACBBAF.toInt(),
+                    gridColor = 0x2AD8E1D6,
                 )
             }
 
