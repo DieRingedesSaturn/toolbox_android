@@ -28,6 +28,53 @@
         android:name="android.hardware.camera"
         android:required="false" />
 
+    <!-- Package visibility for hidden Google and system settings. QUERY_ALL_PACKAGES
+         already covers this; the queries block is the narrower declaration. -->
+    <queries>
+        <package android:name="com.google.android.gms" />
+        <package android:name="com.android.settings" />
+        <intent>
+            <action android:name="com.google.android.gms.location.settings.LOCATION_ACCURACY" />
+        </intent>
+        <intent>
+            <action android:name="com.google.android.gms.settings.ADS_PRIVACY" />
+        </intent>
+        <intent>
+            <action android:name="com.google.android.gms.usagereporting.UPLOAD_CONSENT" />
+        </intent>
+        <intent>
+            <action android:name="com.google.android.gms.app.settings.GOOGLE_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="com.google.android.gms.constellation.SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.SYNC_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.ACCOUNT_SYNC_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.APPLICATION_DEVELOPMENT_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.APN_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.USAGE_ACCESS_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.APPLICATION_DETAILS_SETTINGS" />
+            <data android:scheme="package" />
+        </intent>
+    </queries>
+
     <application
         android:name=".ToolboxApplication"
         android:allowBackup="false"

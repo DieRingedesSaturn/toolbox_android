@@ -17,6 +17,7 @@ Current version **0.1** (`minSdk 26`, `targetSdk 36`). This version has no speed
 - **Ledger and cost amortization**: on-device SQLite ledger with multiple accounts, tags, budgets, subscription amortization, and transfers. JSON and CSV export/import, manual HTTPS WebDAV sync, and a home-screen widget. **Notification quick entry is temporarily disabled** (its menu entry is hidden and the notification listener is off). The code remains so it can be turned back on. Notification bodies are not stored in plaintext, and any body text already saved is cleared on startup.
 - **Exchange rates**: reference rates fetched on demand (Frankfurter → European Central Bank → the community currency-api). Results show the date and source and can be used from the local cache.
 - **TOTP**: RFC 6238 tokens (camera or gallery QR, or manual entry). Stored with Android Keystore, and the screen blocks screenshots. Encrypted backups use a passphrase you choose, locally or on an HTTPS WebDAV folder you configure. If the local vault cannot be decrypted, it is left unchanged and sync will not overwrite it.
+- **Privacy**: shortcuts to Google and system settings that some ROMs hide (Google settings, location accuracy, ads, usage diagnostics, phone-number verification, and a few system pages). Only exported activities are opened.
 
 ## Screenshots
 

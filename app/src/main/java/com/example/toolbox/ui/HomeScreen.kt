@@ -98,6 +98,7 @@ internal object HomeModuleOrder {
         ToolboxModule.DEVICE,
         ToolboxModule.LOCATION,
         ToolboxModule.NETWORK,
+        ToolboxModule.PRIVACY,
     )
 
     /** Keeps known tool modules, drops duplicates, and appends newly added modules. */
@@ -707,4 +708,5 @@ private val moduleTiles = listOf(
     ModuleTile(ToolboxModule.DEVICE, R.drawable.ic_module_device),
     ModuleTile(ToolboxModule.LOCATION, R.drawable.ic_module_location),
     ModuleTile(ToolboxModule.NETWORK, R.drawable.ic_module_network),
+    ModuleTile(ToolboxModule.PRIVACY, R.drawable.ic_module_privacy),
 )
