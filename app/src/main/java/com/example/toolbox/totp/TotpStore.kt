@@ -7,29 +7,47 @@ import android.util.AtomicFile
 import android.util.Base64
 import androidx.core.content.edit
 import java.io.File
+import java.io.FileNotFoundException
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-class TotpStore(context: Context) {
-    private val appContext = context.applicationContext
-    private val vaultFile = AtomicFile(File(appContext.noBackupFilesDir, LOCAL_FILE_NAME))
-    private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+/**
+ * Thrown when the on-device token file exists but cannot be decrypted or parsed.
+ * Callers must not replace the file: an empty list is only returned when the
+ * vault is actually absent.
+ */
+class TotpLocalVaultException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
+
+internal interface TotpLocalCipher {
+    fun encrypt(plainText: String): ByteArray
+    fun decrypt(raw: ByteArray): String?
+}
+
+class TotpStore internal constructor(
+    context: Context,
+    private val vaultFile: AtomicFile,
+    private val cipher: TotpLocalCipher,
+) {
+    constructor(context: Context) : this(
+        context.applicationContext,
+        AtomicFile(File(context.applicationContext.noBackupFilesDir, LOCAL_FILE_NAME)),
+        AndroidKeystoreTotpCipher,
+    )
+
+    private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     @Synchronized
-    fun queryAllForSync(): List<TotpEntry> {
-        if (!vaultFile.baseFile.exists()) return emptyList()
-        val raw = runCatching { vaultFile.readFully() }.getOrNull() ?: return emptyList()
-        if (raw.size <= GCM_IV_BYTES) return emptyList()
-        val json = decryptBytes(raw) ?: return emptyList()
-        return runCatching { TotpVaultCrypto.parseEntriesJson(json) }.getOrDefault(emptyList())
-    }
+    fun queryAllForSync(): List<TotpEntry> = readEntries()
 
     @Synchronized
     fun queryVisible(): List<TotpEntry> =
-        queryAllForSync()
+        readEntries()
             .filter { it.deletedAtMillis == null }
             .sortedWith(
                 compareBy<TotpEntry> { it.issuer.lowercase() }
@@ -39,19 +57,19 @@ class TotpStore(context: Context) {
 
     @Synchronized
     fun upsert(entry: TotpEntry) {
-        val current = queryAllForSync().toMutableList()
+        val current = readEntries().toMutableList()
         val index = current.indexOfFirst { it.uuid == entry.uuid }
         if (index >= 0) {
             current[index] = entry
         } else {
             current.add(entry)
         }
-        writeAll(current)
+        writeEntries(current)
     }
 
     @Synchronized
     fun softDelete(uuid: String, nowMillis: Long = System.currentTimeMillis()) {
-        val current = queryAllForSync().map { item ->
+        val current = readEntries().map { item ->
             if (item.uuid == uuid) {
                 item.copy(
                     updatedAtMillis = maxOf(nowMillis, item.updatedAtMillis + 1L),
@@ -61,18 +79,26 @@ class TotpStore(context: Context) {
                 item
             }
         }
-        writeAll(current)
+        writeEntries(current)
     }
 
+    /**
+     * Replaces the vault. Refuses to overwrite a file that cannot be read unless
+     * [overwriteUnreadable] is set, which is reserved for an explicit import
+     * Replace. Sync must leave the flag false so a decrypt failure cannot wipe tokens.
+     */
     @Synchronized
-    fun replaceAll(entries: List<TotpEntry>) {
-        writeAll(entries)
+    fun replaceAll(entries: List<TotpEntry>, overwriteUnreadable: Boolean = false) {
+        if (!overwriteUnreadable) {
+            readEntries()
+        }
+        writeEntries(entries)
     }
 
     @Synchronized
     fun mergeAndSave(remoteEntries: List<TotpEntry>): TotpMergeResult {
-        val merged = TotpSyncMerge.merge(queryAllForSync(), remoteEntries)
-        writeAll(merged.entries)
+        val merged = TotpSyncMerge.merge(readEntries(), remoteEntries)
+        writeEntries(merged.entries)
         return merged
     }
 
@@ -80,7 +106,7 @@ class TotpStore(context: Context) {
         prefs.getString(KEY_VAULT_PASSPHRASE_ENC, null)?.let { encoded ->
             runCatching {
                 val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-                decryptBytes(bytes)
+                cipher.decrypt(bytes)
             }.getOrNull()
         }
 
@@ -89,15 +115,37 @@ class TotpStore(context: Context) {
             if (passphrase.isNullOrEmpty()) {
                 remove(KEY_VAULT_PASSPHRASE_ENC)
             } else {
-                val encrypted = encryptBytes(passphrase)
+                val encrypted = cipher.encrypt(passphrase)
                 putString(KEY_VAULT_PASSPHRASE_ENC, Base64.encodeToString(encrypted, Base64.NO_WRAP))
             }
         }
     }
 
-    private fun writeAll(entries: List<TotpEntry>) {
+    /**
+     * Empty only when no vault file exists. A present file that cannot be
+     * decrypted or parsed throws [TotpLocalVaultException] so callers cannot
+     * mistake it for an empty store and write over it.
+     */
+    private fun readEntries(): List<TotpEntry> {
+        val raw = try {
+            vaultFile.readFully()
+        } catch (_: FileNotFoundException) {
+            return emptyList()
+        } catch (failure: Exception) {
+            throw TotpLocalVaultException("Couldn't read the token vault", failure)
+        }
+        val json = cipher.decrypt(raw)
+            ?: throw TotpLocalVaultException("Couldn't decrypt the token vault")
+        return try {
+            TotpVaultCrypto.parseEntriesJson(json)
+        } catch (failure: Exception) {
+            throw TotpLocalVaultException("Couldn't parse the token vault", failure)
+        }
+    }
+
+    private fun writeEntries(entries: List<TotpEntry>) {
         val json = TotpVaultCrypto.serializeEntriesJson(entries)
-        val encrypted = encryptBytes(json)
+        val encrypted = cipher.encrypt(json)
         val output = vaultFile.startWrite()
         try {
             output.write(encrypted)
@@ -109,10 +157,40 @@ class TotpStore(context: Context) {
         }
     }
 
-    private fun secretKey(): SecretKey {
+    companion object {
+        internal const val LOCAL_FILE_NAME = "totp-local.bin"
+        private const val PREFS_NAME = "totp_prefs"
+        private const val KEY_VAULT_PASSPHRASE_ENC = "vault_passphrase_enc"
+    }
+}
+
+private object AndroidKeystoreTotpCipher : TotpLocalCipher {
+    override fun encrypt(plainText: String): ByteArray {
+        val cipher = Cipher.getInstance(AES_GCM)
+        val key = secretKey(create = true)
+            ?: throw TotpLocalVaultException("Couldn't create the token keystore key")
+        cipher.init(Cipher.ENCRYPT_MODE, key)
+        val ciphertext = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+        return cipher.iv + ciphertext
+    }
+
+    override fun decrypt(raw: ByteArray): String? = runCatching {
+        if (raw.size <= GCM_IV_BYTES) return@runCatching null
+        val key = secretKey(create = false) ?: return@runCatching null
+        val cipher = Cipher.getInstance(AES_GCM)
+        cipher.init(
+            Cipher.DECRYPT_MODE,
+            key,
+            GCMParameterSpec(GCM_TAG_BITS, raw.copyOfRange(0, GCM_IV_BYTES)),
+        )
+        String(cipher.doFinal(raw.copyOfRange(GCM_IV_BYTES, raw.size)), Charsets.UTF_8)
+    }.getOrNull()
+
+    private fun secretKey(create: Boolean): SecretKey? {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         (keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)
             ?.let { return it.secretKey }
+        if (!create) return null
         val generator = KeyGenerator.getInstance(
             KeyProperties.KEY_ALGORITHM_AES,
             ANDROID_KEYSTORE,
@@ -130,32 +208,9 @@ class TotpStore(context: Context) {
         return generator.generateKey()
     }
 
-    private fun encryptBytes(plainText: String): ByteArray {
-        val cipher = Cipher.getInstance(AES_GCM)
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey())
-        val ciphertext = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
-        return cipher.iv + ciphertext
-    }
-
-    private fun decryptBytes(raw: ByteArray): String? = runCatching {
-        if (raw.size <= GCM_IV_BYTES) return@runCatching null
-        val cipher = Cipher.getInstance(AES_GCM)
-        cipher.init(
-            Cipher.DECRYPT_MODE,
-            secretKey(),
-            GCMParameterSpec(GCM_TAG_BITS, raw.copyOfRange(0, GCM_IV_BYTES)),
-        )
-        String(cipher.doFinal(raw.copyOfRange(GCM_IV_BYTES, raw.size)), Charsets.UTF_8)
-    }.getOrNull()
-
-    companion object {
-        private const val LOCAL_FILE_NAME = "totp-local.bin"
-        private const val PREFS_NAME = "totp_prefs"
-        private const val KEY_VAULT_PASSPHRASE_ENC = "vault_passphrase_enc"
-        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
-        private const val KEY_ALIAS = "toolbox_totp_local"
-        private const val AES_GCM = "AES/GCM/NoPadding"
-        private const val GCM_IV_BYTES = 12
-        private const val GCM_TAG_BITS = 128
-    }
+    private const val ANDROID_KEYSTORE = "AndroidKeyStore"
+    private const val KEY_ALIAS = "toolbox_totp_local"
+    private const val AES_GCM = "AES/GCM/NoPadding"
+    private const val GCM_IV_BYTES = 12
+    private const val GCM_TAG_BITS = 128
 }

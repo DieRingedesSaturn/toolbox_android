@@ -39,7 +39,10 @@ class NotificationLedgerStoreTest {
         val candidate = store.candidates().single()
         assertEquals(listOf(2_500L), candidate.amountsCents)
         assertEquals("招商银行", candidate.title)
-        assertEquals("您尾号1234的储蓄卡消费25.00元", candidate.text)
+        assertEquals("", candidate.text)
+        val raw = context.getSharedPreferences("notification_ledger", Context.MODE_PRIVATE)
+            .getString("candidates", "")!!
+        assertFalse(raw.contains("您尾号1234的储蓄卡消费25.00元"))
         assertNull(candidate.skipReason)
         assertEquals(1, store.records().size)
     }
@@ -51,7 +54,10 @@ class NotificationLedgerStoreTest {
         val record = store.records().single()
         assertEquals(NotificationSkipReason.NO_AMOUNT, record.skipReason)
         assertTrue(record.amountsCents.isEmpty())
-        assertEquals("今天晴，25 度", record.text)
+        assertEquals("", record.text)
+        val raw = context.getSharedPreferences("notification_ledger", Context.MODE_PRIVATE)
+            .getString("candidates", "")!!
+        assertFalse(raw.contains("今天晴"))
     }
 
     @Test
@@ -90,7 +96,9 @@ class NotificationLedgerStoreTest {
         store.recordParts("com.pay", "new", System.currentTimeMillis(), "新", "消费 ¥2.00")
         val raw = prefs.getString("candidates", "[]")!!
         assertFalse(raw.contains("消费 ¥1.00"))
-        assertTrue(raw.contains("消费 ¥2.00"))
+        assertFalse(raw.contains("消费 ¥2.00"))
+        assertFalse(raw.contains("旧"))
+        assertTrue(raw.contains("新"))
     }
 
     @Test
@@ -118,6 +126,22 @@ class NotificationLedgerStoreTest {
         assertEquals(1, store.records().size)
         store.clearCandidates()
         assertTrue(store.records().isEmpty())
+    }
+
+    @Test
+    fun redactClearsNotificationBodiesAlreadyStored() {
+        val prefs = context.getSharedPreferences("notification_ledger", Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        prefs.edit().putString(
+            "candidates",
+            """[{"id":"a","package":"com.pay","time":$now,"amounts":[100],"title":"bank","text":"secret body 482913"}]""",
+        ).commit()
+        store.redactStoredBodies()
+        val raw = prefs.getString("candidates", "")!!
+        assertFalse(raw.contains("secret body"))
+        assertFalse(raw.contains("482913"))
+        assertEquals("", store.records().single().text)
+        assertEquals("bank", store.records().single().title)
     }
 
     @Test

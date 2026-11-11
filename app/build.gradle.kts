@@ -1,3 +1,5 @@
+import java.io.File
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -6,7 +8,26 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val projectSigningKey = rootProject.file("signing/toolbox-debug.keystore")
+val debugSigningKey = rootProject.file("signing/toolbox-debug.keystore")
+
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.isFile) {
+        file.inputStream().use { load(it) }
+    }
+}
+
+fun signingValue(property: String, env: String): String? =
+    keystoreProperties.getProperty(property)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: System.getenv(env)?.trim()?.takeIf { it.isNotEmpty() }
+
+val releaseStorePassword = signingValue("storePassword", "TOOLBOX_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "TOOLBOX_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "TOOLBOX_RELEASE_KEY_PASSWORD")
+val releaseStoreFile: File? = signingValue("storeFile", "TOOLBOX_RELEASE_STORE_FILE")?.let { path ->
+    val candidate = File(path)
+    if (candidate.isAbsolute) candidate else rootProject.file(path)
+}?.takeIf { it.isFile }
 
 android {
     namespace = "com.example.toolbox"
@@ -27,11 +48,23 @@ android {
 
     signingConfigs {
         getByName("debug") {
-            if (projectSigningKey.exists()) {
-                storeFile = projectSigningKey
+            if (debugSigningKey.isFile) {
+                storeFile = debugSigningKey
                 storePassword = "android"
                 keyAlias = "androiddebugkey"
                 keyPassword = "android"
+            }
+        }
+        if (releaseStoreFile != null &&
+            releaseStorePassword != null &&
+            releaseKeyAlias != null &&
+            releaseKeyPassword != null
+        ) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
@@ -44,9 +77,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            if (projectSigningKey.exists()) {
-                signingConfig = signingConfigs.getByName("debug")
-            }
+            // Unsigned unless keystore.properties or TOOLBOX_RELEASE_* is set.
+            // Never fall back to the debug key.
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 

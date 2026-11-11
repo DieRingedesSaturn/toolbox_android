@@ -158,12 +158,13 @@ internal fun HomeScreen(
             currentOnStatusChange(withContext(Dispatchers.IO) {
                 runCatching {
                     val quick = DeviceInfoReader.readQuickStatus(context)
-                    val store = LedgerStore(context)
-                    val entries = store.queryVisibleEntries()
+                    val (entries, accounts) = LedgerStore(context).use { store ->
+                        store.queryVisibleEntries() to store.queryAccounts(includeDeleted = false)
+                    }
                     val month = YearMonth.now()
                     val summary = LedgerCalculator.monthSummary(entries, month)
                     val (totalCny, allConverted) = LedgerAccounts.totalAssetsCnyCents(
-                        store.queryAccounts(includeDeleted = false),
+                        accounts,
                         entries,
                         FxRateStore(context.applicationContext).latest(),
                     )

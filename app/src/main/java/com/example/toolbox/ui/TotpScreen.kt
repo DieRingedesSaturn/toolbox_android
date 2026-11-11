@@ -113,6 +113,7 @@ import com.example.toolbox.totp.TotpAlgorithm
 import com.example.toolbox.totp.TotpCameraScannerView
 import com.example.toolbox.totp.TotpEntry
 import com.example.toolbox.totp.TotpGenerator
+import com.example.toolbox.totp.TotpLocalVaultException
 import com.example.toolbox.totp.TotpQrDecoder
 import com.example.toolbox.totp.TotpStore
 import com.example.toolbox.totp.TotpVaultCrypto
@@ -176,6 +177,7 @@ internal fun TotpScreen(
 
     var entries by remember { mutableStateOf<List<TotpEntry>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
+    var loadError by remember { mutableStateOf<Throwable?>(null) }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var searchQuery by rememberSaveable { mutableStateOf<String?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -201,17 +203,25 @@ internal fun TotpScreen(
 
     fun reload() {
         scope.launch {
-            val loadedData = withContext(Dispatchers.IO) {
-                TotpScreenLoadedState(
-                    entries = store.queryVisible(),
-                    targets = webDavStore.selectedServices(BackupTool.TOTP),
-                    passphrase = store.savedPassphrase(),
-                )
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    TotpScreenLoadedState(
+                        entries = store.queryVisible(),
+                        targets = webDavStore.selectedServices(BackupTool.TOTP),
+                        passphrase = store.savedPassphrase(),
+                    )
+                }
             }
-            entries = loadedData.entries
-            webDavTargets = loadedData.targets
-            savedPassphrase = loadedData.passphrase
-            loaded = true
+            outcome.onSuccess { loadedData ->
+                entries = loadedData.entries
+                webDavTargets = loadedData.targets
+                savedPassphrase = loadedData.passphrase
+                loadError = null
+                loaded = true
+            }.onFailure { error ->
+                loadError = error
+                loaded = true
+            }
         }
     }
 
@@ -230,6 +240,20 @@ internal fun TotpScreen(
         }
     }
 
+    fun vaultErrorMessage(error: Throwable): String = when (error) {
+        is TotpVaultException -> when (error.failure) {
+            TotpVaultFailure.PASSPHRASE_TOO_SHORT -> strings.totpVaultPassphraseTooShort
+            TotpVaultFailure.WRONG_PASSPHRASE_OR_CORRUPTED,
+            TotpVaultFailure.INVALID_FORMAT,
+            TotpVaultFailure.UNSUPPORTED_VERSION,
+            TotpVaultFailure.CRYPTO_ERROR,
+            -> strings.totpVaultWrongPassphrase
+        }
+        is WebDavException -> strings.webDavError(error.failure, error.httpCode)
+        is TotpLocalVaultException -> strings.totpLocalVaultUnreadable
+        else -> strings.webDavError(WebDavFailure.NETWORK, null)
+    }
+
     fun handleDirectScannedUri(rawUri: String) {
         val parsed = runCatching { TotpGenerator.parseOtpauthUri(rawUri) }.getOrNull()
         if (parsed == null) {
@@ -238,8 +262,13 @@ internal fun TotpScreen(
         }
         showDirectScanner = false
         scope.launch {
-            withContext(Dispatchers.IO) {
-                store.upsert(parsed)
+            val failure = withContext(Dispatchers.IO) {
+                runCatching { store.upsert(parsed) }.exceptionOrNull()
+            }
+            if (failure != null) {
+                Toast.makeText(context, vaultErrorMessage(failure), Toast.LENGTH_LONG).show()
+                reload()
+                return@launch
             }
             reload()
             val label = if (parsed.displaySubtitle.isNotEmpty()) {
@@ -274,19 +303,6 @@ internal fun TotpScreen(
         } else {
             directCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
-    }
-
-    fun vaultErrorMessage(error: Throwable): String = when (error) {
-        is TotpVaultException -> when (error.failure) {
-            TotpVaultFailure.PASSPHRASE_TOO_SHORT -> strings.totpVaultPassphraseTooShort
-            TotpVaultFailure.WRONG_PASSPHRASE_OR_CORRUPTED,
-            TotpVaultFailure.INVALID_FORMAT,
-            TotpVaultFailure.UNSUPPORTED_VERSION,
-            TotpVaultFailure.CRYPTO_ERROR,
-            -> strings.totpVaultWrongPassphrase
-        }
-        is WebDavException -> strings.webDavError(error.failure, error.httpCode)
-        else -> strings.webDavError(WebDavFailure.NETWORK, null)
     }
 
     fun runWebDavSyncWithPassphrase(passphrase: String) {
@@ -621,7 +637,7 @@ internal fun TotpScreen(
             }
         },
         floatingActionButton = {
-            if (!searching) {
+            if (!searching && loadError == null) {
                 ExtendedFloatingActionButton(
                     onClick = { showAddMethodDialog = true },
                     icon = {
@@ -645,35 +661,37 @@ internal fun TotpScreen(
             ) {
                 InfoCard(title = strings.moduleTitle(ToolboxModule.TOTP)) {
                     Text(
-                        text = strings.totpEmptyHint,
+                        text = loadError?.let { vaultErrorMessage(it) } ?: strings.totpEmptyHint,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Button(
-                            onClick = ::requestDirectQrScan,
-                            modifier = Modifier.weight(1f),
+                    if (loadError == null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_qr_scan),
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(strings.totpScanQrAction, maxLines = 1)
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                editingUuid = null
-                                showEditor = true
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(strings.totpManualAddAction, maxLines = 1)
+                            Button(
+                                onClick = ::requestDirectQrScan,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_qr_scan),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(strings.totpScanQrAction, maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    editingUuid = null
+                                    showEditor = true
+                                },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(strings.totpManualAddAction, maxLines = 1)
+                            }
                         }
                     }
                 }
@@ -805,8 +823,11 @@ internal fun TotpScreen(
                 showEditor = false
                 editingUuid = null
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        store.upsert(updated)
+                    val failure = withContext(Dispatchers.IO) {
+                        runCatching { store.upsert(updated) }.exceptionOrNull()
+                    }
+                    if (failure != null) {
+                        Toast.makeText(context, vaultErrorMessage(failure), Toast.LENGTH_LONG).show()
                     }
                     reload()
                 }
@@ -824,8 +845,11 @@ internal fun TotpScreen(
                     onClick = {
                         pendingDeleteUuid = null
                         scope.launch {
-                            withContext(Dispatchers.IO) {
-                                store.softDelete(target.uuid)
+                            val failure = withContext(Dispatchers.IO) {
+                                runCatching { store.softDelete(target.uuid) }.exceptionOrNull()
+                            }
+                            if (failure != null) {
+                                Toast.makeText(context, vaultErrorMessage(failure), Toast.LENGTH_LONG).show()
                             }
                             reload()
                         }
@@ -897,16 +921,21 @@ internal fun TotpScreen(
                         val incoming = imported
                         pendingImportEntries = null
                         scope.launch {
-                            val merged = withContext(Dispatchers.IO) {
-                                store.mergeAndSave(incoming)
+                            val outcome = withContext(Dispatchers.IO) {
+                                runCatching { store.mergeAndSave(incoming) }
                             }
                             reload()
                             Toast.makeText(
                                 context,
-                                strings.totpSyncSuccess(
-                                    total = merged.entries.count { it.deletedAtMillis == null },
-                                    pulled = merged.pulledCount,
-                                    pushed = merged.pushedCount,
+                                outcome.fold(
+                                    onSuccess = { merged ->
+                                        strings.totpSyncSuccess(
+                                            total = merged.entries.count { it.deletedAtMillis == null },
+                                            pulled = merged.pulledCount,
+                                            pushed = merged.pushedCount,
+                                        )
+                                    },
+                                    onFailure = { vaultErrorMessage(it) },
                                 ),
                                 Toast.LENGTH_LONG,
                             ).show()
@@ -926,14 +955,19 @@ internal fun TotpScreen(
                             val incoming = imported
                             pendingImportEntries = null
                             scope.launch {
-                                val active = withContext(Dispatchers.IO) {
-                                    store.replaceAll(incoming)
-                                    incoming.count { it.deletedAtMillis == null }
+                                val outcome = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        store.replaceAll(incoming, overwriteUnreadable = true)
+                                        incoming.count { it.deletedAtMillis == null }
+                                    }
                                 }
                                 reload()
                                 Toast.makeText(
                                     context,
-                                    strings.totpSyncSuccess(active, active, 0),
+                                    outcome.fold(
+                                        onSuccess = { active -> strings.totpSyncSuccess(active, active, 0) },
+                                        onFailure = { vaultErrorMessage(it) },
+                                    ),
                                     Toast.LENGTH_LONG,
                                 ).show()
                             }

@@ -18,12 +18,18 @@ class LedgerNotificationListener : NotificationListenerService() {
     }
 
     override fun onListenerConnected() {
-        if (!NotificationLedgerStore(applicationContext).enabled()) {
+        if (!NotificationBookkeeping.ENABLED ||
+            !NotificationLedgerStore(applicationContext).enabled()
+        ) {
             runCatching { setActive(applicationContext, false) }
         }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (!NotificationBookkeeping.ENABLED) {
+            runCatching { setActive(applicationContext, false) }
+            return
+        }
         val input = runCatching { NotificationLedgerStore.inputOf(sbn) }.getOrNull() ?: return
         worker.execute {
             runCatching {
@@ -42,16 +48,19 @@ class LedgerNotificationListener : NotificationListenerService() {
     companion object {
         fun setActive(context: Context, active: Boolean) {
             val component = ComponentName(context, LedgerNotificationListener::class.java)
+            val enabled = active && NotificationBookkeeping.ENABLED
             context.packageManager.setComponentEnabledSetting(
                 component,
-                if (active) {
-                    PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+                if (enabled) {
+                    // Manifest default is disabled, so opt-in must set ENABLED
+                    // rather than DEFAULT or the service stays off.
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                 } else {
                     PackageManager.COMPONENT_ENABLED_STATE_DISABLED
                 },
                 PackageManager.DONT_KILL_APP,
             )
-            if (active) runCatching { requestRebind(component) }
+            if (enabled) runCatching { requestRebind(component) }
         }
     }
 }

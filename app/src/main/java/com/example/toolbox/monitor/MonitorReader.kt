@@ -22,6 +22,9 @@ class MonitorReader(context: Context) {
     private var cachedThermalHeadroom: Float? = null
     private val cpuPolicySources by lazy { discoverCpuPolicySources() }
     private val gpuFrequencySources by lazy { discoverGpuFrequencySources() }
+    private var cachedCpuIndexes: List<Int>? = null
+    private var cachedCpuIndexProcessors = -1
+    private var cpuIndexesReadAt = Long.MIN_VALUE
 
     fun read(): MonitorSample {
         val cpu = readCpu()
@@ -103,6 +106,15 @@ class MonitorReader(context: Context) {
     }
 
     private fun discoverCpuIndexes(): List<Int> {
+        val now = SystemClock.elapsedRealtime()
+        val processors = Runtime.getRuntime().availableProcessors()
+        val cached = cachedCpuIndexes
+        if (cached != null &&
+            processors == cachedCpuIndexProcessors &&
+            now - cpuIndexesReadAt < CPU_INDEX_REFRESH_MILLIS
+        ) {
+            return cached
+        }
         val cpuRoot = File("/sys/devices/system/cpu")
         val discovered = cpuRoot.listFiles().orEmpty()
             .mapNotNull { directory -> Regex("cpu(\\d+)").matchEntire(directory.name)?.groupValues?.get(1)?.toIntOrNull() }
@@ -111,7 +123,11 @@ class MonitorReader(context: Context) {
             }
             .distinct()
             .sorted()
-        return discovered.ifEmpty { (0 until Runtime.getRuntime().availableProcessors()).toList() }
+            .ifEmpty { (0 until processors).toList() }
+        cachedCpuIndexes = discovered
+        cachedCpuIndexProcessors = processors
+        cpuIndexesReadAt = now
+        return discovered
     }
 
     private fun readCpuValue(index: Int, names: List<String>): Int? = names.asSequence()
@@ -449,5 +465,6 @@ class MonitorReader(context: Context) {
 
     private companion object {
         const val THERMAL_HEADROOM_REFRESH_MILLIS = 10_000L
+        const val CPU_INDEX_REFRESH_MILLIS = 30_000L
     }
 }

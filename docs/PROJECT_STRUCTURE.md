@@ -38,6 +38,7 @@ Current structure:
 ```text
 app/src/main/java/com/example/toolbox/
 ├── MainActivity.kt
+├── ToolboxApplication.kt
 ├── monitor/
 │   ├── MonitorOverlayService.kt
 │   ├── MonitorOverlayTheme.kt
@@ -162,7 +163,7 @@ Responsibility boundaries:
 | `monitor/` | Sampling, CPU topology math, overlay service, and views | UI-only settings or unrelated device summaries |
 | `usage/` | App usage / traffic statistics reader and offline category resolver | Direct Compose UI rendering |
 | `astronomy/` | Solar/lunar ephemeris math and models | Android system services |
-| `ledger/` | Bookkeeping models and custom tags, one-time/periodic cost amortization calculator, calendar renewal scheduling, native SQLite store (tags + accounts tables, parent/link/disposal/account fields), shared backup/WebDAV exchange format, file backup (JSON/CSV) logic, manual WebDAV backup/sync client, source-aware WeChat/Alipay payment-notification parser with opt-in auto-booking and undo, notification listener/store, and the RemoteViews widget provider | Compose UI rendering |
+| `ledger/` | Bookkeeping models and custom tags, one-time/periodic cost amortization calculator, calendar renewal scheduling, native SQLite store (tags + accounts tables, parent/link/disposal/account fields), shared backup/WebDAV exchange format, file backup (JSON/CSV) logic, manual WebDAV backup/sync client, source-aware WeChat/Alipay payment-notification parser with opt-in auto-booking and undo (notification quick entry is temporarily disabled: the listener component ships off and notification bodies are not stored in plaintext), notification listener/store, and the RemoteViews widget provider | Compose UI rendering |
 | `fx/` | Exchange-rate models and blocking reader with a Frankfurter → ECB → community mirror fallback chain, plus a SharedPreferences cache of latest + up to 120 dated rates (fetch only on explicit actions) | Compose UI rendering |
 
 ## Incremental v0.1 layout

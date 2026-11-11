@@ -81,6 +81,7 @@ import com.example.toolbox.monitor.MonitorOverlayTheme
 import com.example.toolbox.monitor.MonitorOverlayThemeHelper
 import com.example.toolbox.monitor.MonitorReader
 import com.example.toolbox.monitor.MonitorSample
+import com.example.toolbox.monitor.MonitorSampleSource
 import com.example.toolbox.monitor.chartValue
 import com.example.toolbox.monitor.frequencyLoadPercent
 import com.example.toolbox.monitor.weightedCpuFrequencyPercent
@@ -147,16 +148,25 @@ fun MonitorScreen(
     LaunchedEffect(monitorReader, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
-                val sample = runCatching {
-                    withContext(Dispatchers.IO) { monitorReader.read() }
-                }.getOrNull()
-                latestSample = sample
-                if (sample != null) {
-                    sampleHistory.add(sample)
-                    val extra = sampleHistory.size - HISTORY_LIMIT
-                    if (extra > 0) sampleHistory.removeRange(0, extra)
+                val overlayRunning = MonitorOverlayService.running
+                val sample = if (overlayRunning) {
+                    MonitorSampleSource.latest
+                } else {
+                    runCatching {
+                        withContext(Dispatchers.IO) { monitorReader.read() }
+                    }.getOrNull()
                 }
-                isRunning = MonitorOverlayService.running
+                if (sample != null) {
+                    latestSample = sample
+                    if (sampleHistory.lastOrNull()?.timestampMillis != sample.timestampMillis) {
+                        sampleHistory.add(sample)
+                        val extra = sampleHistory.size - HISTORY_LIMIT
+                        if (extra > 0) sampleHistory.removeRange(0, extra)
+                    }
+                } else if (!overlayRunning) {
+                    latestSample = null
+                }
+                isRunning = overlayRunning
                 delay(SAMPLE_INTERVAL_MILLIS)
             }
         }

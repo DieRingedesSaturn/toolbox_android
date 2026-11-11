@@ -2,7 +2,8 @@ package com.example.toolbox.ui
 
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
+import android.graphics.Bitmap
+import android.util.LruCache
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -73,6 +74,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -593,11 +596,15 @@ private fun AppUsageListItem(
     maxMetricValue: Long,
 ) {
     val pm = context.packageManager
-    val iconBitmap = remember(item.packageName) {
-        runCatching {
-            val iconDrawable = pm.getApplicationIcon(item.packageName)
-            iconDrawable.toBitmap(width = 80, height = 80).asImageBitmap()
-        }.getOrNull()
+    var iconBitmap by remember(item.packageName) {
+        mutableStateOf(UsageAppIconCache.peek(item.packageName)?.asImageBitmap())
+    }
+    LaunchedEffect(item.packageName) {
+        if (iconBitmap != null) return@LaunchedEffect
+        val bitmap = withContext(Dispatchers.IO) {
+            UsageAppIconCache.load(pm, item.packageName)
+        }
+        if (bitmap != null) iconBitmap = bitmap.asImageBitmap()
     }
 
     val primaryText = when (sortMode) {
@@ -651,9 +658,10 @@ private fun AppUsageListItem(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 // App Icon
-                if (iconBitmap != null) {
+                val bitmap = iconBitmap
+                if (bitmap != null) {
                     Image(
-                        bitmap = iconBitmap,
+                        bitmap = bitmap,
                         contentDescription = item.label,
                         modifier = Modifier
                             .size(40.dp)
@@ -768,5 +776,20 @@ private fun formatDataBytes(bytes: Long): String {
         mb >= 1.0 -> "%.1f MB".format(Locale.US, mb)
         kb >= 1.0 -> "%.0f KB".format(Locale.US, kb)
         else -> "$bytes B"
+    }
+}
+
+private object UsageAppIconCache {
+    private val bitmaps = LruCache<String, Bitmap>(64)
+
+    fun peek(packageName: String): Bitmap? = bitmaps.get(packageName)
+
+    fun load(packageManager: PackageManager, packageName: String): Bitmap? {
+        bitmaps.get(packageName)?.let { return it }
+        val bitmap = runCatching {
+            packageManager.getApplicationIcon(packageName).toBitmap(width = 80, height = 80)
+        }.getOrNull() ?: return null
+        bitmaps.put(packageName, bitmap)
+        return bitmap
     }
 }
