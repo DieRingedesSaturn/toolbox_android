@@ -36,7 +36,7 @@ Open the project in [Android Studio](https://developer.android.com/studio), or f
 
 Toolchain: JDK 21 (app bytecode still targets Java 17) and Android SDK Platform 36. Put the SDK path in the untracked `local.properties` file.
 
-Debug builds are signed with the untracked `signing/toolbox-debug.keystore` when that file exists, and otherwise with the default debug key. Release builds are never signed with the debug key. To sign a release, set either the untracked `keystore.properties` or environment variables:
+Debug builds are signed with the untracked `signing/toolbox-debug.keystore` when that file exists, and otherwise with the default debug key. Release builds use the same original keystore when no separate release key is configured. To sign a release with a dedicated key, set either the untracked `keystore.properties` or environment variables:
 
 | `keystore.properties` | Environment variable |
 | --- | --- |
@@ -45,7 +45,7 @@ Debug builds are signed with the untracked `signing/toolbox-debug.keystore` when
 | `keyAlias` | `TOOLBOX_RELEASE_KEY_ALIAS` |
 | `keyPassword` | `TOOLBOX_RELEASE_KEY_PASSWORD` |
 
-`storeFile` may be absolute or relative to the project root. If those values are missing, or the file is not there, the release APK is left unsigned.
+`storeFile` may be absolute or relative to the project root. If no complete release configuration exists, the release build falls back to `signing/toolbox-debug.keystore` when present; without that file it is left unsigned.
 
 ## Permissions
 

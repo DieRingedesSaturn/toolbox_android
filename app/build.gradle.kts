@@ -77,9 +77,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Unsigned unless keystore.properties or TOOLBOX_RELEASE_* is set.
-            // Never fall back to the debug key.
-            signingConfigs.findByName("release")?.let { signingConfig = it }
+            // Prefer an explicit release keystore. Otherwise keep using the
+            // original debug keystore so existing installs can be updated.
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug").takeIf { debugSigningKey.isFile }
         }
     }
 

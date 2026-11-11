@@ -36,7 +36,7 @@ Toolbox 是一款按需读取的轻量 Android 工具箱：设备信息、实时
 
 环境：JDK 21（应用字节码目标仍为 Java 17）、Android SDK Platform 36。把 SDK 路径写在不提交的 `local.properties` 里。
 
-debug 包在项目根目录存在不提交的 `signing/toolbox-debug.keystore` 时用它签名，否则用默认调试密钥。release **不会**再用这把调试密钥签名。需要发布签名时，在不提交的 `keystore.properties` 或环境变量里配置：
+debug 包在项目根目录存在不提交的 `signing/toolbox-debug.keystore` 时用它签名，否则用默认调试密钥。没有单独配置发布密钥时，release 仍使用这把原始密钥。需要用专用发布密钥签名时，在不提交的 `keystore.properties` 或环境变量里配置：
 
 | `keystore.properties` | 环境变量 |
 | --- | --- |
@@ -45,7 +45,7 @@ debug 包在项目根目录存在不提交的 `signing/toolbox-debug.keystore` �
 | `keyAlias` | `TOOLBOX_RELEASE_KEY_ALIAS` |
 | `keyPassword` | `TOOLBOX_RELEASE_KEY_PASSWORD` |
 
-`storeFile` 可以是绝对路径，或相对于项目根目录的路径。没有这些值，或文件不存在时，release 包不签名。
+`storeFile` 可以是绝对路径，或相对于项目根目录的路径。没有完整的发布签名配置时，release 会回退到存在的 `signing/toolbox-debug.keystore`；该文件也不存在时才不签名。
 
 ## 权限
 
