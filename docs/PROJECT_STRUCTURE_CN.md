@@ -62,6 +62,10 @@ app/src/main/java/com/example/toolbox/
 │   ├── NetworkInfoReader.kt
 │   ├── LanScan.kt
 │   └── LanScanner.kt
+├── privacy/
+│   ├── PrivacyShortcut.kt
+│   ├── PrivacyShortcutCatalog.kt
+│   └── PrivacyShortcutResolver.kt
 ├── usage/
 │   ├── AppCategory.kt
 │   ├── AppCategoryResolver.kt
@@ -119,6 +123,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── MockLocationMapPicker.kt
 │   ├── AstronomyScreen.kt
 │   ├── NetworkScreen.kt
+│   ├── PrivacyScreen.kt
 │   ├── AppUsageScreen.kt
 │   ├── LedgerScreen.kt
 │   ├── LedgerAccountsTab.kt
@@ -165,6 +170,7 @@ app/src/main/java/com/example/toolbox/
 | `astronomy/` | 日月升落计算、天文模型算法 | Android 系统服务调用 |
 | `ledger/` | 记账模型与自定义多标签、一次性大件摊销/周期订阅计算、按日历日期的续费调度、原生 SQLite 存储（标签表、账户表与父级关联/处置/账户字段）、共享的备份/WebDAV 交换格式、文件备份（JSON/CSV）逻辑、手动 WebDAV 备份同步客户端、来源感知的微信/支付宝支付通知解析与可选自动入账（含撤销；通知快速记账暂时关闭：监听组件默认禁用，通知正文不再明文写入偏好设置）、通知监听与记录存储，以及 RemoteViews 小组件提供器 | 直接 Compose UI 渲染 |
 | `fx/` | 汇率模型与阻塞式读取器（Frankfurter → 欧洲央行官网 → 社区镜像的回退链），以及 SharedPreferences 缓存（最新汇率 + 最多 120 个历史日期；仅在用户主动操作时联网） | 直接 Compose UI 渲染 |
+| `privacy/` | 打开已导出的 Google 与系统设置的数据列表，以及 PackageManager 解析 | 直接 Compose UI 渲染 |
 
 ## v0.1 的增量结构
 

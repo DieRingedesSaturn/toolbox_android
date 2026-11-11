@@ -57,6 +57,7 @@ enum class ToolboxModule {
     LEDGER,
     FX,
     TOTP,
+    PRIVACY,
     SETTINGS,
     ABOUT,
 }
@@ -296,6 +297,11 @@ fun ToolboxApp(
                         strings = strings,
                         onBack = { moduleName = ToolboxModule.HOME.name },
                         onOpenSettings = { moduleName = ToolboxModule.SETTINGS.name },
+                    )
+
+                    ToolboxModule.PRIVACY -> PrivacyScreen(
+                        strings = strings,
+                        onBack = { moduleName = ToolboxModule.HOME.name },
                     )
 
                     ToolboxModule.SETTINGS -> SettingsScreen(

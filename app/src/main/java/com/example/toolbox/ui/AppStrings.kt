@@ -430,6 +430,7 @@ class ToolboxStrings(val language: AppLanguage) {
                 "记账与成本：多账户、摊销、订阅、备份与 WebDAV",
                 "汇率换算：Frankfurter/ECB 参考汇率",
                 "动态令牌：TOTP 验证码、扫码导入与加密备份",
+                "隐私：打开被系统藏起的 Google 与系统设置",
             )
         } else {
             listOf(
@@ -442,6 +443,7 @@ class ToolboxStrings(val language: AppLanguage) {
                 "Ledger & cost: multiple accounts, amortization, subscriptions, backup, and WebDAV",
                 "Currency converter: Frankfurter/ECB reference rates",
                 "TOTP authenticator: dynamic codes, QR import, and encrypted backup",
+                "Privacy: open Google and system settings that some ROMs hide",
             )
         }
     val version: String
@@ -829,6 +831,7 @@ class ToolboxStrings(val language: AppLanguage) {
         ToolboxModule.LEDGER -> ledger
         ToolboxModule.FX -> if (chinese) "汇率换算" else "Currency converter"
         ToolboxModule.TOTP -> if (chinese) "动态令牌 (TOTP)" else "TOTP Authenticator"
+        ToolboxModule.PRIVACY -> if (chinese) "隐私" else "Privacy"
         ToolboxModule.SETTINGS -> settings
         ToolboxModule.ABOUT -> about
     }
@@ -844,9 +847,33 @@ class ToolboxStrings(val language: AppLanguage) {
         ToolboxModule.LEDGER -> if (chinese) "记账" else "Ledger"
         ToolboxModule.FX -> if (chinese) "汇率" else "FX"
         ToolboxModule.TOTP -> if (chinese) "令牌" else "TOTP"
+        ToolboxModule.PRIVACY -> if (chinese) "隐私" else "Privacy"
         ToolboxModule.SETTINGS -> settings
         ToolboxModule.ABOUT -> about
     }
+
+    val privacyIntro: String
+        get() = if (chinese) {
+            "这里列出部分国产系统会藏起来的 Google 和系统设置。只能打开已导出的界面；打不开的会变灰。长按可复制等效的 adb 命令。"
+        } else {
+            "Google and system settings that some ROMs hide. Only exported screens can be opened; the rest stay grey. Long-press copies an equivalent adb command."
+        }
+    val privacyNotFound: String
+        get() = if (chinese) "此设备上未找到" else "Not found on this device"
+    val privacyNotExported: String
+        get() = if (chinese) "未导出，普通应用无法打开" else "Not exported"
+    val privacyLaunchFailed: String
+        get() = if (chinese) "无法打开该设置" else "Couldn't open that setting"
+    val privacyCopyAdb: String
+        get() = if (chinese) "复制 adb 命令" else "Copy adb command"
+    val privacyCopiedAdb: String
+        get() = if (chinese) "已复制 adb 命令" else "adb command copied"
+    val privacyPinShortcut: String
+        get() = if (chinese) "创建主屏幕快捷方式" else "Home-screen shortcut"
+    val privacyPinRequested: String
+        get() = if (chinese) "已请求创建快捷方式" else "Shortcut requested"
+    val privacyPinUnsupported: String
+        get() = if (chinese) "启动器不支持固定快捷方式" else "This launcher cannot pin shortcuts"
 
     val ledger: String
         get() = if (chinese) "记账与成本摊销" else "Ledger & Cost Tracker"
@@ -1712,6 +1739,7 @@ class ToolboxStrings(val language: AppLanguage) {
         ToolboxModule.LEDGER -> if (chinese) "日常收支、大件摊销与订阅日均成本" else "Expenses, asset amortization & subscriptions"
         ToolboxModule.FX -> if (chinese) "欧洲央行参考汇率" else "ECB reference rates"
         ToolboxModule.TOTP -> if (chinese) "双因素动态验证码与加密备份" else "2FA dynamic codes & encrypted backup"
+        ToolboxModule.PRIVACY -> if (chinese) "被系统藏起的 Google 与系统设置" else "Google and system settings some ROMs hide"
         ToolboxModule.SETTINGS -> if (chinese) "外观、主题与偏好设置" else "Appearance, theme, and preferences"
         ToolboxModule.ABOUT -> if (chinese) "版本与应用信息" else "Version and app info"
         else -> ""

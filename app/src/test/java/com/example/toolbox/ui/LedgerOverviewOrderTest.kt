@@ -64,6 +64,7 @@ class LedgerOverviewOrderTest {
                 ToolboxModule.USAGE,
                 ToolboxModule.DEVICE,
                 ToolboxModule.LOCATION,
+                ToolboxModule.PRIVACY,
             ),
             HomeModuleOrder.parse("LEDGER,NETWORK,LEDGER,HOME,UNKNOWN"),
         )

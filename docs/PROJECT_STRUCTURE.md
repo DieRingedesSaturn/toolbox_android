@@ -62,6 +62,10 @@ app/src/main/java/com/example/toolbox/
 │   ├── NetworkInfoReader.kt
 │   ├── LanScan.kt
 │   └── LanScanner.kt
+├── privacy/
+│   ├── PrivacyShortcut.kt
+│   ├── PrivacyShortcutCatalog.kt
+│   └── PrivacyShortcutResolver.kt
 ├── usage/
 │   ├── AppCategory.kt
 │   ├── AppCategoryResolver.kt
@@ -119,6 +123,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── MockLocationMapPicker.kt
 │   ├── AstronomyScreen.kt
 │   ├── NetworkScreen.kt
+│   ├── PrivacyScreen.kt
 │   ├── AppUsageScreen.kt
 │   ├── LedgerScreen.kt
 │   ├── LedgerAccountsTab.kt
@@ -165,6 +170,7 @@ Responsibility boundaries:
 | `astronomy/` | Solar/lunar ephemeris math and models | Android system services |
 | `ledger/` | Bookkeeping models and custom tags, one-time/periodic cost amortization calculator, calendar renewal scheduling, native SQLite store (tags + accounts tables, parent/link/disposal/account fields), shared backup/WebDAV exchange format, file backup (JSON/CSV) logic, manual WebDAV backup/sync client, source-aware WeChat/Alipay payment-notification parser with opt-in auto-booking and undo (notification quick entry is temporarily disabled: the listener component ships off and notification bodies are not stored in plaintext), notification listener/store, and the RemoteViews widget provider | Compose UI rendering |
 | `fx/` | Exchange-rate models and blocking reader with a Frankfurter → ECB → community mirror fallback chain, plus a SharedPreferences cache of latest + up to 120 dated rates (fetch only on explicit actions) | Compose UI rendering |
+| `privacy/` | Data-driven shortcuts to exported Google and system settings activities, plus PackageManager resolution | Compose UI rendering |
 
 ## Incremental v0.1 layout
 
