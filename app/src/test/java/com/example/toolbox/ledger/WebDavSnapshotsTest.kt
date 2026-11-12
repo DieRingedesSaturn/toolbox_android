@@ -14,14 +14,12 @@ class WebDavSnapshotsTest {
     fun testSnapshotNameUsesZone() {
         val millis = ZonedDateTime.of(2024, 3, 5, 8, 9, 10, 0, ZoneOffset.UTC)
             .toInstant().toEpochMilli()
-        assertEquals(
-            "ledger-backup-20240305-080910.json",
-            WebDavSnapshots.snapshotName(millis, ZoneId.of("UTC")),
-        )
-        assertEquals(
-            "ledger-backup-20240305-160910.json",
-            WebDavSnapshots.snapshotName(millis, ZoneId.of("Asia/Shanghai")),
-        )
+        val utc = WebDavSnapshots.snapshotName(millis, ZoneId.of("UTC"))
+        val shanghai = WebDavSnapshots.snapshotName(millis, ZoneId.of("Asia/Shanghai"))
+        assertTrue(utc.startsWith("ledger-backup-20240305-080910-000-"))
+        assertTrue(shanghai.startsWith("ledger-backup-20240305-160910-000-"))
+        assertTrue(WebDavSnapshots.NAME_REGEX.matches(utc))
+        assertFalse(utc == WebDavSnapshots.snapshotName(millis, ZoneId.of("UTC")))
     }
 
     @Test

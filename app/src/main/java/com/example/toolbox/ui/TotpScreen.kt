@@ -103,8 +103,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.toolbox.R
+import com.example.toolbox.ledger.BackupRecoveryStore
 import com.example.toolbox.ledger.BackupTool
-import com.example.toolbox.ledger.WebDavClient
 import com.example.toolbox.ledger.WebDavConfigStore
 import com.example.toolbox.ledger.WebDavException
 import com.example.toolbox.ledger.WebDavFailure
@@ -193,12 +193,14 @@ internal fun TotpScreen(
 
     var webDavVersion by remember { mutableIntStateOf(0) }
     var webDavTargets by remember { mutableStateOf<List<WebDavServiceProfile>>(emptyList()) }
+    var showBackupHistory by remember { mutableStateOf(false) }
     var syncBusy by remember { mutableStateOf(false) }
 
     var passphrasePurpose by remember { mutableStateOf<PassphrasePurpose?>(null) }
     var savedPassphrase by remember { mutableStateOf<String?>(null) }
     var pendingExportPassphrase by remember { mutableStateOf<String?>(null) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingImportPassphrase by remember { mutableStateOf("") }
     var pendingImportEntries by remember { mutableStateOf<List<TotpEntry>?>(null) }
 
     fun reload() {
@@ -319,17 +321,25 @@ internal fun TotpScreen(
                 var okCount = 0
                 val messages = mutableListOf<String>()
                 val syncTime = System.currentTimeMillis()
+                val pullFailures = mutableMapOf<String, Throwable>()
+                for (service in targets) {
+                    runCatching {
+                        TotpWebDavSync(service.syncClient(BackupTool.TOTP), passphrase,
+                            loadLocal = { store.queryAllForSync() },
+                            applyMerged = { store.mergeAndSave(it) },
+                            legacyClients = service.legacyClients(BackupTool.TOTP))
+                            .pull()?.let { store.mergeAndSave(it) }
+                    }.onFailure { pullFailures[service.id] = it }
+                }
                 for (service in targets) {
                     val res = runCatching {
+                        pullFailures[service.id]?.let { throw it }
                         TotpWebDavSync(
-                            client = WebDavClient(
-                                folderUrl = service.folderUrl,
-                                username = service.username,
-                                password = service.password,
-                            ),
+                            client = service.syncClient(BackupTool.TOTP),
                             passphrase = passphrase,
                             loadLocal = { store.queryAllForSync() },
-                            applyMerged = { merged -> store.replaceAll(merged) },
+                            applyMerged = { merged -> store.mergeAndSave(merged) },
+                            legacyClients = service.legacyClients(BackupTool.TOTP),
                         ).sync(syncTime)
                     }
                     res.onSuccess { r ->
@@ -410,6 +420,7 @@ internal fun TotpScreen(
                 }
             }
             outcome.onSuccess { decrypted ->
+                pendingImportPassphrase = passphrase
                 pendingImportEntries = decrypted
             }.onFailure { err ->
                 Toast.makeText(context, vaultErrorMessage(err), Toast.LENGTH_LONG).show()
@@ -579,6 +590,10 @@ internal fun TotpScreen(
                                 expanded = menuExpanded,
                                 onDismissRequest = { menuExpanded = false },
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text(strings.backupHistoryTitle) },
+                                    onClick = { menuExpanded = false; showBackupHistory = true },
+                                )
                                 DropdownMenuItem(
                                     text = { Text(strings.webDavSyncNow) },
                                     onClick = {
@@ -869,6 +884,21 @@ internal fun TotpScreen(
         )
     }
 
+    if (showBackupHistory) {
+        BackupHistoryDialog(
+            strings, BackupTool.TOTP, webDavTargets, savedPassphrase.orEmpty(),
+            preview = { body, pass -> TotpVaultCrypto.decryptVault(body, pass).count { it.deletedAtMillis == null } },
+            restore = { body, pass ->
+                val entries = TotpVaultCrypto.decryptVault(body, pass)
+                BackupRecoveryStore(context, BackupTool.TOTP).save(
+                    TotpVaultCrypto.encryptVault(store.queryAllForSync(), pass))
+                store.restore(entries)
+            },
+            onRestored = { showBackupHistory = false; reload() },
+            onDismiss = { showBackupHistory = false },
+        )
+    }
+
     passphrasePurpose?.let { purpose ->
         TotpPassphraseDialog(
             strings = strings,
@@ -957,7 +987,17 @@ internal fun TotpScreen(
                             scope.launch {
                                 val outcome = withContext(Dispatchers.IO) {
                                     runCatching {
-                                        store.replaceAll(incoming, overwriteUnreadable = true)
+                                        val current = try {
+                                            store.queryAllForSync()
+                                        } catch (_: TotpLocalVaultException) {
+                                            null // Explicit Replace can recover an unreadable local vault.
+                                        }
+                                        if (current != null) {
+                                            BackupRecoveryStore(context, BackupTool.TOTP).save(
+                                                TotpVaultCrypto.encryptVault(current, pendingImportPassphrase),
+                                            )
+                                        }
+                                        store.restore(incoming, overwriteUnreadable = true)
                                         incoming.count { it.deletedAtMillis == null }
                                     }
                                 }

@@ -250,6 +250,77 @@ class LedgerWebDavSyncTest {
     }
 
     @Test
+    fun testSameTimestampSnapshotsRemainSeparate() {
+        val local = mutableListOf(entry("a", 100L))
+        val sync = newSync(local)
+        val first = sync.sync(1_700_000_000_000L).snapshotName!!
+        local.add(entry("b", 200L))
+        val second = sync.sync(1_700_000_000_000L).snapshotName!!
+        assertFalse(first == second)
+        assertEquals(1, LedgerBackup.parse(server.bodyOf(first)!!).entries.size)
+        assertEquals(2, LedgerBackup.parse(server.bodyOf(second)!!).entries.size)
+        assertEquals(setOf(first, second), WebDavHistory(
+            WebDavClient(server.folderUrl, "user", "pass"), BackupTool.LEDGER).list().toSet())
+    }
+
+    @Test
+    fun testSnapshotIndexConflictIsRetriedWithoutLosingVersion() {
+        val client = WebDavClient(server.folderUrl, "user", "pass")
+        val history = WebDavHistory(client, BackupTool.LEDGER)
+        val first = history.save("{}", 1_700_000_000_000L, ZoneId.of("UTC"))
+        server.bumpEtagAfterNextGet = true
+        val second = history.save("{}", 1_700_000_000_001L, ZoneId.of("UTC"))
+        assertEquals(setOf(first, second), history.list().toSet())
+    }
+
+    @Test
+    fun testEncryptedSyncMigratesPlaintextAndKeepsEncryptedSnapshots() {
+        val plain = LedgerSyncSerializer.toJsonString(LedgerSyncPayload(entries = listOf(entry("a", 100L))))
+        server.putRaw(LedgerWebDavSync.LEDGER_FILE, plain)
+        val local = mutableListOf<LedgerEntry>()
+        val vault = LedgerBackupVault("test-passphrase")
+        val result = LedgerWebDavSync(
+            client = WebDavClient(server.folderUrl, "user", "pass"),
+            loadLocal = { local.toList() }, loadLocalTags = { emptyList() },
+            applyMerged = { local.clear(); local.addAll(it.entries) }, vault = vault,
+        ).sync()
+        val remote = server.bodyOf(LedgerWebDavSync.LEDGER_FILE)!!
+        assertTrue(remote.contains(LedgerBackupVault.FORMAT))
+        assertEquals(listOf("a"), LedgerBackup.parse(vault.decode(remote)).entries.map { it.uuid })
+        assertEquals(remote, server.bodyOf(result.snapshotName!!))
+    }
+
+    @Test
+    fun testPullAllBeforePublishingConvergesMultipleTargets() {
+        val second = FakeWebDavServer(WebDavPaths.basicAuthHeader("user", "pass"))
+        try {
+            val local = mutableListOf<LedgerEntry>()
+            server.putRaw(LedgerWebDavSync.LEDGER_FILE,
+                LedgerSyncSerializer.toJsonString(LedgerSyncPayload(entries = listOf(entry("a", 100L)))))
+            second.putRaw(LedgerWebDavSync.LEDGER_FILE,
+                LedgerSyncSerializer.toJsonString(LedgerSyncPayload(entries = listOf(entry("b", 200L)))))
+            val engines = listOf(server, second).map { target -> LedgerWebDavSync(
+                client = WebDavClient(target.folderUrl, "user", "pass"),
+                loadLocal = { local.toList() }, loadLocalTags = { emptyList() },
+                applyMerged = { payload ->
+                    val merged = LedgerSyncMerge.merge(local, payload.entries).entries
+                    local.clear(); local.addAll(merged)
+                },
+            ) }
+            engines.forEach { engine ->
+                val pulled = engine.pull()!!
+                val merged = LedgerSyncMerge.merge(local, pulled.entries).entries
+                local.clear(); local.addAll(merged)
+            }
+            engines.forEach { it.sync() }
+            listOf(server, second).forEach { target ->
+                assertEquals(setOf("a", "b"), LedgerBackup.parse(
+                    target.bodyOf(LedgerWebDavSync.LEDGER_FILE)!!).entries.map { it.uuid }.toSet())
+            }
+        } finally { second.stop() }
+    }
+
+    @Test
     fun testFirstSyncCreatesLedgerJsonSnapshotAndIndex() {
         val local = mutableListOf(entry("a", 100L), entry("b", 200L))
         val result = newSync(local).sync(nowMillis = 1_700_000_000_000L)
@@ -267,6 +338,39 @@ class LedgerWebDavSyncTest {
         )
         assertEquals(listOf(result.snapshotName), index)
         assertTrue(local.all { it.syncStatus == LedgerSyncStatus.SYNCED })
+    }
+
+    @Test
+    fun testFirstToolboxSyncReadsLegacyFileInTheParentFolder() {
+        server.putRaw(
+            LedgerWebDavSync.LEDGER_FILE,
+            LedgerSyncSerializer.toJsonString(
+                LedgerSyncPayload(entries = listOf(entry("legacy", 100L))),
+            ),
+        )
+        val local = mutableListOf<LedgerEntry>()
+        val result = LedgerWebDavSync(
+            client = WebDavClient(
+                WebDavPaths.toolboxFolderUrl(server.folderUrl),
+                "user",
+                "pass",
+            ),
+            legacyClient = WebDavClient(server.folderUrl, "user", "pass"),
+            loadLocal = { local.toList() },
+            loadLocalTags = { emptyList() },
+            applyMerged = { merged ->
+                local.clear()
+                local.addAll(merged.entries)
+            },
+            zone = ZoneId.of("UTC"),
+        ).sync(nowMillis = 1_700_000_000_000L)
+
+        assertEquals(1, result.pulledCount)
+        assertEquals(listOf("legacy"), local.map { it.uuid })
+        assertNotNull(server.bodyOf("Toolbox/${LedgerWebDavSync.LEDGER_FILE}"))
+        assertNotNull(server.bodyOf("Toolbox/${result.snapshotName}"))
+        // The legacy file remains available as a fallback.
+        assertNotNull(server.bodyOf(LedgerWebDavSync.LEDGER_FILE))
     }
 
     @Test

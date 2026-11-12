@@ -36,6 +36,19 @@ data class WebDavServiceProfile(
         username = username,
         password = password,
     )
+
+    fun syncClient(tool: BackupTool): WebDavClient = WebDavClient(
+        WebDavPaths.toolFolderUrl(folderUrl, tool), username, password,
+        parentFolderUrl = WebDavPaths.toolboxFolderUrl(folderUrl),
+    )
+
+    fun connectionClient(): WebDavClient = WebDavClient(
+        WebDavPaths.toolboxFolderUrl(folderUrl), username, password,
+    )
+
+    fun legacyClients(tool: BackupTool): List<WebDavClient> =
+        WebDavPaths.legacyFolderUrls(folderUrl, tool).map { WebDavClient(it, username, password) }
+
 }
 
 data class WebDavConfig(
@@ -45,6 +58,17 @@ data class WebDavConfig(
 ) {
     val isComplete: Boolean
         get() = folderUrl.isNotBlank() && username.isNotBlank() && password.isNotEmpty()
+
+    fun syncClient(): WebDavClient = WebDavClient(
+        WebDavPaths.toolFolderUrl(folderUrl, BackupTool.LEDGER), username, password,
+        parentFolderUrl = WebDavPaths.toolboxFolderUrl(folderUrl),
+    )
+
+    fun legacyClients(): List<WebDavClient> =
+        WebDavPaths.legacyFolderUrls(folderUrl, BackupTool.LEDGER).map {
+            WebDavClient(it, username, password)
+        }
+
 }
 
 object WebDavPaths {
@@ -61,6 +85,37 @@ object WebDavPaths {
 
     fun defaultServiceName(folderUrl: String): String =
         runCatching { URI(folderUrl).host?.takeIf { it.isNotBlank() } }.getOrNull() ?: "WebDAV"
+
+    /**
+     * Files live in a Toolbox subfolder so a WebDAV root never receives
+     * ledger.json or token files directly. The function is idempotent when the
+     * configured URL already ends in Toolbox.
+     */
+    fun toolboxFolderUrl(folderUrl: String): String {
+        val base = if (folderUrl.endsWith("/")) folderUrl else "$folderUrl/"
+        val path = runCatching { URI(base).path.orEmpty() }.getOrDefault("")
+        val segments = path.trim('/').split('/')
+        if (segments.size >= 2 && segments[segments.lastIndex - 1].equals(TOOLBOX_FOLDER, true) &&
+            BackupTool.entries.any { it.key.equals(segments.last(), true) }
+        ) return URI(base).resolve("../").toASCIIString()
+        val lastSegment = segments.lastOrNull().orEmpty()
+        return if (lastSegment.equals(TOOLBOX_FOLDER, ignoreCase = true)) {
+            base
+        } else {
+            base + "$TOOLBOX_FOLDER/"
+        }
+    }
+
+    fun toolFolderUrl(folderUrl: String, tool: BackupTool): String =
+        toolboxFolderUrl(folderUrl) + tool.key + "/"
+
+    fun legacyFolderUrls(folderUrl: String, tool: BackupTool): List<String> {
+        val original = folderUrl.trimEnd('/') + "/"
+        val target = toolFolderUrl(original, tool)
+        return listOf(toolboxFolderUrl(original), original).distinct().filter { it != target }
+    }
+
+    const val TOOLBOX_FOLDER = "Toolbox"
 
     fun fileUrl(folderUrl: String, name: String): String =
         folderUrl + URLEncoder.encode(name, Charsets.UTF_8.name()).replace("+", "%20")
@@ -213,15 +268,8 @@ class WebDavConfigStore(context: Context) {
         return loadServices().filter { it.id in ids && it.isComplete }
     }
 
-    fun load(): WebDavConfig {
-        val selected = selectedServices(BackupTool.LEDGER).firstOrNull()
-            ?: loadServices().firstOrNull()
-        return selected?.toWebDavConfig() ?: WebDavConfig(
-            folderUrl = prefs.getString(KEY_FOLDER_URL, "") ?: "",
-            username = prefs.getString(KEY_USERNAME, "") ?: "",
-            password = prefs.getString(KEY_PASSWORD_ENC, null)?.let { decrypt(it) } ?: "",
-        )
-    }
+    fun load(): WebDavConfig = selectedServices(BackupTool.LEDGER).firstOrNull()
+        ?.toWebDavConfig() ?: WebDavConfig("", "", "")
 
     fun isPasswordUnavailable(): Boolean {
         ensureMigrated()

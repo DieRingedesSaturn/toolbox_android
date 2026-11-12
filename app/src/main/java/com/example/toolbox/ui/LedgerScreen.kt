@@ -84,6 +84,8 @@ import com.example.toolbox.ledger.LINK_TYPE_SALE
 import com.example.toolbox.ledger.LedgerAccount
 import com.example.toolbox.ledger.LedgerAccounts
 import com.example.toolbox.ledger.LedgerBackup
+import com.example.toolbox.ledger.LedgerBackupVault
+import com.example.toolbox.ledger.BackupRecoveryStore
 import com.example.toolbox.ledger.LedgerBackupReminder
 import com.example.toolbox.ledger.LedgerBackupStatusStore
 import com.example.toolbox.ledger.LedgerBudgetStore
@@ -105,6 +107,8 @@ import com.example.toolbox.ledger.LedgerSyncStatus
 import com.example.toolbox.ledger.LedgerTag
 import com.example.toolbox.ledger.LedgerTags
 import com.example.toolbox.ledger.BackupTool
+import com.example.toolbox.totp.TotpVaultException
+import com.example.toolbox.ledger.ReplacePlan
 import com.example.toolbox.ledger.LedgerWebDavSync
 import com.example.toolbox.ledger.NotificationLedgerCandidate
 import com.example.toolbox.ledger.NotificationLedgerDefaults
@@ -113,7 +117,6 @@ import com.example.toolbox.ledger.NotificationPayment
 import com.example.toolbox.ledger.NotificationPaymentDirection
 import com.example.toolbox.ledger.SubscriptionRenewals
 import com.example.toolbox.ledger.TagFilterMode
-import com.example.toolbox.ledger.WebDavClient
 import com.example.toolbox.ledger.WebDavConfig
 import com.example.toolbox.ledger.WebDavConfigStore
 import com.example.toolbox.ledger.WebDavException
@@ -222,6 +225,9 @@ internal fun LedgerScreen(
     var selectedMonthName by rememberSaveable {
         mutableStateOf(YearMonth.now().toString())
     }
+    var ledgerPassphrase by remember { mutableStateOf("") }
+    var pendingBackupAction by remember { mutableStateOf<((String) -> Unit)?>(null) }
+    var showBackupHistory by remember { mutableStateOf(false) }
     var showWebDavDialog by rememberSaveable { mutableStateOf(false) }
     var showNotificationLedgerDialog by rememberSaveable { mutableStateOf(false) }
     var notificationDraft by rememberSaveable(stateSaver = notificationDraftSaver) {
@@ -828,6 +834,7 @@ internal fun LedgerScreen(
     }
 
     fun webDavErrorMessage(error: Throwable): String {
+        if (error is TotpVaultException || error.cause is TotpVaultException) return strings.backupDecryptFailed
         val webDavError = error as? WebDavException
         return strings.webDavError(
             webDavError?.failure ?: WebDavFailure.NETWORK,
@@ -844,11 +851,7 @@ internal fun LedgerScreen(
                 webDavStore.save(config)
                 runCatching {
                     LedgerWebDavSync(
-                        client = WebDavClient(
-                            config.folderUrl,
-                            config.username,
-                            config.password,
-                        ),
+                        client = config.syncClient(),
                         loadLocal = { emptyList() },
                         loadLocalTags = { emptyList() },
                         loadLocalAccounts = { emptyList() },
@@ -866,6 +869,13 @@ internal fun LedgerScreen(
     }
 
     fun runWebDavSync(config: WebDavConfig, toastResult: Boolean) {
+        if (ledgerPassphrase.isEmpty()) {
+            pendingBackupAction = { pass ->
+                ledgerPassphrase = pass
+                runWebDavSync(config, toastResult)
+            }
+            return
+        }
         if (webDavBusyAction != null) return
         webDavBusyAction = WebDavBusyAction.SYNC
         webDavLastResult = null
@@ -874,15 +884,13 @@ internal fun LedgerScreen(
                 webDavStore.save(config)
                 runCatching {
                     val result = LedgerWebDavSync(
-                        client = WebDavClient(
-                            config.folderUrl,
-                            config.username,
-                            config.password,
-                        ),
+                        client = config.syncClient(),
                         loadLocal = { store.queryAllEntriesForSync() },
                         loadLocalTags = { store.queryTags(includeDeleted = true) },
                         loadLocalAccounts = { store.queryAccounts(includeDeleted = true) },
                         applyMerged = { merged -> store.importSyncPayload(merged) },
+                        legacyClients = config.legacyClients(),
+                        vault = LedgerBackupVault(ledgerPassphrase),
                     ).sync()
                     webDavStore.saveLastSync(System.currentTimeMillis())
                     result
@@ -913,14 +921,17 @@ internal fun LedgerScreen(
     }
 
     fun runSelectedWebDavSync(toastResult: Boolean) {
+        if (ledgerPassphrase.isEmpty()) {
+            pendingBackupAction = { pass ->
+                ledgerPassphrase = pass
+                runSelectedWebDavSync(toastResult)
+            }
+            return
+        }
         val targets = webDavTargets.filter { it.isComplete }
         if (targets.isEmpty()) {
-            val single = webDavConfig?.takeIf { it.isComplete }
-            if (single != null) {
-                runWebDavSync(single, toastResult)
-            } else {
-                onOpenSettings()
-            }
+            Toast.makeText(context, strings.webDavNoTargetSelectedToast, Toast.LENGTH_LONG).show()
+            onOpenSettings()
             return
         }
         if (targets.size == 1) {
@@ -935,18 +946,31 @@ internal fun LedgerScreen(
                 var okCount = 0
                 val messages = mutableListOf<String>()
                 val now = System.currentTimeMillis()
+                val pullFailures = mutableMapOf<String, Throwable>()
+                for (service in targets) {
+                    runCatching {
+                        LedgerWebDavSync(
+                            client = service.syncClient(BackupTool.LEDGER),
+                            loadLocal = { store.queryAllEntriesForSync() },
+                            loadLocalTags = { store.queryTags(includeDeleted = true) },
+                            loadLocalAccounts = { store.queryAccounts(includeDeleted = true) },
+                            applyMerged = { store.importSyncPayload(it) },
+                            legacyClients = service.legacyClients(BackupTool.LEDGER),
+                            vault = LedgerBackupVault(ledgerPassphrase),
+                        ).pull()?.let { store.importSyncPayload(it) }
+                    }.onFailure { pullFailures[service.id] = it }
+                }
                 for (service in targets) {
                     val res = runCatching {
+                        pullFailures[service.id]?.let { throw it }
                         LedgerWebDavSync(
-                            client = WebDavClient(
-                                service.folderUrl,
-                                service.username,
-                                service.password,
-                            ),
+                            client = service.syncClient(BackupTool.LEDGER),
                             loadLocal = { store.queryAllEntriesForSync() },
                             loadLocalTags = { store.queryTags(includeDeleted = true) },
                             loadLocalAccounts = { store.queryAccounts(includeDeleted = true) },
                             applyMerged = { merged -> store.importSyncPayload(merged) },
+                            legacyClients = service.legacyClients(BackupTool.LEDGER),
+                            vault = LedgerBackupVault(ledgerPassphrase),
                         ).sync()
                     }
                     res.onSuccess { r ->
@@ -993,6 +1017,10 @@ internal fun LedgerScreen(
     }
 
     fun exportJsonBackup(uri: Uri) {
+        if (ledgerPassphrase.isEmpty()) {
+            pendingBackupAction = { pass -> ledgerPassphrase = pass; exportJsonBackup(uri) }
+            return
+        }
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
@@ -1000,13 +1028,13 @@ internal fun LedgerScreen(
                     val allRows = store.queryAllEntriesForSync()
                     writeTextToUri(
                         uri,
-                        LedgerSyncSerializer.toJsonString(
+                        LedgerBackupVault(ledgerPassphrase).encode(LedgerSyncSerializer.toJsonString(
                             LedgerSyncPayload(
                                 entries = allRows,
                                 tags = store.queryTags(includeDeleted = true),
                                 accounts = store.queryAccounts(includeDeleted = true),
                             ),
-                        ),
+                        )),
                     )
                     backupStatusStore.saveFileExport(exportedAt)
                     exportedAt to allRows.count { it.deletedAtMillis == null }
@@ -1085,13 +1113,17 @@ internal fun LedgerScreen(
     }
 
     fun startImport(uri: Uri) {
+        if (ledgerPassphrase.isEmpty()) {
+            pendingBackupAction = { pass -> ledgerPassphrase = pass; startImport(uri) }
+            return
+        }
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
                     val declaredSize = context.contentResolver
                         .openAssetFileDescriptor(uri, "r")
                         ?.use { it.length } ?: -1L
-                    if (declaredSize > LedgerBackup.MAX_BYTES) {
+                    if (declaredSize > LedgerBackupVault.MAX_BYTES) {
                         throw BackupException(BackupFailure.TOO_LARGE)
                     }
                     val text = context.contentResolver.openInputStream(uri)
@@ -1103,7 +1135,7 @@ internal fun LedgerScreen(
                                 val read = stream.read(buffer)
                                 if (read < 0) break
                                 total += read
-                                if (total > LedgerBackup.MAX_BYTES) {
+                                if (total > LedgerBackupVault.MAX_BYTES) {
                                     throw BackupException(BackupFailure.TOO_LARGE)
                                 }
                                 out.write(buffer, 0, read)
@@ -1111,7 +1143,7 @@ internal fun LedgerScreen(
                             String(out.toByteArray(), Charsets.UTF_8)
                         }
                         ?: throw IOException("openInputStream returned null")
-                    val payload = LedgerBackup.parse(text)
+                    val payload = LedgerBackup.parse(LedgerBackupVault(ledgerPassphrase).decode(text))
                     PendingImport(
                         payload = payload,
                         preview = LedgerBackup.previewMerge(
@@ -1125,7 +1157,7 @@ internal fun LedgerScreen(
             outcome.onFailure { error ->
                 val message = (error as? BackupException)
                     ?.let { strings.backupError(it.failure) }
-                    ?: strings.backupReadFailed
+                    ?: if (error is TotpVaultException) strings.backupDecryptFailed else strings.backupReadFailed
                 Toast.makeText(context, message, Toast.LENGTH_LONG).show()
             }
         }
@@ -1149,48 +1181,53 @@ internal fun LedgerScreen(
         }
     }
 
+    fun currentBackupPayload() = LedgerSyncPayload(
+        entries = store.queryAllEntriesForSync(),
+        tags = store.queryTags(includeDeleted = true),
+        accounts = store.queryAccounts(includeDeleted = true),
+    )
+
+    fun replacementPlan(current: LedgerSyncPayload, incoming: LedgerSyncPayload) = LedgerBackup.planReplace(
+        current.entries, incoming.entries,
+        localTags = current.tags, incomingTags = incoming.tags,
+        localAccounts = current.accounts, incomingAccounts = incoming.accounts,
+        nowMillis = System.currentTimeMillis(),
+    )
+
+    fun restoreBackupPayload(payload: LedgerSyncPayload, pass: String): ReplacePlan {
+        val current = currentBackupPayload()
+        val plan = replacementPlan(current, payload)
+        BackupRecoveryStore(context, BackupTool.LEDGER).save(
+            LedgerBackupVault(pass).encode(LedgerSyncSerializer.toJsonString(current)),
+        )
+        store.applyReplace(plan)
+        return plan
+    }
+
     fun requestReplace(pending: PendingImport) {
         scope.launch {
-            val plan = withContext(Dispatchers.IO) {
-                LedgerBackup.planReplace(
-                    store.queryAllEntriesForSync(),
-                    pending.payload.entries,
-                    localTags = store.queryTags(includeDeleted = true),
-                    incomingTags = pending.payload.tags,
-                    localAccounts = store.queryAccounts(includeDeleted = true),
-                    incomingAccounts = pending.payload.accounts,
-                    nowMillis = System.currentTimeMillis(),
-                )
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching { replacementPlan(currentBackupPayload(), pending.payload) }
             }
-            pendingReplace = PendingReplace(pending.payload, plan)
+            outcome.onSuccess { pendingReplace = PendingReplace(pending.payload, it) }
+            outcome.onFailure { Toast.makeText(context, strings.backupReadFailed, Toast.LENGTH_LONG).show() }
         }
     }
 
     fun applyReplaceImport(pending: PendingReplace) {
         scope.launch {
-            val plan = withContext(Dispatchers.IO) {
-                // Recompute right before writing so edits made while the
-                // dialogs were open aren't silently dropped.
-                val fresh = LedgerBackup.planReplace(
-                    store.queryAllEntriesForSync(),
-                    pending.payload.entries,
-                    localTags = store.queryTags(includeDeleted = true),
-                    incomingTags = pending.payload.tags,
-                    localAccounts = store.queryAccounts(includeDeleted = true),
-                    incomingAccounts = pending.payload.accounts,
-                    nowMillis = System.currentTimeMillis(),
-                )
-                store.applyReplace(fresh)
-                fresh
+            val outcome = withContext(Dispatchers.IO) {
+                // Recompute and checkpoint immediately before the deliberate replacement.
+                runCatching { restoreBackupPayload(pending.payload, ledgerPassphrase) }
             }
-            pendingReplace = null
-            pendingImport = null
-            reloadEntries()
-            Toast.makeText(
-                context,
-                strings.backupReplacedDone(plan.keptCount, plan.deletedCount),
-                Toast.LENGTH_LONG,
-            ).show()
+            outcome.onSuccess { plan ->
+                pendingReplace = null
+                pendingImport = null
+                reloadEntries()
+                Toast.makeText(context, strings.backupReplacedDone(plan.keptCount, plan.deletedCount),
+                    Toast.LENGTH_LONG).show()
+            }
+            outcome.onFailure { Toast.makeText(context, strings.backupReadFailed, Toast.LENGTH_LONG).show() }
         }
     }
 
@@ -1370,6 +1407,17 @@ internal fun LedgerScreen(
                                             },
                                         )
                                     }
+                                    DropdownMenuItem(
+                                        text = { Text(strings.backupHistoryTitle) },
+                                        onClick = { menuExpanded = false; showBackupHistory = true },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(strings.backupPasswordTitle) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            pendingBackupAction = { ledgerPassphrase = it }
+                                        },
+                                    )
                                     if (webDavTargets.any { it.isComplete } ||
                                         webDavConfig?.isComplete == true
                                     ) {
@@ -1870,6 +1918,26 @@ internal fun LedgerScreen(
                     }
                 }
             },
+        )
+    }
+
+    pendingBackupAction?.let { action ->
+        BackupPassphraseDialog(strings, ledgerPassphrase,
+            onDismiss = { pendingBackupAction = null },
+            onConfirm = { pass -> pendingBackupAction = null; action(pass) })
+    }
+    if (showBackupHistory) {
+        BackupHistoryDialog(
+            strings, BackupTool.LEDGER, webDavTargets, ledgerPassphrase,
+            preview = { body, pass ->
+                LedgerBackup.parse(LedgerBackupVault(pass).decode(body)).entries.count { it.deletedAtMillis == null }
+            },
+            restore = { body, pass ->
+                val payload = LedgerBackup.parse(LedgerBackupVault(pass).decode(body))
+                restoreBackupPayload(payload, pass)
+            },
+            onRestored = { showBackupHistory = false; scope.launch { reloadEntries() } },
+            onDismiss = { showBackupHistory = false },
         )
     }
 

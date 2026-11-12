@@ -4,9 +4,11 @@ import java.io.IOException
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WebDavClientTest {
@@ -58,6 +60,109 @@ class WebDavClientTest {
         assertNull(WebDavClient.ifMatchValue("W/\"abc\""))
         assertNull(WebDavClient.ifMatchValue("w/\"abc\""))
         assertEquals("\"abc\"", WebDavClient.ifMatchValue("\"abc\""))
+    }
+
+    @Test
+    fun createsTheFolderWithMkcol() {
+        val request = AtomicReference<String>()
+        val server = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
+        val worker = Thread {
+            server.accept().use { socket ->
+                val reader = socket.getInputStream().bufferedReader(Charsets.ISO_8859_1)
+                val head = StringBuilder()
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    head.append(line).append("\r\n")
+                    if (line.isEmpty()) break
+                }
+                request.set(head.toString())
+                socket.getOutputStream().write(
+                    "HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        .toByteArray(Charsets.ISO_8859_1),
+                )
+                socket.getOutputStream().flush()
+            }
+        }.apply { start() }
+        try {
+            val client = WebDavClient(
+                "http://127.0.0.1:${server.localPort}/dav/Toolbox/",
+                "user",
+                "secret",
+            )
+            client.ensureFolder()
+            assertTrue(request.get().startsWith("MKCOL /dav/Toolbox/ HTTP/1.1\r\n"))
+            assertTrue(request.get().contains(WebDavPaths.basicAuthHeader("user", "secret")))
+        } finally {
+            server.close()
+            worker.join(1_000)
+        }
+    }
+
+    @Test
+    fun createsParentBeforeToolFolderAndSkipsInformationalHeaders() {
+        val requests = mutableListOf<String>()
+        val server = ServerSocket(0, 2, InetAddress.getByName("127.0.0.1"))
+        val worker = Thread {
+            repeat(2) {
+                server.accept().use { socket ->
+                    val reader = socket.getInputStream().bufferedReader(Charsets.ISO_8859_1)
+                    requests.add(reader.readLine())
+                    while (!reader.readLine().isNullOrEmpty()) { /* Consume request. */ }
+                    socket.getOutputStream().write((
+                        "HTTP/1.1 100 Continue\r\nX-Hint: ignored\r\n\r\n" +
+                            "HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n"
+                        ).toByteArray(Charsets.ISO_8859_1))
+                }
+            }
+        }.apply { start() }
+        try {
+            val parent = "http://127.0.0.1:${server.localPort}/dav/Toolbox/"
+            WebDavClient(parent + "ledger/", "user", "secret", parentFolderUrl = parent).ensureFolder()
+            worker.join(1000)
+            assertEquals(listOf("MKCOL /dav/Toolbox/ HTTP/1.1", "MKCOL /dav/Toolbox/ledger/ HTTP/1.1"), requests)
+        } finally { server.close(); worker.join(1000) }
+    }
+
+    @Test
+    fun rejectsUnboundedMkcolStatusLine() {
+        val server = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
+        val worker = Thread {
+            server.accept().use { socket ->
+                socket.getInputStream().bufferedReader().readLine()
+                runCatching { socket.getOutputStream().write("X".repeat(70_000).toByteArray()) }
+            }
+        }.apply { start() }
+        try {
+            val client = WebDavClient("http://127.0.0.1:${server.localPort}/dav/", "user", "secret")
+            assertEquals(WebDavFailure.NETWORK,
+                assertThrows(WebDavException::class.java) { client.ensureFolder() }.failure)
+        } finally { server.close(); worker.join(1000) }
+    }
+
+    @Test
+    fun existingFolderMayAnswerMethodNotAllowed() {
+        val server = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
+        val worker = Thread {
+            server.accept().use { socket ->
+                socket.getInputStream().bufferedReader(Charsets.ISO_8859_1)
+                    .readLine()
+                socket.getOutputStream().write(
+                    "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        .toByteArray(Charsets.ISO_8859_1),
+                )
+                socket.getOutputStream().flush()
+            }
+        }.apply { start() }
+        try {
+            WebDavClient(
+                "http://127.0.0.1:${server.localPort}/dav/Toolbox/",
+                "user",
+                "secret",
+            ).ensureFolder()
+        } finally {
+            server.close()
+            worker.join(1_000)
+        }
     }
 
     @Test

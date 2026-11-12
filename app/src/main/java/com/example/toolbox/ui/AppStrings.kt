@@ -67,6 +67,28 @@ enum class DeviceSection {
 }
 
 class ToolboxStrings(val language: AppLanguage) {
+    val backupPasswordTitle: String
+        get() = if (chinese) "备份加密密码" else "Backup encryption passphrase"
+    val backupPasswordHint: String
+        get() = if (chinese) "至少 8 个字符，用于客户端加密；已有加密备份须输入原密码，忘记后无法恢复。恢复旧明文备份时也需设置密码，以保护恢复前副本。" else "At least 8 characters; encrypts backups on this device. Use the original passphrase for existing encrypted backups. Lost passphrases cannot be recovered. A passphrase is also needed to protect the checkpoint when restoring legacy plaintext."
+    val backupDecryptFailed: String
+        get() = if (chinese) "备份密码错误，或文件已损坏、格式不兼容。" else "Incorrect backup passphrase, damaged file, or incompatible format."
+    val backupHistoryTitle: String
+        get() = if (chinese) "历史备份与恢复" else "Backup history and restore"
+    val backupBeforeRestore: String
+        get() = if (chinese) "本机恢复前副本" else "Local pre-restore checkpoint"
+    val backupLegacy: String
+        get() = if (chinese) "旧目录" else "Legacy folder"
+    val backupHistoryFailed: String
+        get() = if (chinese) "读取或恢复失败，请检查密码与网络；尚未确认的恢复不会修改本机数据。" else "Read or restore failed. Check the passphrase and connection. Unconfirmed restores leave local data unchanged."
+    val backupHistoryEmpty: String
+        get() = if (chinese) "没有可用的历史版本" else "No backup versions found"
+    val backupRestoreAction: String
+        get() = if (chinese) "恢复" else "Restore"
+    fun backupRestoreWarning(count: Int): String = if (chinese) {
+        "此版本包含 $count 条有效记录。恢复前会保存加密的本机副本；恢复将替换当前数据，并生成新修订。下次手动同步会把这次恢复传播到所选服务和其他设备。"
+    } else "This version contains $count active records. An encrypted local checkpoint is saved first. Restore replaces current data as a new revision; the next manual sync propagates it to selected services and other devices."
+
     val mockLocationTitle: String
         get() = if (chinese) "模拟定位" else "Mock location"
     val mockLocationIpButton: String
@@ -1500,9 +1522,9 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "立即同步" else "Sync now"
     val webDavHelpText: String
         get() = if (chinese) {
-            "请先在服务器上创建好同步文件夹，再粘贴它的 HTTPS 地址（例如 https://dav.jianguoyun.com/dav/Toolbox/；坚果云需使用「应用密码」而非登录密码）。同步会写入 ledger.json、带日期的 ledger-backup-*.json 快照（仅保留最新 10 份，供手动恢复）以及 ledger-backups.json 索引。"
+            "粘贴服务器上的 HTTPS 文件夹地址（例如 https://dav.jianguoyun.com/dav/；坚果云需使用「应用密码」而非登录密码）。同步文件会放在该地址下的 Toolbox/ledger/ 或 Toolbox/totp/ 子目录，不存在时自动创建；首次同步会读取原地址的旧文件并合并，旧文件保留。账本内容以备份密码加密，可从历史备份菜单恢复特定版本。账本写入 ledger.json、带日期的 ledger-backup-*.json 快照（仅保留最新 10 份）以及 ledger-backups.json 索引。"
         } else {
-            "Create the folder on your server first, then paste its HTTPS URL (e.g. https://dav.jianguoyun.com/dav/Toolbox/ — Jianguoyun requires an app password, not your login password). Sync writes ledger.json, dated ledger-backup-*.json snapshots (newest 10 kept, for manual recovery), and the ledger-backups.json index."
+            "Paste a folder HTTPS URL on your server (e.g. https://dav.jianguoyun.com/dav/ — Jianguoyun requires an app password, not your login password). Sync files go in a Toolbox/ledger/ or Toolbox/totp/ subfolder, created when missing. The first sync also reads and merges legacy files from the configured folder, leaving them untouched. Ledger contents are encrypted with the backup passphrase; restore a specific version from Backup history. The ledger writes ledger.json, dated ledger-backup-*.json snapshots (newest 10 kept), and the ledger-backups.json index."
         }
     val webDavFolderUrlLabel: String
         get() = if (chinese) "文件夹地址（HTTPS）" else "Folder URL (HTTPS)"

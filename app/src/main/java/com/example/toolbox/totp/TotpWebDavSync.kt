@@ -1,22 +1,21 @@
 package com.example.toolbox.totp
 
+import com.example.toolbox.ledger.BackupTool
+import com.example.toolbox.ledger.WebDavHistory
 import com.example.toolbox.ledger.WebDavClient
 import com.example.toolbox.ledger.WebDavException
 import com.example.toolbox.ledger.WebDavFailure
-import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import org.json.JSONArray
 import org.json.JSONObject
 
 object TotpWebDavSnapshots {
     const val KEEP = 10
     const val INDEX_FILE = "totp-backups.json"
-    val NAME_REGEX = Regex("""^totp-backup-\d{8}-\d{6}\.json$""")
-    private val NAME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+    val NAME_REGEX = WebDavHistory.nameRegex(BackupTool.TOTP)
 
     fun snapshotName(millis: Long, zone: ZoneId): String =
-        "totp-backup-${Instant.ofEpochMilli(millis).atZone(zone).format(NAME_FORMATTER)}.json"
+        WebDavHistory.snapshotName(BackupTool.TOTP, millis, zone)
 
     fun parseIndex(json: String?): List<String> {
         if (json.isNullOrBlank()) return emptyList()
@@ -56,23 +55,39 @@ class TotpWebDavSync(
     private val applyMerged: (List<TotpEntry>) -> Unit,
     private val iterations: Int = TotpVaultCrypto.DEFAULT_ITERATIONS,
     private val zone: ZoneId = ZoneId.systemDefault(),
+    /** Reads a legacy file in the parent folder on the first Toolbox sync. */
+    private val legacyClient: WebDavClient? = null,
+    private val legacyClients: List<WebDavClient> = listOfNotNull(legacyClient),
 ) {
 
+    fun pull(): List<TotpEntry>? {
+        val remote = client.get(VAULT_FILE)
+        if (remote != null && WebDavClient.ifMatchValue(remote.etag) == null) {
+            throw WebDavException(WebDavFailure.VERSION_UNAVAILABLE)
+        }
+        val file = remote ?: legacyClients.firstNotNullOfOrNull { it.get(VAULT_FILE) } ?: return null
+        return TotpVaultCrypto.decryptVault(file.body, passphrase)
+    }
+
     fun sync(nowMillis: Long = System.currentTimeMillis()): TotpWebDavSyncResult {
+        client.ensureFolder()
         var attempt = 0
         var finalMerged: TotpMergeResult? = null
         var uploadedBody: String? = null
         while (attempt < MAX_ATTEMPTS) {
             attempt++
             val remote = client.get(VAULT_FILE)
+            // A missing tool vault migrates from the nearest legacy folder;
+            // only the new tool folder is written. Legacy files stay untouched.
+            val remoteSource = remote ?: legacyClients.firstNotNullOfOrNull { it.get(VAULT_FILE) }
             val etag = remote?.let { WebDavClient.ifMatchValue(it.etag) }
             if (remote != null && etag == null) {
                 throw WebDavException(WebDavFailure.VERSION_UNAVAILABLE)
             }
-            val remoteEntries = if (remote == null) {
+            val remoteEntries = if (remoteSource == null) {
                 emptyList()
             } else {
-                TotpVaultCrypto.decryptVault(remote.body, passphrase)
+                TotpVaultCrypto.decryptVault(remoteSource.body, passphrase)
             }
             val merged = TotpSyncMerge.merge(loadLocal(), remoteEntries)
             val body = TotpVaultCrypto.encryptVault(
@@ -103,15 +118,7 @@ class TotpWebDavSync(
         var snapshotName: String? = null
         var snapshotFailure: WebDavFailure? = null
         try {
-            val name = TotpWebDavSnapshots.snapshotName(nowMillis, zone)
-            client.put(name, body)
-            val index = TotpWebDavSnapshots.parseIndex(
-                client.get(TotpWebDavSnapshots.INDEX_FILE)?.body,
-            )
-            val (keep, delete) = TotpWebDavSnapshots.prune(index, name)
-            client.put(TotpWebDavSnapshots.INDEX_FILE, TotpWebDavSnapshots.indexJson(keep))
-            delete.forEach { old -> runCatching { client.delete(old) } }
-            snapshotName = name
+            snapshotName = WebDavHistory(client, BackupTool.TOTP).save(body, nowMillis, zone)
         } catch (e: WebDavException) {
             snapshotFailure = e.failure
         } catch (_: Exception) {

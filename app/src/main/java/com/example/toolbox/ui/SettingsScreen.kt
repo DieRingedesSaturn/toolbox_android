@@ -72,7 +72,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.toolbox.R
 import com.example.toolbox.ledger.BackupTool
 import com.example.toolbox.ledger.LedgerWebDavSync
-import com.example.toolbox.ledger.WebDavClient
 import com.example.toolbox.ledger.WebDavConfigStore
 import com.example.toolbox.ledger.WebDavException
 import com.example.toolbox.ledger.WebDavFailure
@@ -578,11 +577,7 @@ private fun WebDavServiceEditDialog(
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
                     LedgerWebDavSync(
-                        client = WebDavClient(
-                            profile.folderUrl,
-                            profile.username,
-                            profile.password,
-                        ),
+                        client = profile.connectionClient(),
                         loadLocal = { emptyList() },
                         loadLocalTags = { emptyList() },
                         loadLocalAccounts = { emptyList() },

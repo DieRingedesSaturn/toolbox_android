@@ -1,8 +1,6 @@
 package com.example.toolbox.ledger
 
-import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -97,11 +95,10 @@ object LedgerSyncMerge {
 object WebDavSnapshots {
     const val KEEP = 10
     const val INDEX_FILE = "ledger-backups.json"
-    val NAME_REGEX = Regex("""^ledger-backup-\d{8}-\d{6}\.json$""")
-    private val NAME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+    val NAME_REGEX = WebDavHistory.nameRegex(BackupTool.LEDGER)
 
     fun snapshotName(millis: Long, zone: ZoneId): String =
-        "ledger-backup-${Instant.ofEpochMilli(millis).atZone(zone).format(NAME_FORMATTER)}.json"
+        WebDavHistory.snapshotName(BackupTool.LEDGER, millis, zone)
 
     fun parseIndex(json: String?): List<String> {
         if (json.isNullOrBlank()) return emptyList()
@@ -153,14 +150,29 @@ class LedgerWebDavSync(
     private val loadLocalAccounts: () -> List<LedgerAccount> = { emptyList() },
     private val applyMerged: (LedgerSyncPayload) -> Unit,
     private val zone: ZoneId = ZoneId.systemDefault(),
+    /** Reads a legacy file in the parent folder on the first Toolbox sync. */
+    private val legacyClient: WebDavClient? = null,
+    private val legacyClients: List<WebDavClient> = listOfNotNull(legacyClient),
+    private val vault: LedgerBackupVault? = null,
 ) {
 
     fun testConnection() {
+        client.ensureFolder()
         client.put(TEST_FILE, "{}")
         client.delete(TEST_FILE)
     }
 
+    fun pull(): LedgerSyncPayload? {
+        val remote = client.get(LEDGER_FILE)
+        if (remote != null && WebDavClient.ifMatchValue(remote.etag) == null) {
+            throw WebDavException(WebDavFailure.VERSION_UNAVAILABLE)
+        }
+        val file = remote ?: legacyClients.firstNotNullOfOrNull { it.get(LEDGER_FILE) } ?: return null
+        return LedgerBackup.parse(vault?.decode(file.body) ?: file.body)
+    }
+
     fun sync(nowMillis: Long = System.currentTimeMillis()): WebDavSyncResult {
+        client.ensureFolder()
         var merged: MergeResult? = null
         var mergedTags: List<LedgerTag> = emptyList()
         var mergedAccounts: List<LedgerAccount> = emptyList()
@@ -169,13 +181,16 @@ class LedgerWebDavSync(
         while (true) {
             attempt++
             val remote = client.get(LEDGER_FILE)
+            // A missing tool file migrates from the nearest legacy folder;
+            // only the new tool folder is written. Legacy files stay untouched.
+            val remoteSource = remote ?: legacyClients.firstNotNullOfOrNull { it.get(LEDGER_FILE) }
             val etag = remote?.let { WebDavClient.ifMatchValue(it.etag) }
             if (remote != null && etag == null) {
                 throw WebDavException(WebDavFailure.VERSION_UNAVAILABLE)
             }
-            val remotePayload = remote?.let { file ->
+            val remotePayload = remoteSource?.let { file ->
                 try {
-                    LedgerSyncSerializer.fromJsonString(file.body)
+                    LedgerSyncSerializer.fromJsonString(vault?.decode(file.body) ?: file.body)
                 } catch (e: Exception) {
                     throw WebDavException(WebDavFailure.INVALID_REMOTE_FILE, cause = e)
                 }.also { payload ->
@@ -205,6 +220,7 @@ class LedgerWebDavSync(
                     accounts = mergedAccounts,
                 ),
             )
+            body = vault?.encode(body) ?: body
             try {
                 client.put(
                     LEDGER_FILE,
@@ -233,17 +249,7 @@ class LedgerWebDavSync(
         var snapshotName: String? = null
         var snapshotFailure: WebDavFailure? = null
         try {
-            val name = WebDavSnapshots.snapshotName(nowMillis, zone)
-            client.put(name, body)
-            val index = WebDavSnapshots.parseIndex(
-                client.get(WebDavSnapshots.INDEX_FILE)?.body,
-            )
-            val (keep, delete) = WebDavSnapshots.prune(index, name)
-            client.put(WebDavSnapshots.INDEX_FILE, WebDavSnapshots.indexJson(keep))
-            for (old in delete) {
-                runCatching { client.delete(old) }
-            }
-            snapshotName = name
+            snapshotName = WebDavHistory(client, BackupTool.LEDGER).save(body, nowMillis, zone)
         } catch (e: WebDavException) {
             snapshotFailure = e.failure
         } catch (e: Exception) {

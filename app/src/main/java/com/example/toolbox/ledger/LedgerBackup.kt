@@ -70,7 +70,7 @@ object LedgerBackup {
     /**
      * Plans a full replace that survives the next WebDAV sync. A wipe+insert
      * would lose the Last-Write-Wins race against the remote, so every row the
-     * plan writes is re-stamped to [nowMillis] and marked
+     * plan writes is re-stamped beyond all known revisions (at least [nowMillis]) and marked
      * [LedgerSyncStatus.PENDING_PUSH], and local-only live entries become
      * tombstones instead of being deleted outright.
      */
@@ -83,10 +83,20 @@ object LedgerBackup {
         incomingAccounts: List<LedgerAccount> = emptyList(),
         nowMillis: Long,
     ): ReplacePlan {
+        val latest = sequenceOf(
+            local.asSequence().map { it.updatedAtMillis },
+            incoming.asSequence().map { it.updatedAtMillis },
+            localTags.asSequence().map { it.updatedAtMillis },
+            incomingTags.asSequence().map { it.updatedAtMillis },
+            localAccounts.asSequence().map { it.updatedAtMillis },
+            incomingAccounts.asSequence().map { it.updatedAtMillis },
+        ).flatten().maxOrNull() ?: 0L
+        require(latest < Long.MAX_VALUE)
+        val revisionMillis = maxOf(nowMillis, latest + 1L)
         val incomingUuids = incoming.mapTo(HashSet()) { it.uuid }
         val writes = incoming.map {
             it.copy(
-                updatedAtMillis = nowMillis,
+                updatedAtMillis = revisionMillis,
                 syncStatus = LedgerSyncStatus.PENDING_PUSH,
             )
         }.toMutableList()
@@ -95,8 +105,8 @@ object LedgerBackup {
             if (entry.uuid in incomingUuids || entry.deletedAtMillis != null) continue
             deletedCount++
             writes += entry.copy(
-                deletedAtMillis = nowMillis,
-                updatedAtMillis = nowMillis,
+                deletedAtMillis = revisionMillis,
+                updatedAtMillis = revisionMillis,
                 isActiveCost = false,
                 syncStatus = LedgerSyncStatus.PENDING_PUSH,
             )
@@ -109,7 +119,7 @@ object LedgerBackup {
             .flatMapTo(HashSet()) { it.tagUuids }
         val tagWrites = incomingTags.map {
             it.copy(
-                updatedAtMillis = nowMillis,
+                updatedAtMillis = revisionMillis,
                 syncStatus = LedgerSyncStatus.PENDING_PUSH,
             )
         }.toMutableList()
@@ -122,8 +132,8 @@ object LedgerBackup {
             }
             deletedTagCount++
             tagWrites += tag.copy(
-                deletedAtMillis = nowMillis,
-                updatedAtMillis = nowMillis,
+                deletedAtMillis = revisionMillis,
+                updatedAtMillis = revisionMillis,
                 syncStatus = LedgerSyncStatus.PENDING_PUSH,
             )
         }
@@ -133,7 +143,7 @@ object LedgerBackup {
         }
         val accountWrites = incomingAccounts.map {
             it.copy(
-                updatedAtMillis = nowMillis,
+                updatedAtMillis = revisionMillis,
                 syncStatus = LedgerSyncStatus.PENDING_PUSH,
             )
         }.toMutableList()
@@ -147,8 +157,8 @@ object LedgerBackup {
             }
             deletedAccountCount++
             accountWrites += account.copy(
-                deletedAtMillis = nowMillis,
-                updatedAtMillis = nowMillis,
+                deletedAtMillis = revisionMillis,
+                updatedAtMillis = revisionMillis,
                 syncStatus = LedgerSyncStatus.PENDING_PUSH,
             )
         }

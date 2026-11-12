@@ -33,6 +33,15 @@ class LedgerBackupTest {
     }
 
     @Test
+    fun replaceNewRevisionWinsOverFutureRemoteTimestamps() {
+        val remote = listOf(entry("a", 9000L), entry("b", 8000L))
+        val plan = LedgerBackup.planReplace(remote, listOf(entry("a", 100L)), nowMillis = 500L)
+        val merged = LedgerSyncMerge.merge(plan.writes, remote).entries
+        assertEquals(9001L, merged.single { it.uuid == "a" }.updatedAtMillis)
+        assertNotNull(merged.single { it.uuid == "b" }.deletedAtMillis)
+    }
+
+    @Test
     fun testParseValidPayload() {
         val json = LedgerSyncSerializer.toJsonString(
             LedgerSyncPayload(entries = listOf(entry("a", 100L))),
@@ -188,6 +197,8 @@ class LedgerBackupTest {
             openingBalanceCents = 0L,
             openingAtMillis = 0L,
             colorArgb = 1,
+            createdAtMillis = 0L,
+            updatedAtMillis = 0L,
         )
         val unusedAccount = account.copy(uuid = "unused-account", name = "Unused")
         val tag = LedgerTag(

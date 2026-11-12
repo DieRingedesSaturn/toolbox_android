@@ -100,24 +100,35 @@ object TotpVaultCrypto {
         iterations: Int = DEFAULT_ITERATIONS,
         nowMillis: Long = System.currentTimeMillis(),
     ): String {
+        return encryptPayload(serializeEntriesJson(entries, nowMillis), passphrase,
+            FORMAT_TOOLBOX, AAD_TOOLBOX, iterations)
+    }
+
+    fun encryptPayload(
+        plaintextJson: String,
+        passphrase: String,
+        format: String,
+        aad: String,
+        iterations: Int = DEFAULT_ITERATIONS,
+    ): String {
         if (!validatePassphrase(passphrase)) {
             throw TotpVaultException(TotpVaultFailure.PASSPHRASE_TOO_SHORT)
         }
         val safeIterations = iterations.coerceIn(MIN_ITERATIONS, MAX_ITERATIONS)
         val salt = ByteArray(SALT_BYTES).also(random::nextBytes)
         val iv = ByteArray(IV_BYTES).also(random::nextBytes)
-        val plaintext = serializeEntriesJson(entries, nowMillis).toByteArray(Charsets.UTF_8)
+        val plaintext = plaintextJson.toByteArray(Charsets.UTF_8)
         val ciphertext = try {
             val key = deriveKey(passphrase, salt, safeIterations)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
-            cipher.updateAAD(AAD_TOOLBOX.toByteArray(Charsets.UTF_8))
+            cipher.updateAAD(aad.toByteArray(Charsets.UTF_8))
             cipher.doFinal(plaintext)
         } catch (e: Exception) {
             throw TotpVaultException(TotpVaultFailure.CRYPTO_ERROR, e)
         }
         val envelope = JSONObject()
-            .put("format", FORMAT_TOOLBOX)
+            .put("format", format)
             .put("version", VERSION)
             .put(
                 "kdf",
@@ -137,10 +148,20 @@ object TotpVaultCrypto {
     }
 
     fun decryptVault(envelopeJson: String, passphrase: String): List<TotpEntry> {
+        return parseEntriesJson(decryptPayload(envelopeJson, passphrase,
+            mapOf(FORMAT_TOOLBOX to AAD_TOOLBOX, FORMAT_DORIYA to AAD_DORIYA), MAX_BYTES))
+    }
+
+    fun decryptPayload(
+        envelopeJson: String,
+        passphrase: String,
+        formats: Map<String, String>,
+        maxBytes: Int,
+    ): String {
         if (passphrase.isEmpty()) {
             throw TotpVaultException(TotpVaultFailure.PASSPHRASE_TOO_SHORT)
         }
-        if (envelopeJson.length > MAX_BYTES) {
+        if (envelopeJson.toByteArray(Charsets.UTF_8).size > maxBytes) {
             throw TotpVaultException(TotpVaultFailure.INVALID_FORMAT)
         }
         val root = try {
@@ -149,11 +170,7 @@ object TotpVaultCrypto {
             throw TotpVaultException(TotpVaultFailure.INVALID_FORMAT, e)
         }
         val format = root.optString("format")
-        val aad = when (format) {
-            FORMAT_TOOLBOX -> AAD_TOOLBOX
-            FORMAT_DORIYA -> AAD_DORIYA
-            else -> throw TotpVaultException(TotpVaultFailure.INVALID_FORMAT)
-        }
+        val aad = formats[format] ?: throw TotpVaultException(TotpVaultFailure.INVALID_FORMAT)
         val version = root.optInt("version", -1)
         if (version != VERSION) {
             throw TotpVaultException(TotpVaultFailure.UNSUPPORTED_VERSION)
@@ -189,7 +206,7 @@ object TotpVaultCrypto {
         } catch (e: Exception) {
             throw TotpVaultException(TotpVaultFailure.WRONG_PASSPHRASE_OR_CORRUPTED, e)
         }
-        return parseEntriesJson(String(decryptedBytes, Charsets.UTF_8))
+        return String(decryptedBytes, Charsets.UTF_8)
     }
 
     internal fun serializeEntriesJson(

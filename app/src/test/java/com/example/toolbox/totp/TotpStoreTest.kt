@@ -91,6 +91,32 @@ class TotpStoreTest {
         assertArrayEquals(byteArrayOf(1, 2, 3), vaultFile.readBytes())
     }
 
+    @Test
+    fun syncMergeKeepsEditsAndNewTokensMadeAfterUploadStarted() {
+        val old = entry("old", "11111111-1111-1111-1111-111111111111").copy(updatedAtMillis = 100L)
+        store.upsert(old)
+        val uploaded = store.queryAllForSync()
+        store.upsert(old.copy(issuer = "edited", updatedAtMillis = 200L))
+        store.upsert(entry("new", "22222222-2222-2222-2222-222222222222"))
+        store.mergeAndSave(uploaded)
+        assertEquals(setOf("edited", "new"), store.queryVisible().map { it.issuer }.toSet())
+    }
+
+    @Test
+    fun restoreCreatesNewRevisionsAndTombstonesThatSurviveNextSync() {
+        val old = entry("old", "11111111-1111-1111-1111-111111111111").copy(updatedAtMillis = 100L)
+        val remote = listOf(old.copy(issuer = "remote", updatedAtMillis = 9000L),
+            entry("omitted", "22222222-2222-2222-2222-222222222222").copy(updatedAtMillis = 8000L))
+        store.replaceAll(remote)
+        store.restore(listOf(old), nowMillis = 500L)
+        store.mergeAndSave(remote)
+        assertEquals(listOf("old"), store.queryVisible().map { it.issuer })
+        assertTrue(store.queryAllForSync().all { it.updatedAtMillis == 9001L })
+        assertEquals(9001L, store.queryAllForSync().single { it.issuer == "omitted" }.deletedAtMillis)
+        store.upsert(store.queryVisible().single().copy(issuer = "edited", updatedAtMillis = 600L))
+        assertEquals(9002L, store.queryVisible().single().updatedAtMillis)
+    }
+
     private fun assertFails(block: () -> Unit) {
         try {
             block()
@@ -105,6 +131,8 @@ class TotpStoreTest {
         issuer = issuer,
         accountName = "user",
         secret = "JBSWY3DPEHPK3PXP",
+        createdAtMillis = 0L,
+        updatedAtMillis = 0L,
     )
 
     private class FakeTotpCipher : TotpLocalCipher {

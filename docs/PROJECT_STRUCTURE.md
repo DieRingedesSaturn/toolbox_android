@@ -79,6 +79,9 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerCalculator.kt
 │   ├── LedgerQuickPicks.kt
 │   ├── SubscriptionRenewals.kt
+│   ├── LedgerBackupVault.kt
+│   ├── BackupRecoveryStore.kt
+│   ├── WebDavHistory.kt
 │   ├── LedgerBackup.kt
 │   ├── LedgerBackupReminder.kt
 │   ├── LedgerBudgets.kt
@@ -111,6 +114,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── ToolboxApp.kt
 │   ├── ToolboxTheme.kt
 │   ├── AccentScheme.kt
+│   ├── BackupDialogs.kt
 │   ├── Components.kt
 │   ├── WindowSize.kt
 │   ├── AppStrings.kt
