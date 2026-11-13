@@ -36,7 +36,10 @@ class MonthlyRegularSpendingTest {
         val result = LedgerCalculator.monthSummary(rows, month, zone)
         assertEquals(156_000L, result.expenseCents)
         assertEquals(156_000L, result.expenseByCategory.sumOf { it.second })
+        assertEquals(10_000L, result.ordinaryExpenseCents)
+        assertEquals(2_000L, result.monthlySubscriptionCents)
         assertEquals(12_000L, result.regularExpenseCents)
+        assertEquals(144_000L, result.oneTimeOutlayCents)
         assertEquals(488_000L, result.regularNetCents)
         assertEquals(344_000L, result.netCents)
         assertEquals(156_000L, LedgerCalculator.groupByDay(rows, month, zone).sumOf { it.expenseCents })
@@ -60,7 +63,10 @@ class MonthlyRegularSpendingTest {
         )
         val result = LedgerCalculator.monthSummary(rows, month, zone)
         assertEquals(rows.size * 10_000L, result.expenseCents)
+        assertEquals(0L, result.ordinaryExpenseCents)
+        assertEquals(20_000L, result.monthlySubscriptionCents)
         assertEquals(20_000L, result.regularExpenseCents)
+        assertEquals(rows.size * 10_000L - 20_000L, result.oneTimeOutlayCents)
     }
 
     @Test
@@ -77,7 +83,10 @@ class MonthlyRegularSpendingTest {
             listOf(monthly, annual, monthlyRenewal, annualRenewal, deleted), month, zone,
         )
         assertEquals(130_000L, result.expenseCents)
+        assertEquals(0L, result.ordinaryExpenseCents)
+        assertEquals(10_000L, result.monthlySubscriptionCents)
         assertEquals(10_000L, result.regularExpenseCents)
+        assertEquals(120_000L, result.oneTimeOutlayCents)
     }
 
     @Test
@@ -88,7 +97,10 @@ class MonthlyRegularSpendingTest {
             entries = listOf(renewal), month = month, zone = zone, referenceEntries = listOf(annual, renewal),
         )
         assertEquals(10_000L, result.expenseCents)
+        assertEquals(0L, result.ordinaryExpenseCents)
+        assertEquals(0L, result.monthlySubscriptionCents)
         assertEquals(0L, result.regularExpenseCents)
+        assertEquals(10_000L, result.oneTimeOutlayCents)
     }
 
     @Test
@@ -97,6 +109,7 @@ class MonthlyRegularSpendingTest {
         val result = LedgerCalculator.monthSummary(listOf(renewal), month, zone)
         assertEquals(10_000L, result.expenseCents)
         assertEquals(0L, result.regularExpenseCents)
+        assertEquals(10_000L, result.oneTimeOutlayCents)
     }
 
     @Test
@@ -139,5 +152,36 @@ class MonthlyRegularSpendingTest {
         assertEquals(expected, summary.activeMonthlyBurnRateYuan, 0.0001)
         assertEquals(1, summary.activeOneTimeCount)
         assertEquals(2, summary.activeSubscriptionCount)
+        val cashMonth = LedgerCalculator.monthSummary(rows, month, zone)
+        assertEquals(10_000L, cashMonth.regularExpenseCents)
+        assertEquals(485_000L, cashMonth.oneTimeOutlayCents)
+    }
+
+    @Test
+    fun monthlyCycleHelperAcceptsOnlyCalendarMonthSubscriptions() {
+        assertEquals(
+            true,
+            LedgerCalculator.isMonthlySubscriptionCycle(subscription("m", BillingCycle.MONTHLY)),
+        )
+        assertEquals(
+            true,
+            LedgerCalculator.isMonthlySubscriptionCycle(
+                subscription("one", BillingCycle.CUSTOM_DAYS).copy(
+                    customCycleDays = 1,
+                    customCycleUnit = CycleUnit.MONTHS,
+                ),
+            ),
+        )
+        assertEquals(
+            false,
+            LedgerCalculator.isMonthlySubscriptionCycle(subscription("y", BillingCycle.YEARLY)),
+        )
+        assertEquals(false, LedgerCalculator.isMonthlySubscriptionCycle(entry("food")))
+        assertEquals(
+            false,
+            LedgerCalculator.isMonthlySubscriptionCycle(
+                entry("asset").copy(costTrackingMode = CostTrackingMode.ONE_TIME_AMORTIZED),
+            ),
+        )
     }
 }

@@ -19,9 +19,17 @@ object LedgerCalculator {
         val expenseCents: Long,
         val incomeCents: Long,
         val expenseByCategory: List<Pair<LedgerCategory, Long>>,
-        /** Ordinary spending plus recorded monthly subscriptions; excludes long-term outlays. */
-        val regularExpenseCents: Long = expenseCents,
+        /** Everyday [CostTrackingMode.NONE] expenses in this month. */
+        val ordinaryExpenseCents: Long = expenseCents,
+        /** Recorded monthly-cycle subscriptions (and their renewals) in this month. */
+        val monthlySubscriptionCents: Long = 0L,
     ) {
+        /** Everyday spending plus recorded monthly subscriptions; used for monthly net. */
+        val regularExpenseCents: Long
+            get() = ordinaryExpenseCents + monthlySubscriptionCents
+        /** Cash outlays excluded from monthly net (assets, non-monthly cycles, orphans). */
+        val oneTimeOutlayCents: Long
+            get() = expenseCents - regularExpenseCents
         val netCents: Long
             get() = incomeCents - expenseCents
         val regularNetCents: Long
@@ -342,7 +350,8 @@ object LedgerCalculator {
         referenceEntries: List<LedgerEntry> = entries,
     ): MonthSummary {
         var expenseCents = 0L
-        var regularExpenseCents = 0L
+        var ordinaryExpenseCents = 0L
+        var monthlySubscriptionCents = 0L
         var incomeCents = 0L
         val expenseByCategory = HashMap<LedgerCategory, Long>()
         // Include tombstoned parents for classification of historical renewals.
@@ -357,8 +366,12 @@ object LedgerCalculator {
                 LedgerEntryType.INCOME -> incomeCents += entry.baseAmountCents
                 LedgerEntryType.EXPENSE -> {
                     expenseCents += entry.baseAmountCents
-                    if (countsAsRegularExpense(entry, byUuid)) {
-                        regularExpenseCents += entry.baseAmountCents
+                    when (expenseKind(entry, byUuid)) {
+                        ExpenseKind.ORDINARY ->
+                            ordinaryExpenseCents += entry.baseAmountCents
+                        ExpenseKind.MONTHLY_SUBSCRIPTION ->
+                            monthlySubscriptionCents += entry.baseAmountCents
+                        ExpenseKind.ONE_TIME -> Unit
                     }
                     expenseByCategory.merge(
                         entry.categoryEnum,
@@ -376,7 +389,8 @@ object LedgerCalculator {
             month = month,
             expenseCents = expenseCents,
             incomeCents = incomeCents,
-            regularExpenseCents = regularExpenseCents,
+            ordinaryExpenseCents = ordinaryExpenseCents,
+            monthlySubscriptionCents = monthlySubscriptionCents,
             expenseByCategory = expenseByCategory.entries
                 .filter { it.value > 0L }
                 .sortedByDescending { it.value }
@@ -408,24 +422,48 @@ object LedgerCalculator {
         return expenseCents to incomeCents
     }
 
-    private fun countsAsRegularExpense(
+    private enum class ExpenseKind {
+        ORDINARY,
+        MONTHLY_SUBSCRIPTION,
+        ONE_TIME,
+    }
+
+    /**
+     * A monthly-cycle subscription: [BillingCycle.MONTHLY], or a custom cycle
+     * of exactly one calendar month. These count toward monthly net; every
+     * other cycle is a one-time outlay for net and still amortizes into
+     * daily holding cost.
+     */
+    internal fun isMonthlySubscriptionCycle(entry: LedgerEntry): Boolean {
+        if (entry.costTrackingMode != CostTrackingMode.PERIODIC_SUBSCRIPTION) return false
+        if (entry.billingCycle == BillingCycle.MONTHLY) return true
+        return entry.billingCycle == BillingCycle.CUSTOM_DAYS &&
+            entry.customCycleUnit == CycleUnit.MONTHS &&
+            entry.customCycleDays == 1
+    }
+
+    private fun expenseKind(
         entry: LedgerEntry,
         byUuid: Map<String, LedgerEntry>,
-    ): Boolean {
+    ): ExpenseKind {
         // Renewal children have mode NONE; their billing rule belongs to the parent.
         // An orphan renewal has no known cycle, so keep it in actual outlays only.
         val source = if (entry.linkType == LINK_TYPE_RENEWAL) {
-            byUuid[entry.parentUuid] ?: return false
+            byUuid[entry.parentUuid] ?: return ExpenseKind.ONE_TIME
         } else {
             entry
         }
         return when (source.costTrackingMode) {
-            CostTrackingMode.NONE -> entry.linkType != LINK_TYPE_RENEWAL
-            CostTrackingMode.ONE_TIME_AMORTIZED -> false
+            CostTrackingMode.NONE ->
+                if (entry.linkType == LINK_TYPE_RENEWAL) ExpenseKind.ONE_TIME
+                else ExpenseKind.ORDINARY
+            CostTrackingMode.ONE_TIME_AMORTIZED -> ExpenseKind.ONE_TIME
             CostTrackingMode.PERIODIC_SUBSCRIPTION ->
-                source.billingCycle == BillingCycle.MONTHLY ||
-                    (source.billingCycle == BillingCycle.CUSTOM_DAYS &&
-                        source.customCycleUnit == CycleUnit.MONTHS && source.customCycleDays == 1)
+                if (isMonthlySubscriptionCycle(source)) {
+                    ExpenseKind.MONTHLY_SUBSCRIPTION
+                } else {
+                    ExpenseKind.ONE_TIME
+                }
         }
     }
 

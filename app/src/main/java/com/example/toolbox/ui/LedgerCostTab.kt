@@ -104,12 +104,6 @@ internal fun LedgerCostTab(
     val burnDaily = costItems
         .filter { it.second.isActive && it.first.type == LedgerEntryType.EXPENSE }
         .sumOf { it.second.dailyCostYuan }
-    val burnMonthly = costItems
-        .filter { it.second.isActive && it.first.type == LedgerEntryType.EXPENSE }
-        .sumOf { it.second.monthlyCostYuan }
-    val incomeMonthly = costItems
-        .filter { it.second.isActive && it.first.type == LedgerEntryType.INCOME }
-        .sumOf { it.second.monthlyCostYuan }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -144,8 +138,6 @@ internal fun LedgerCostTab(
                 listOf(
                     strings.totalDailyCostLabel to
                         "${LedgerCalculator.formatCurrency(burnDaily)}${strings.perDayUnit}",
-                    strings.totalMonthlyCostLabel to
-                        "${LedgerCalculator.formatCurrency(burnMonthly)}${strings.perMonthUnit}",
                     strings.totalYearlyCostLabel to
                         "${LedgerCalculator.formatCurrency(burnDaily * 365.25)}${strings.perYearUnit}",
                 ).forEach { (label, value) ->
@@ -162,15 +154,11 @@ internal fun LedgerCostTab(
                         },
                     )
                 }
-                if (fixedIncomes.isNotEmpty()) {
-                    InfoRow(
-                        label = strings.fixedIncomeSection,
-                        value = strings.incomeMinusCosts(
-                            LedgerCalculator.formatCurrency(incomeMonthly - burnMonthly),
-                        ),
-                        onCopy = {},
-                    )
-                }
+                Text(
+                    text = strings.dailyHoldingCostRule,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -397,8 +385,8 @@ private fun CostCardHeader(
     entry: LedgerEntry,
     breakdown: CostBreakdown,
     status: String,
-    dailyCost: String,
-    monthlyCost: String,
+    primaryRate: String,
+    secondaryRate: String? = null,
     expanded: Boolean,
 ) {
     Row(
@@ -425,7 +413,7 @@ private fun CostCardHeader(
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = dailyCost,
+                text = primaryRate,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = if (breakdown.isActive) {
@@ -434,11 +422,13 @@ private fun CostCardHeader(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
-            Text(
-                text = monthlyCost,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (secondaryRate != null) {
+                Text(
+                    text = secondaryRate,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         Icon(
             painter = painterResource(R.drawable.ic_chevron_right),
@@ -467,7 +457,6 @@ private fun CostAssetCard(
     val context = LocalContext.current
     val zone = remember { ZoneId.systemDefault() }
     val dailyStr = "${LedgerCalculator.formatCurrency(breakdown.dailyCostYuan)}${strings.perDayUnit}"
-    val monthlyStr = "${LedgerCalculator.formatCurrency(breakdown.monthlyCostYuan)}${strings.perMonthUnit}"
     val purchased = Instant.ofEpochMilli(entry.occurredAtMillis)
         .atZone(zone).toLocalDate().toString()
     val metricCells = buildList {
@@ -539,8 +528,12 @@ private fun CostAssetCard(
                     entry.isActiveCost -> strings.statusActiveInUse
                     else -> strings.statusRetired
                 },
-                dailyCost = dailyStr,
-                monthlyCost = monthlyStr,
+                primaryRate = dailyStr,
+                secondaryRate = if (expanded) {
+                    "${strings.totalYearlyCostLabel} ${LedgerCalculator.formatCurrency(breakdown.yearlyCostYuan)}${strings.perYearUnit}"
+                } else {
+                    null
+                },
                 expanded = expanded,
             )
 
@@ -658,7 +651,12 @@ private fun CostSubscriptionCard(
 ) {
     val dateFormatter = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     val dailyStr = "${LedgerCalculator.formatCurrency(breakdown.dailyCostYuan)}${strings.perDayUnit}"
-    val monthlyStr = "${LedgerCalculator.formatCurrency(breakdown.monthlyCostYuan)}${strings.perMonthUnit}"
+    val cycleAmount = LedgerCalculator.formatMoney(entry.amountCents, entry.currency)
+    val cycleLabel = strings.cycleName(
+        entry.billingCycle,
+        entry.customCycleDays,
+        entry.customCycleUnit,
+    )
 
     CostExpandableCard(
         expanded = expanded,
@@ -676,8 +674,12 @@ private fun CostSubscriptionCard(
                     entry.isActiveCost -> strings.statusSubActive
                     else -> strings.statusSubStopped
                 },
-                dailyCost = dailyStr,
-                monthlyCost = monthlyStr,
+                primaryRate = dailyStr,
+                secondaryRate = if (expanded) {
+                    "$cycleLabel $cycleAmount · ${strings.cycleCashInPaymentMonth}"
+                } else {
+                    null
+                },
                 expanded = expanded,
             )
 
@@ -685,8 +687,7 @@ private fun CostSubscriptionCard(
 
             if (expanded) {
                 Text(
-                    text = "${strings.cycleName(entry.billingCycle, entry.customCycleDays, entry.customCycleUnit)} · " +
-                        LedgerCalculator.formatMoney(entry.amountCents, entry.currency),
+                    text = "$cycleLabel · $cycleAmount · ${strings.cycleCashInPaymentMonth}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -209,35 +210,84 @@ private fun MonthSummaryCard(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            val expenseText = LedgerCalculator.formatCurrency(monthSummary.regularExpenseCents / 100.0)
             val tabularHeadline = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum")
-            val tabularTitle = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum")
-            Text(
-                text = strings.monthlyRegularExpenseLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = expenseText,
-                style = tabularHeadline,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.clickable {
-                    copyToClipboard(
-                        context = context,
-                        label = strings.monthlyRegularExpenseLabel,
-                        value = expenseText,
-                        copiedMessage = strings.copied(strings.monthlyRegularExpenseLabel),
-                    )
+            val netText = (if (monthSummary.regularNetCents > 0) "+" else "") +
+                LedgerCalculator.formatCurrency(monthSummary.regularNetCents / 100.0)
+            MonthAmountCell(
+                label = strings.monthNetLabel,
+                amountText = netText,
+                copiedMessage = strings.copied(strings.monthNetLabel),
+                amountStyle = tabularHeadline,
+                amountWeight = FontWeight.Bold,
+                amountColor = if (monthSummary.regularNetCents >= 0) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
                 },
             )
+            val incomeText = "+" + LedgerCalculator.formatCurrency(monthSummary.incomeCents / 100.0)
+            val ordinaryText = LedgerCalculator.formatCurrency(monthSummary.ordinaryExpenseCents / 100.0)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                MonthAmountCell(
+                    label = strings.monthIncomeLabel,
+                    amountText = incomeText,
+                    copiedMessage = strings.copied(strings.monthIncomeLabel),
+                    modifier = Modifier.weight(1f),
+                    amountColor = MaterialTheme.colorScheme.primary,
+                )
+                MonthAmountCell(
+                    label = strings.ordinaryExpenseLabel,
+                    amountText = ordinaryText,
+                    copiedMessage = strings.copied(strings.ordinaryExpenseLabel),
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.End,
+                )
+            }
+            val hasMonthly = monthSummary.monthlySubscriptionCents > 0L
+            val hasOneTime = monthSummary.oneTimeOutlayCents > 0L
+            if (hasMonthly || hasOneTime) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    if (hasMonthly) {
+                        MonthAmountCell(
+                            label = strings.monthlySubscriptionExpenseLabel,
+                            amountText = LedgerCalculator.formatCurrency(
+                                monthSummary.monthlySubscriptionCents / 100.0,
+                            ),
+                            copiedMessage = strings.copied(strings.monthlySubscriptionExpenseLabel),
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                    if (hasOneTime) {
+                        MonthAmountCell(
+                            label = strings.oneTimeOutlayLabel,
+                            amountText = LedgerCalculator.formatCurrency(
+                                monthSummary.oneTimeOutlayCents / 100.0,
+                            ),
+                            copiedMessage = strings.copied(strings.oneTimeOutlayLabel),
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.End,
+                            caption = strings.oneTimeOutlayCaption,
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
             val monthlyBudget = budgets.monthlyCents
-            if (monthlyBudget != null || monthSummary.expenseCents != monthSummary.regularExpenseCents) {
+            if (monthlyBudget != null) {
                 val actualExpenseText = LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0)
                 Text(
                     text = strings.actualMonthExpenseLine(
                         actualExpenseText,
-                        forBudget = monthlyBudget != null,
+                        forBudget = true,
                     ),
                     modifier = Modifier.clickable {
                         copyToClipboard(
@@ -250,8 +300,6 @@ private fun MonthSummaryCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-            if (monthlyBudget != null) {
                 val progress = BudgetProgress(monthlyBudget, monthSummary.expenseCents)
                 val budgetText = LedgerCalculator.formatCurrency(monthlyBudget / 100.0)
                 BudgetBar(progress, Modifier.fillMaxWidth())
@@ -291,65 +339,53 @@ private fun MonthSummaryCard(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                val incomeText = "+" + LedgerCalculator.formatCurrency(monthSummary.incomeCents / 100.0)
-                Column(
-                    modifier = Modifier.clickable {
-                        copyToClipboard(
-                            context = context,
-                            label = strings.monthIncomeLabel,
-                            value = incomeText,
-                            copiedMessage = strings.copied(strings.monthIncomeLabel),
-                        )
-                    },
-                ) {
-                    Text(
-                        text = strings.monthIncomeLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = incomeText,
-                        style = tabularTitle,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                val netText = (if (monthSummary.regularNetCents > 0) "+" else "") +
-                    LedgerCalculator.formatCurrency(monthSummary.regularNetCents / 100.0)
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    modifier = Modifier.clickable {
-                        copyToClipboard(
-                            context = context,
-                            label = strings.monthNetLabel,
-                            value = netText,
-                            copiedMessage = strings.copied(strings.monthNetLabel),
-                        )
-                    },
-                ) {
-                    Text(
-                        text = strings.monthNetLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = netText,
-                        style = tabularTitle,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (monthSummary.regularNetCents >= 0) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.error
-                        },
-                    )
-                }
-            }
             Text(
                 text = strings.monthlyRegularSpendingRule,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MonthAmountCell(
+    label: String,
+    amountText: String,
+    copiedMessage: String,
+    modifier: Modifier = Modifier,
+    horizontalAlignment: Alignment.Horizontal = Alignment.Start,
+    amountStyle: TextStyle = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"),
+    amountWeight: FontWeight = FontWeight.SemiBold,
+    amountColor: Color = MaterialTheme.colorScheme.onSurface,
+    caption: String? = null,
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = modifier.clickable {
+            copyToClipboard(
+                context = context,
+                label = label,
+                value = amountText,
+                copiedMessage = copiedMessage,
+            )
+        },
+        horizontalAlignment = horizontalAlignment,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = amountText,
+            style = amountStyle,
+            fontWeight = amountWeight,
+            color = amountColor,
+        )
+        if (caption != null) {
+            Text(
+                text = caption,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -386,8 +422,7 @@ private fun DailyCostCard(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "${LedgerCalculator.formatCurrency(summary.activeMonthlyBurnRateYuan)}${strings.perMonthUnit}" +
-                    " · ${LedgerCalculator.formatCurrency(summary.activeYearlyBurnRateYuan)}${strings.perYearUnit}",
+                text = "${strings.totalYearlyCostLabel} ${LedgerCalculator.formatCurrency(summary.activeYearlyBurnRateYuan)}${strings.perYearUnit}",
                 style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -398,6 +433,11 @@ private fun DailyCostCard(
                 ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = strings.dailyHoldingCostRule,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

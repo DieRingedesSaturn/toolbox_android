@@ -1290,8 +1290,8 @@ internal fun LedgerEntryEditor(
 
                             if (previewBreakdown != null) {
                                 val daily = LedgerCalculator.formatCurrency(previewBreakdown.dailyCostYuan)
-                                val monthly = LedgerCalculator.formatCurrency(previewBreakdown.monthlyCostYuan)
                                 val yearly = LedgerCalculator.formatCurrency(previewBreakdown.yearlyCostYuan)
+                                val previewText = strings.holdingCostPreview(daily, yearly)
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -1300,7 +1300,7 @@ internal fun LedgerEntryEditor(
                                         .padding(12.dp),
                                 ) {
                                     Text(
-                                        text = strings.averageCostPreview(daily, monthly, yearly),
+                                        text = previewText,
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,

@@ -1007,30 +1007,50 @@ class ToolboxStrings(val language: AppLanguage) {
     fun monthEntriesCount(count: Int): String =
         if (chinese) "$count 笔" else "$count entr${if (count == 1) "y" else "ies"}"
     val dailyBurnRateTitle: String
-        get() = if (chinese) "平均持有与订阅成本看板" else "Average Usage & Subscription Cost"
+        get() = if (chinese) "持有成本看板" else "Holding cost"
     val totalDailyCostLabel: String
-        get() = if (chinese) "每日固定持有总成本" else "Total Daily Burn Rate"
-    val totalMonthlyCostLabel: String
-        get() = if (chinese) "每月等效固定成本" else "Equivalent Monthly Cost"
+        get() = if (chinese) "日均持有" else "Daily holding"
     val totalYearlyCostLabel: String
-        get() = if (chinese) "每年等效固定成本" else "Equivalent Yearly Cost"
+        get() = if (chinese) "折合每年" else "Yearly equivalent"
     val monthExpenseLabel: String
         get() = if (chinese) "本月支出" else "Spending"
     val monthlyRegularExpenseLabel: String
-        get() = if (chinese) "本月日常支出" else "Monthly regular spending"
+        get() = if (chinese) "日常与月付" else "Everyday + monthly"
+    val ordinaryExpenseLabel: String
+        get() = if (chinese) "日常支出" else "Everyday"
+    val monthlySubscriptionExpenseLabel: String
+        get() = if (chinese) "月付订阅" else "Monthly subs"
+    val oneTimeOutlayLabel: String
+        get() = if (chinese) "一次性支出" else "One-time"
+    val oneTimeOutlayCaption: String
+        get() = if (chinese) "不计入结余" else "Excluded from net"
     val actualMonthExpenseLabel: String
         get() = if (chinese) "实际支出" else "Actual outlays"
     val monthlyRegularSpendingRule: String
         get() = if (chinese) {
-            "结余仅扣除普通支出和当月已入账的月付订阅；长期一次性购买、年付等其他周期订阅计入实际支出和平均成本。"
+            "结余只扣日常支出和已入账的月付订阅。年付、周付等周期款只计入实际付款的那个月，记一次性支出，不摊进结余。"
         } else {
-            "Net deducts ordinary spending and recorded monthly subscriptions. Long-term purchases and other subscription cycles remain in actual outlays and average costs."
+            "Net deducts everyday spending and recorded monthly subscriptions. Yearly, weekly, and other cycle payments count only in the month they are paid, as one-time outlays."
         }
+    val dailyHoldingCostRule: String
+        get() = if (chinese) {
+            "摊销持有，不是本月现金支出。周期付款只计入实际付款的那个月。"
+        } else {
+            "Amortized holding, not this month's cash spending. Cycle payments count only in the month they are paid."
+        }
+    val cycleCashInPaymentMonth: String
+        get() = if (chinese) "计入付款月" else "Counts in the payment month"
     fun actualMonthExpenseLine(amount: String, forBudget: Boolean = false): String =
         if (chinese) {
             "实际支出 $amount" + if (forBudget) "（预算按此计算）" else ""
         } else {
             "Actual outlays $amount" + if (forBudget) " (used for budget)" else ""
+        }
+    fun oneTimeOutlayLine(amount: String): String =
+        if (chinese) {
+            "一次性支出 $amount（不计入结余）"
+        } else {
+            "One-time $amount (excluded from net)"
         }
     val monthIncomeLabel: String
         get() = if (chinese) "收入" else "Income"
@@ -1215,7 +1235,7 @@ class ToolboxStrings(val language: AppLanguage) {
     val noExpenseThisMonth: String
         get() = if (chinese) "本月暂无支出" else "No expenses this month"
     val dailyCostCaption: String
-        get() = if (chinese) "日均持有成本" else "Daily cost"
+        get() = if (chinese) "日均持有成本" else "Daily holding cost"
     val recentEntriesTitle: String
         get() = if (chinese) "最近记录" else "Recent"
     val seeAllAction: String
@@ -2307,11 +2327,6 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "固定收入（周期性）" else "Recurring income"
     val fixedIncomeSection: String
         get() = if (chinese) "固定收入" else "Fixed income"
-    fun incomeMinusCosts(monthly: String): String = if (chinese) {
-        "固定收入 − 固定支出 = 每月 $monthly"
-    } else {
-        "Fixed income − fixed costs = $monthly/mo"
-    }
     fun accumulatedPayments(count: Int, total: String): String = if (chinese) {
         "累计支付 $count 次 · 合计 $total"
     } else {
@@ -2569,11 +2584,11 @@ class ToolboxStrings(val language: AppLanguage) {
     val csvTagsHeader: String
         get() = if (chinese) "标签" else "Tags"
 
-    fun averageCostPreview(daily: String, monthly: String, yearly: String): String =
+    fun holdingCostPreview(daily: String, yearly: String): String =
         if (chinese) {
-            "平均成本折算：$daily$perDayUnit  ·  $monthly$perMonthUnit  ·  $yearly$perYearUnit"
+            "日均持有 $daily$perDayUnit · 折合每年 $yearly$perYearUnit。摊销不是每月实付。"
         } else {
-            "Average cost: $daily$perDayUnit  ·  $monthly$perMonthUnit  ·  $yearly$perYearUnit"
+            "Daily holding $daily$perDayUnit · $yearly$perYearUnit amortized. Not monthly cash."
         }
 
     // Multi-WebDAV settings & TOTP

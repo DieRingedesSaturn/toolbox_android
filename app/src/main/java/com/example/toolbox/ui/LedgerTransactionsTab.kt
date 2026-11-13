@@ -383,18 +383,18 @@ internal fun LedgerTransactionsTab(
                         }
                     }
                     Text(
-                        text = "${strings.monthlyRegularExpenseLabel} ${LedgerCalculator.formatCurrency(monthSummary.regularExpenseCents / 100.0)}" +
+                        text = "${strings.monthNetLabel} ${LedgerCalculator.formatCurrency(monthSummary.regularNetCents / 100.0)}" +
                             " · ${strings.monthIncomeLabel} ${LedgerCalculator.formatCurrency(monthSummary.incomeCents / 100.0)}" +
-                            " · ${strings.monthNetLabel} ${LedgerCalculator.formatCurrency(monthSummary.regularNetCents / 100.0)}",
+                            " · ${strings.monthlyRegularExpenseLabel} ${LedgerCalculator.formatCurrency(monthSummary.regularExpenseCents / 100.0)}",
                         modifier = Modifier.fillMaxWidth(),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
-                    if (monthSummary.expenseCents != monthSummary.regularExpenseCents) {
+                    if (monthSummary.oneTimeOutlayCents > 0L) {
                         Text(
-                            text = strings.actualMonthExpenseLine(
-                                LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0),
+                            text = strings.oneTimeOutlayLine(
+                                LedgerCalculator.formatCurrency(monthSummary.oneTimeOutlayCents / 100.0),
                             ),
                             modifier = Modifier.fillMaxWidth(),
                             style = MaterialTheme.typography.labelSmall,
