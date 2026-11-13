@@ -13,7 +13,7 @@ import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
 import com.example.toolbox.location.formatShortCoordinates
-import com.example.toolbox.ui.ToolboxStrings
+import com.example.toolbox.ui.*
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat

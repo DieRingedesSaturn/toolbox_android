@@ -137,8 +137,9 @@ data class CostBreakdown(
     val dailyCostYuan: Double,
     val monthlyCostYuan: Double,
     val yearlyCostYuan: Double,
-    val targetDailyCostYuan: Double?,
-    val targetMonthlyCostYuan: Double?,
+    /** Held-to-date daily cost for one-time assets; null for subscriptions. */
+    val actualDailyCostYuan: Double?,
+    val actualMonthlyCostYuan: Double?,
     val nextRenewalMillis: Long?,
     val daysUntilRenewal: Int?,
     val accumulatedCyclesCount: Int,

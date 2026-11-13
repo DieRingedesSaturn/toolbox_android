@@ -10,7 +10,7 @@ import android.widget.RemoteViews
 import com.example.toolbox.MainActivity
 import com.example.toolbox.R
 import com.example.toolbox.ui.AppPreferences
-import com.example.toolbox.ui.ToolboxStrings
+import com.example.toolbox.ui.*
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId

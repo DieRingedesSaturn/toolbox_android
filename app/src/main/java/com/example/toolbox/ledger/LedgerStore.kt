@@ -2,15 +2,16 @@ package com.example.toolbox.ledger
 
 import android.content.ContentValues
 import android.content.Context
-import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
-import android.database.sqlite.SQLiteOpenHelper
 import androidx.core.database.sqlite.transaction
-import com.example.toolbox.ui.AppPreferences
-import com.example.toolbox.ui.ToolboxStrings
+import com.example.toolbox.ui.*
 import java.io.File
 import org.json.JSONArray
+
+import com.example.toolbox.ledger.LedgerDb.Companion.TABLE_ENTRIES
+import com.example.toolbox.ledger.LedgerDb.Companion.TABLE_TAGS
+import com.example.toolbox.ledger.LedgerDb.Companion.TABLE_ACCOUNTS
 
 class LedgerUpgradeBackupException(cause: Exception) :
     IllegalStateException("Cannot save the pre-upgrade ledger copy", cause)
@@ -18,307 +19,9 @@ class LedgerUpgradeBackupException(cause: Exception) :
 class LedgerStore private constructor(
     context: Context,
     databaseName: String,
-    private val snapshotBeforeUpgrade: Boolean,
-) : SQLiteOpenHelper(
-    context.applicationContext,
-    databaseName,
-    null,
-    DATABASE_VERSION,
-    { throw SQLiteException("Ledger database is corrupt") },
-) {
+    snapshotBeforeUpgrade: Boolean,
+) : LedgerDb(context, databaseName, snapshotBeforeUpgrade) {
     constructor(context: Context) : this(context, DATABASE_NAME, true)
-
-    private val appContext = context.applicationContext
-
-    override fun onConfigure(db: SQLiteDatabase) {
-        super.onConfigure(db)
-        val fromVersion = db.version
-        if (snapshotBeforeUpgrade && fromVersion in 1 until DATABASE_VERSION) {
-            try {
-                db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use {
-                    check(it.moveToFirst() && it.getInt(0) == 0) { "Ledger checkpoint is busy" }
-                }
-                LedgerDbSnapshots.save(
-                    dbFile = File(db.path),
-                    dir = File(appContext.noBackupFilesDir, LedgerDbSnapshots.DIR_NAME),
-                    fromVersion = fromVersion,
-                    nowMillis = System.currentTimeMillis(),
-                )
-            } catch (failure: Exception) {
-                // Stop before onUpgrade; the old database remains untouched.
-                throw LedgerUpgradeBackupException(failure)
-            }
-        }
-    }
-
-    override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS $TABLE_ENTRIES (
-                uuid TEXT PRIMARY KEY NOT NULL,
-                title TEXT NOT NULL,
-                amount_cents INTEGER NOT NULL,
-                currency TEXT NOT NULL,
-                fx_rate_to_cny REAL NOT NULL DEFAULT 1.0,
-                fx_rate_date TEXT,
-                fx_rate_source TEXT,
-                parent_uuid TEXT,
-                link_type TEXT,
-                renewal_index INTEGER,
-                disposal_type TEXT,
-                tag_uuids TEXT NOT NULL DEFAULT '[]',
-                type TEXT NOT NULL,
-                category TEXT NOT NULL,
-                occurred_at INTEGER NOT NULL,
-                note TEXT NOT NULL,
-                cost_tracking_mode TEXT NOT NULL,
-                salvage_value_cents INTEGER NOT NULL,
-                target_days INTEGER,
-                retired_at INTEGER,
-                cost_ends_at INTEGER,
-                billing_cycle TEXT NOT NULL,
-                custom_cycle_days INTEGER NOT NULL,
-                custom_cycle_unit TEXT NOT NULL DEFAULT 'DAYS',
-                is_active_cost INTEGER NOT NULL,
-                account_uuid TEXT,
-                account_amount_cents INTEGER,
-                to_account_uuid TEXT,
-                to_amount_cents INTEGER,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL,
-                deleted_at INTEGER,
-                sync_status TEXT NOT NULL,
-                server_revision INTEGER NOT NULL
-            )
-            """.trimIndent(),
-        )
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_ledger_occurred ON $TABLE_ENTRIES(occurred_at DESC)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_ledger_sync ON $TABLE_ENTRIES(sync_status, updated_at)")
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS $TABLE_TAGS (
-                uuid TEXT PRIMARY KEY NOT NULL,
-                name TEXT NOT NULL,
-                color INTEGER NOT NULL,
-                emoji TEXT NOT NULL,
-                sort_order INTEGER NOT NULL,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL,
-                deleted_at INTEGER,
-                sync_status TEXT NOT NULL
-            )
-            """.trimIndent(),
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS $TABLE_ACCOUNTS (
-                uuid TEXT PRIMARY KEY NOT NULL,
-                name TEXT NOT NULL,
-                currency TEXT NOT NULL,
-                opening_balance_cents INTEGER NOT NULL,
-                opening_at INTEGER NOT NULL,
-                color INTEGER NOT NULL,
-                emoji TEXT NOT NULL,
-                sort_order INTEGER NOT NULL,
-                is_archived INTEGER NOT NULL,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL,
-                deleted_at INTEGER,
-                sync_status TEXT NOT NULL
-            )
-            """.trimIndent(),
-        )
-        seedAccounts(db)
-    }
-
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion < 2) {
-            db.execSQL(
-                "ALTER TABLE $TABLE_ENTRIES " +
-                    "ADD COLUMN fx_rate_to_cny REAL NOT NULL DEFAULT 1.0",
-            )
-            db.execSQL(
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN fx_rate_date TEXT",
-            )
-        }
-        if (oldVersion < 3) {
-            db.execSQL(
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN parent_uuid TEXT",
-            )
-            db.execSQL(
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN link_type TEXT",
-            )
-            db.execSQL(
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN renewal_index INTEGER",
-            )
-            db.execSQL(
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN fx_rate_source TEXT",
-            )
-            db.execSQL(
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN disposal_type TEXT",
-            )
-            db.execSQL(
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN custom_cycle_unit TEXT NOT NULL DEFAULT 'DAYS'",
-            )
-            db.execSQL(
-                "ALTER TABLE $TABLE_ENTRIES " +
-                    "ADD COLUMN tag_uuids TEXT NOT NULL DEFAULT '[]'",
-            )
-            db.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS $TABLE_TAGS (
-                    uuid TEXT PRIMARY KEY NOT NULL,
-                    name TEXT NOT NULL,
-                    color INTEGER NOT NULL,
-                    emoji TEXT NOT NULL,
-                    sort_order INTEGER NOT NULL,
-                    created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL,
-                    deleted_at INTEGER,
-                    sync_status TEXT NOT NULL
-                )
-                """.trimIndent(),
-            )
-            db.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS $TABLE_ACCOUNTS (
-                    uuid TEXT PRIMARY KEY NOT NULL,
-                    name TEXT NOT NULL,
-                    currency TEXT NOT NULL,
-                    opening_balance_cents INTEGER NOT NULL,
-                    opening_at INTEGER NOT NULL,
-                    color INTEGER NOT NULL,
-                    emoji TEXT NOT NULL,
-                    sort_order INTEGER NOT NULL,
-                    is_archived INTEGER NOT NULL,
-                    created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL,
-                    deleted_at INTEGER,
-                    sync_status TEXT NOT NULL
-                )
-                """.trimIndent(),
-            )
-            listOf(
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN account_uuid TEXT",
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN account_amount_cents INTEGER",
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN to_account_uuid TEXT",
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN to_amount_cents INTEGER",
-            ).forEach { db.execSQL(it) }
-            val producedUuids = backfillEntryTags(db)
-            // Only the category tags the backfill actually referenced are
-            // seeded — the rest were retired in v4.
-            seedCategoryTags(db, producedUuids)
-            seedAccounts(db)
-            backfillEntryAccounts(db)
-        }
-        if (oldVersion < 4) {
-            // v4: unused untouched default tags are tombstoned; new installs
-            // start with zero tags. Only defaults never renamed/edited
-            // (still stamped updated_at = 0) and unreferenced by any live
-            // entry are retired — tombstones are left alone.
-            val strings = ToolboxStrings(AppPreferences(appContext).language())
-            val defaultUuids = LedgerTags.defaultTags(
-                LedgerCategory.entries.associateWith { strings.ledgerCategory(it) },
-            ).mapTo(HashSet()) { it.uuid }
-            val tags = queryTags(db, includeDeleted = false)
-            val unused = tags.filter { it.uuid in defaultUuids }.let { defaults ->
-                LedgerTags.unusedDefaultTagUuids(defaults, liveEntryTagUuids(db))
-            }
-            if (unused.isNotEmpty()) {
-                val now = System.currentTimeMillis()
-                for (uuid in unused) {
-                    db.update(
-                        TABLE_TAGS,
-                        ContentValues().apply {
-                            put("deleted_at", now)
-                            put("updated_at", now)
-                            put("sync_status", LedgerSyncStatus.PENDING_PUSH.name)
-                        },
-                        "uuid = ?",
-                        arrayOf(uuid),
-                    )
-                }
-            }
-        }
-        if (oldVersion < 5) {
-            db.execSQL(
-                "ALTER TABLE $TABLE_ENTRIES ADD COLUMN cost_ends_at INTEGER",
-            )
-        }
-    }
-
-    /** Seeds the shared default account (localized name, epoch-0 LWW). */
-    private fun seedAccounts(db: SQLiteDatabase) {
-        val strings = ToolboxStrings(AppPreferences(appContext).language())
-        db.insertWithOnConflict(
-            TABLE_ACCOUNTS,
-            null,
-            toAccountValues(LedgerAccounts.defaultAccount(strings.defaultAccountName)),
-            SQLiteDatabase.CONFLICT_IGNORE,
-        )
-    }
-
-    /** Legacy entries post to the default account. */
-    private fun backfillEntryAccounts(db: SQLiteDatabase) {
-        db.execSQL(
-            "UPDATE $TABLE_ENTRIES SET account_uuid = ? WHERE account_uuid IS NULL",
-            arrayOf(LedgerAccounts.DEFAULT_ACCOUNT_UUID),
-        )
-    }
-
-    /**
-     * Inserts only the category-derived default tags whose uuid is in
-     * [uuids] (names localized for the current app language).
-     * CONFLICT_IGNORE never revives a tombstoned tag.
-     */
-    private fun seedCategoryTags(db: SQLiteDatabase, uuids: Set<String>) {
-        if (uuids.isEmpty()) return
-        val strings = ToolboxStrings(AppPreferences(appContext).language())
-        val names = LedgerCategory.entries.associateWith { strings.ledgerCategory(it) }
-        for (tag in LedgerTags.defaultTags(names)) {
-            if (tag.uuid !in uuids) continue
-            db.insertWithOnConflict(
-                TABLE_TAGS,
-                null,
-                toTagValues(tag),
-                SQLiteDatabase.CONFLICT_IGNORE,
-            )
-        }
-    }
-
-    /**
-     * Gives every entry one tag uuid derived from its legacy category.
-     * Returns the set of default-tag uuids it wrote.
-     */
-    private fun backfillEntryTags(db: SQLiteDatabase): Set<String> {
-        val produced = HashSet<String>()
-        db.query(
-            TABLE_ENTRIES,
-            arrayOf("uuid", "category"),
-            null,
-            null,
-            null,
-            null,
-            null,
-        ).use { cursor ->
-            while (cursor.moveToNext()) {
-                val uuid = cursor.getString(0)
-                val category = LedgerCategory.fromStorage(cursor.getString(1))
-                val tagUuid = LedgerTags.categoryTagUuid(category)
-                produced += tagUuid
-                val tagUuids = JSONArray()
-                    .put(tagUuid)
-                    .toString()
-                db.update(
-                    TABLE_ENTRIES,
-                    ContentValues().apply { put("tag_uuids", tagUuids) },
-                    "uuid = ? AND (tag_uuids IS NULL OR tag_uuids = '[]')",
-                    arrayOf(uuid),
-                )
-            }
-        }
-        return produced
-    }
 
     fun upsert(entry: LedgerEntry) {
         val now = System.currentTimeMillis()
@@ -335,6 +38,7 @@ class LedgerStore private constructor(
         check(rowId != -1L) { "Ledger entry write failed" }
         notifyChanged()
     }
+
 
     fun softDelete(uuid: String) {
         val now = System.currentTimeMillis()
@@ -353,6 +57,7 @@ class LedgerStore private constructor(
         notifyChanged()
     }
 
+
     fun toggleActiveStatus(entry: LedgerEntry, isActive: Boolean) {
         val now = System.currentTimeMillis()
         val updated = entry.copy(
@@ -363,6 +68,7 @@ class LedgerStore private constructor(
         )
         upsert(updated)
     }
+
 
     fun queryVisibleEntries(): List<LedgerEntry> {
         val result = mutableListOf<LedgerEntry>()
@@ -382,6 +88,7 @@ class LedgerStore private constructor(
         return result
     }
 
+
     fun queryAllEntriesForSync(): List<LedgerEntry> {
         val result = mutableListOf<LedgerEntry>()
         readableDatabase.query(
@@ -399,6 +106,7 @@ class LedgerStore private constructor(
         }
         return result
     }
+
 
     fun importSyncPayload(payload: LedgerSyncPayload): Int {
         var mergedCount = 0
@@ -458,6 +166,7 @@ class LedgerStore private constructor(
      * CONFLICT_REPLACE without re-stamping updatedAt — they carry the
      * timestamp and PENDING_PUSH status assigned by [LedgerBackup.planReplace].
      */
+
     fun applyReplace(plan: ReplacePlan) {
         val db = writableDatabase
         db.transaction {
@@ -494,6 +203,7 @@ class LedgerStore private constructor(
      * CONFLICT_IGNORE leaves an existing row (live or tombstone) untouched so
      * re-running never duplicates.
      */
+
     fun insertIfAbsent(entries: List<LedgerEntry>) {
         if (entries.isEmpty()) return
         val db = writableDatabase
@@ -516,6 +226,7 @@ class LedgerStore private constructor(
      * a live income row for SOLD, or its tombstone when undoing. Written
      * verbatim via CONFLICT_REPLACE, so a previous tombstoned sale revives.
      */
+
     fun applyDisposal(updatedAsset: LedgerEntry, saleEntry: LedgerEntry?) {
         val db = writableDatabase
         db.transaction {
@@ -538,6 +249,7 @@ class LedgerStore private constructor(
     }
 
     /** Validate and migrate an isolated copy, then replace rows atomically. */
+
     fun restoreSnapshot(snapshot: File, nowMillis: Long = System.currentTimeMillis()) {
         val payload = LedgerDbSnapshots.withStagedCopy(snapshot, appContext.cacheDir) { staged ->
             validateSnapshot(staged)
@@ -582,6 +294,7 @@ class LedgerStore private constructor(
         notifyChanged()
     }
 
+
     private fun validateSnapshot(file: File) {
         // A non-deleting handler prevents SQLite's default corruption recovery
         // from silently turning a broken snapshot into a new, empty ledger.
@@ -597,6 +310,7 @@ class LedgerStore private constructor(
         }
     }
 
+
     private fun replaceSnapshotRows(db: SQLiteDatabase, payload: LedgerSyncPayload) {
         db.delete(TABLE_ENTRIES, null, null)
         db.delete(TABLE_TAGS, null, null)
@@ -606,9 +320,11 @@ class LedgerStore private constructor(
         payload.entries.forEach { db.insertOrThrow(TABLE_ENTRIES, null, toContentValues(it)) }
     }
 
+
     private fun notifyChanged() {
         runCatching { LedgerWidget.refreshAll(appContext) }
     }
+
 
     private fun queryTagUpdatedAt(db: SQLiteDatabase, uuid: String): Long? =
         db.query(
@@ -622,6 +338,7 @@ class LedgerStore private constructor(
         ).use { cursor ->
             if (cursor.moveToFirst()) cursor.getLong(0) else null
         }
+
 
     private fun queryUpdatedAt(db: SQLiteDatabase, uuid: String): Long? {
         db.query(
@@ -637,143 +354,11 @@ class LedgerStore private constructor(
         }
     }
 
-    private fun toContentValues(entry: LedgerEntry): ContentValues = ContentValues().apply {
-        put("uuid", entry.uuid)
-        put("title", entry.title)
-        put("amount_cents", entry.amountCents)
-        put("currency", entry.currency)
-        put("fx_rate_to_cny", entry.fxRateToCny)
-        if (entry.fxRateDate != null) {
-            put("fx_rate_date", entry.fxRateDate)
-        } else {
-            putNull("fx_rate_date")
-        }
-        put("fx_rate_source", entry.fxRateSource)
-        put("parent_uuid", entry.parentUuid)
-        put("link_type", entry.linkType)
-        if (entry.renewalIndex != null) {
-            put("renewal_index", entry.renewalIndex)
-        } else {
-            putNull("renewal_index")
-        }
-        put("disposal_type", entry.disposalType)
-        put(
-            "tag_uuids",
-            JSONArray().apply { entry.tagUuids.forEach { put(it) } }.toString(),
-        )
-        put("type", entry.type.name)
-        put("category", entry.category)
-        put("occurred_at", entry.occurredAtMillis)
-        put("note", entry.note)
-        put("cost_tracking_mode", entry.costTrackingMode.name)
-        put("salvage_value_cents", entry.salvageValueCents)
-        if (entry.targetDays != null) put("target_days", entry.targetDays) else putNull("target_days")
-        if (entry.retiredAtMillis != null) put("retired_at", entry.retiredAtMillis) else putNull("retired_at")
-        if (entry.costEndsAtMillis != null) {
-            put("cost_ends_at", entry.costEndsAtMillis)
-        } else {
-            putNull("cost_ends_at")
-        }
-        put("billing_cycle", entry.billingCycle.name)
-        put("custom_cycle_days", entry.customCycleDays)
-        put("custom_cycle_unit", entry.customCycleUnit.name)
-        put("is_active_cost", if (entry.isActiveCost) 1 else 0)
-        put("account_uuid", entry.accountUuid)
-        put("account_amount_cents", entry.accountAmountCents)
-        put("to_account_uuid", entry.toAccountUuid)
-        put("to_amount_cents", entry.toAmountCents)
-        put("created_at", entry.createdAtMillis)
-        put("updated_at", entry.updatedAtMillis)
-        if (entry.deletedAtMillis != null) put("deleted_at", entry.deletedAtMillis) else putNull("deleted_at")
-        put("sync_status", entry.syncStatus.name)
-        put("server_revision", entry.serverRevision)
-    }
-
-    private fun parseTagUuids(raw: String?): List<String> =
-        runCatching {
-            val array = JSONArray(raw ?: "[]")
-            (0 until array.length()).map { array.getString(it) }
-        }.getOrDefault(emptyList())
-
-    private fun toTagValues(tag: LedgerTag): ContentValues = ContentValues().apply {
-        put("uuid", tag.uuid)
-        put("name", tag.name)
-        put("color", tag.colorArgb)
-        put("emoji", tag.emoji)
-        put("sort_order", tag.sortOrder)
-        put("created_at", tag.createdAtMillis)
-        put("updated_at", tag.updatedAtMillis)
-        if (tag.deletedAtMillis != null) {
-            put("deleted_at", tag.deletedAtMillis)
-        } else {
-            putNull("deleted_at")
-        }
-        put("sync_status", tag.syncStatus.name)
-    }
-
-    private fun tagFromCursor(cursor: Cursor): LedgerTag {
-        val deletedIdx = cursor.getColumnIndexOrThrow("deleted_at")
-        return LedgerTag(
-            uuid = cursor.getString(cursor.getColumnIndexOrThrow("uuid")),
-            name = cursor.getString(cursor.getColumnIndexOrThrow("name")),
-            colorArgb = cursor.getInt(cursor.getColumnIndexOrThrow("color")),
-            emoji = cursor.getString(cursor.getColumnIndexOrThrow("emoji")),
-            sortOrder = cursor.getInt(cursor.getColumnIndexOrThrow("sort_order")),
-            createdAtMillis = cursor.getLong(cursor.getColumnIndexOrThrow("created_at")),
-            updatedAtMillis = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at")),
-            deletedAtMillis = if (cursor.isNull(deletedIdx)) {
-                null
-            } else {
-                cursor.getLong(deletedIdx)
-            },
-            syncStatus = runCatching {
-                LedgerSyncStatus.valueOf(
-                    cursor.getString(cursor.getColumnIndexOrThrow("sync_status")),
-                )
-            }.getOrDefault(LedgerSyncStatus.PENDING_PUSH),
-        )
-    }
 
     fun queryTags(includeDeleted: Boolean = false): List<LedgerTag> =
         queryTags(readableDatabase, includeDeleted)
 
-    private fun queryTags(db: SQLiteDatabase, includeDeleted: Boolean): List<LedgerTag> {
-        val result = mutableListOf<LedgerTag>()
-        db.query(
-            TABLE_TAGS,
-            null,
-            if (includeDeleted) null else "deleted_at IS NULL",
-            null,
-            null,
-            null,
-            "sort_order ASC, name ASC",
-        ).use { cursor ->
-            while (cursor.moveToNext()) {
-                result.add(tagFromCursor(cursor))
-            }
-        }
-        return result
-    }
 
-    private fun liveEntryTagUuids(db: SQLiteDatabase): Set<String> {
-        val used = HashSet<String>()
-        db.query(
-            TABLE_ENTRIES,
-            arrayOf("tag_uuids"),
-            "deleted_at IS NULL",
-            null,
-            null,
-            null,
-            null,
-        ).use { cursor ->
-            while (cursor.moveToNext()) {
-                used += parseTagUuids(cursor.getString(0))
-            }
-        }
-        return used
-    }
-
-    /** All live entries — used by the tag merge paths. */
     private fun queryLiveEntriesFor(db: SQLiteDatabase): List<LedgerEntry> {
         val result = mutableListOf<LedgerEntry>()
         db.query(
@@ -792,6 +377,7 @@ class LedgerStore private constructor(
         return result
     }
 
+
     fun upsertTag(tag: LedgerTag) {
         val updated = tag.copy(
             updatedAtMillis = System.currentTimeMillis(),
@@ -805,6 +391,7 @@ class LedgerStore private constructor(
         )
         notifyChanged()
     }
+
 
     fun softDeleteTag(uuid: String) {
         val now = System.currentTimeMillis()
@@ -825,6 +412,7 @@ class LedgerStore private constructor(
      * Writes sort_order = index for [orderedUuids] in one transaction;
      * only rows whose order actually changed get a new updatedAt stamp.
      */
+
     fun reorderTags(orderedUuids: List<String>) {
         val now = System.currentTimeMillis()
         val db = writableDatabase
@@ -853,6 +441,7 @@ class LedgerStore private constructor(
      * Merge tag [fromUuid] into [toUuid]: live entries carrying A get B
      * instead (deduped), then A is tombstoned — all in one transaction.
      */
+
     fun mergeTag(fromUuid: String, toUuid: String) {
         if (fromUuid == toUuid) return
         val now = System.currentTimeMillis()
@@ -893,6 +482,7 @@ class LedgerStore private constructor(
      * Adds [add] and/or removes [remove] on the given entries in one
      * transaction; only entries whose tag list actually changes are written.
      */
+
     fun updateEntryTags(
         entryUuids: Collection<String>,
         add: String?,
@@ -925,6 +515,7 @@ class LedgerStore private constructor(
         notifyChanged()
     }
 
+
     private fun queryAccountUpdatedAt(db: SQLiteDatabase, uuid: String): Long? =
         db.query(
             TABLE_ACCOUNTS,
@@ -936,59 +527,6 @@ class LedgerStore private constructor(
             null,
         ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else null }
 
-    private fun toAccountValues(account: LedgerAccount): ContentValues =
-        ContentValues().apply {
-            put("uuid", account.uuid)
-            put("name", account.name)
-            put("currency", account.currency)
-            put("opening_balance_cents", account.openingBalanceCents)
-            put("opening_at", account.openingAtMillis)
-            put("color", account.colorArgb)
-            put("emoji", account.emoji)
-            put("sort_order", account.sortOrder)
-            put("is_archived", if (account.isArchived) 1 else 0)
-            put("created_at", account.createdAtMillis)
-            put("updated_at", account.updatedAtMillis)
-            if (account.deletedAtMillis != null) {
-                put("deleted_at", account.deletedAtMillis)
-            } else {
-                putNull("deleted_at")
-            }
-            put("sync_status", account.syncStatus.name)
-        }
-
-    private fun accountFromCursor(cursor: Cursor): LedgerAccount {
-        val deletedIdx = cursor.getColumnIndexOrThrow("deleted_at")
-        return LedgerAccount(
-            uuid = cursor.getString(cursor.getColumnIndexOrThrow("uuid")),
-            name = cursor.getString(cursor.getColumnIndexOrThrow("name")),
-            currency = cursor.getString(cursor.getColumnIndexOrThrow("currency")),
-            openingBalanceCents = cursor.getLong(
-                cursor.getColumnIndexOrThrow("opening_balance_cents"),
-            ),
-            openingAtMillis = cursor.getLong(
-                cursor.getColumnIndexOrThrow("opening_at"),
-            ),
-            colorArgb = cursor.getInt(cursor.getColumnIndexOrThrow("color")),
-            emoji = cursor.getString(cursor.getColumnIndexOrThrow("emoji")),
-            sortOrder = cursor.getInt(cursor.getColumnIndexOrThrow("sort_order")),
-            isArchived = cursor.getInt(
-                cursor.getColumnIndexOrThrow("is_archived"),
-            ) != 0,
-            createdAtMillis = cursor.getLong(cursor.getColumnIndexOrThrow("created_at")),
-            updatedAtMillis = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at")),
-            deletedAtMillis = if (cursor.isNull(deletedIdx)) {
-                null
-            } else {
-                cursor.getLong(deletedIdx)
-            },
-            syncStatus = runCatching {
-                LedgerSyncStatus.valueOf(
-                    cursor.getString(cursor.getColumnIndexOrThrow("sync_status")),
-                )
-            }.getOrDefault(LedgerSyncStatus.PENDING_PUSH),
-        )
-    }
 
     fun queryAccounts(includeDeleted: Boolean = false): List<LedgerAccount> {
         val result = mutableListOf<LedgerAccount>()
@@ -1008,6 +546,7 @@ class LedgerStore private constructor(
         return result
     }
 
+
     fun upsertAccount(account: LedgerAccount) {
         val updated = account.copy(
             updatedAtMillis = System.currentTimeMillis(),
@@ -1021,6 +560,7 @@ class LedgerStore private constructor(
         )
         notifyChanged()
     }
+
 
     fun softDeleteAccount(uuid: String) {
         val now = System.currentTimeMillis()
@@ -1037,87 +577,7 @@ class LedgerStore private constructor(
         notifyChanged()
     }
 
-    private fun nullableString(cursor: Cursor, column: String): String? {
-        val idx = cursor.getColumnIndexOrThrow(column)
-        return if (cursor.isNull(idx)) null else cursor.getString(idx)
-    }
-
-    private fun nullableLong(cursor: Cursor, column: String): Long? {
-        val idx = cursor.getColumnIndexOrThrow(column)
-        return if (cursor.isNull(idx)) null else cursor.getLong(idx)
-    }
-
-    private fun fromCursor(cursor: Cursor): LedgerEntry {
-        val targetDaysIdx = cursor.getColumnIndexOrThrow("target_days")
-        val fxRateDateIdx = cursor.getColumnIndexOrThrow("fx_rate_date")
-        val renewalIndexIdx = cursor.getColumnIndexOrThrow("renewal_index")
-        val retiredAtIdx = cursor.getColumnIndexOrThrow("retired_at")
-        val deletedAtIdx = cursor.getColumnIndexOrThrow("deleted_at")
-
-        return LedgerEntry(
-            uuid = cursor.getString(cursor.getColumnIndexOrThrow("uuid")),
-            title = cursor.getString(cursor.getColumnIndexOrThrow("title")),
-            amountCents = cursor.getLong(cursor.getColumnIndexOrThrow("amount_cents")),
-            currency = cursor.getString(cursor.getColumnIndexOrThrow("currency")),
-            fxRateToCny = cursor.getDouble(cursor.getColumnIndexOrThrow("fx_rate_to_cny")),
-            fxRateDate = if (cursor.isNull(fxRateDateIdx)) {
-                null
-            } else {
-                cursor.getString(fxRateDateIdx)
-            },
-            fxRateSource = nullableString(cursor, "fx_rate_source"),
-            parentUuid = nullableString(cursor, "parent_uuid"),
-            linkType = nullableString(cursor, "link_type"),
-            renewalIndex = if (cursor.isNull(renewalIndexIdx)) {
-                null
-            } else {
-                cursor.getInt(renewalIndexIdx)
-            },
-            disposalType = nullableString(cursor, "disposal_type"),
-            tagUuids = parseTagUuids(
-                cursor.getString(cursor.getColumnIndexOrThrow("tag_uuids")),
-            ),
-            type = runCatching {
-                LedgerEntryType.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("type")))
-            }.getOrDefault(LedgerEntryType.EXPENSE),
-            category = cursor.getString(cursor.getColumnIndexOrThrow("category")),
-            occurredAtMillis = cursor.getLong(cursor.getColumnIndexOrThrow("occurred_at")),
-            note = cursor.getString(cursor.getColumnIndexOrThrow("note")),
-            costTrackingMode = runCatching {
-                CostTrackingMode.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("cost_tracking_mode")))
-            }.getOrDefault(CostTrackingMode.NONE),
-            salvageValueCents = cursor.getLong(cursor.getColumnIndexOrThrow("salvage_value_cents")),
-            targetDays = if (cursor.isNull(targetDaysIdx)) null else cursor.getInt(targetDaysIdx),
-            retiredAtMillis = if (cursor.isNull(retiredAtIdx)) null else cursor.getLong(retiredAtIdx),
-            costEndsAtMillis = nullableLong(cursor, "cost_ends_at"),
-            billingCycle = runCatching {
-                BillingCycle.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("billing_cycle")))
-            }.getOrDefault(BillingCycle.MONTHLY),
-            customCycleDays = cursor.getInt(cursor.getColumnIndexOrThrow("custom_cycle_days")),
-            customCycleUnit = cursor.getString(
-                cursor.getColumnIndexOrThrow("custom_cycle_unit"),
-            )?.let { runCatching { CycleUnit.valueOf(it) }.getOrNull() }
-                ?: CycleUnit.DAYS,
-            isActiveCost = cursor.getInt(cursor.getColumnIndexOrThrow("is_active_cost")) != 0,
-            accountUuid = nullableString(cursor, "account_uuid"),
-            accountAmountCents = nullableLong(cursor, "account_amount_cents"),
-            toAccountUuid = nullableString(cursor, "to_account_uuid"),
-            toAmountCents = nullableLong(cursor, "to_amount_cents"),
-            createdAtMillis = cursor.getLong(cursor.getColumnIndexOrThrow("created_at")),
-            updatedAtMillis = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at")),
-            deletedAtMillis = if (cursor.isNull(deletedAtIdx)) null else cursor.getLong(deletedAtIdx),
-            syncStatus = runCatching {
-                LedgerSyncStatus.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("sync_status")))
-            }.getOrDefault(LedgerSyncStatus.PENDING_PUSH),
-            serverRevision = cursor.getLong(cursor.getColumnIndexOrThrow("server_revision")),
-        )
-    }
-
     companion object {
-        internal const val DATABASE_NAME = "toolbox_ledger.db"
-        private const val DATABASE_VERSION = 5
-        private const val TABLE_ENTRIES = "ledger_entries"
-        private const val TABLE_TAGS = "ledger_tags"
-        private const val TABLE_ACCOUNTS = "ledger_accounts"
+        internal const val DATABASE_NAME = LedgerDb.DATABASE_NAME
     }
 }

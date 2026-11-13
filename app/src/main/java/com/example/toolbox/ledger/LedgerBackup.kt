@@ -60,7 +60,7 @@ object LedgerBackup {
             val existing = localByUuid[entry.uuid]
             when {
                 existing == null -> added++
-                entry.updatedAtMillis > existing.updatedAtMillis -> updated++
+                entry.updatedAtMillis >= existing.updatedAtMillis -> updated++
                 else -> unchanged++
             }
         }

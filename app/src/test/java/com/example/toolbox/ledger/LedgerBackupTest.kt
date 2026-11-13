@@ -149,8 +149,8 @@ class LedgerBackupTest {
         )
         val preview = LedgerBackup.previewMerge(local, incoming)
         assertEquals(1, preview.added)
-        assertEquals(1, preview.updated)
-        assertEquals(2, preview.unchanged)
+        assertEquals(2, preview.updated)
+        assertEquals(1, preview.unchanged)
     }
 
     @Test

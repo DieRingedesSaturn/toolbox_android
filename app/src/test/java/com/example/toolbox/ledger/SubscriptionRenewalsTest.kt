@@ -199,7 +199,10 @@ class SubscriptionRenewalsTest {
         assertEquals(subscription.uuid, renewal.parentUuid)
         assertEquals(LINK_TYPE_RENEWAL, renewal.linkType)
         assertEquals(2, renewal.renewalIndex)
-        assertEquals(CostTrackingMode.NONE, renewal.costTrackingMode)
+        assertEquals(subscription.costTrackingMode, renewal.costTrackingMode)
+        assertEquals(subscription.billingCycle, renewal.billingCycle)
+        assertEquals(subscription.tagUuids, renewal.tagUuids)
+        assertNull(renewal.costEndsAtMillis)
         assertEquals(LedgerSyncStatus.PENDING_PUSH, renewal.syncStatus)
         // 09-22 at the parent's 09:30 local time.
         val renewalLocal = java.time.Instant.ofEpochMilli(renewal.occurredAtMillis)

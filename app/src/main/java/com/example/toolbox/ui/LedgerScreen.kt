@@ -1,31 +1,16 @@
 package com.example.toolbox.ui
 
-import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.draw.clip
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -34,7 +19,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -47,17 +31,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -70,116 +51,29 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.toolbox.R
-import com.example.toolbox.ledger.BackupException
-import com.example.toolbox.ledger.BackupFailure
-import com.example.toolbox.fx.FxException
-import com.example.toolbox.fx.FxFailure
 import com.example.toolbox.fx.FxRateStore
 import com.example.toolbox.fx.FxRates
-import com.example.toolbox.fx.FxSource
-import com.example.toolbox.totp.TotpStore
-import com.example.toolbox.ledger.CostTrackingMode
-import com.example.toolbox.ledger.DISPOSAL_SOLD
-import com.example.toolbox.ledger.DueRenewal
-import com.example.toolbox.ledger.FX_SOURCE_MANUAL
-import com.example.toolbox.ledger.LINK_TYPE_SALE
 import com.example.toolbox.ledger.LedgerAccount
-import com.example.toolbox.ledger.LedgerAccounts
-import com.example.toolbox.ledger.LedgerBackup
-import com.example.toolbox.ledger.LedgerBackupVault
-import com.example.toolbox.ledger.BackupRecoveryStore
 import com.example.toolbox.ledger.LedgerBackupReminder
-import com.example.toolbox.ledger.LedgerBackupStatusStore
-import com.example.toolbox.ledger.LedgerBudgetStore
-import com.example.toolbox.ledger.LedgerBudgets
 import com.example.toolbox.ledger.LedgerCalculator
-import com.example.toolbox.ledger.LedgerCategory
-import com.example.toolbox.ledger.LedgerCsv
-import com.example.toolbox.ledger.LedgerDbSnapshots
-import com.example.toolbox.ledger.LedgerDuplicateMatcher
 import com.example.toolbox.ledger.NotificationBookkeeping
 import com.example.toolbox.ledger.LedgerEntry
-import com.example.toolbox.ledger.LedgerEntryType
 import com.example.toolbox.ledger.LedgerQuickPicks
 import com.example.toolbox.ledger.LedgerStore
 import com.example.toolbox.ledger.LedgerUpgradeBackupException
-import com.example.toolbox.ledger.LedgerSyncPayload
-import com.example.toolbox.ledger.LedgerSyncSerializer
-import com.example.toolbox.ledger.LedgerSyncStatus
 import com.example.toolbox.ledger.LedgerTag
 import com.example.toolbox.ledger.LedgerTags
-import com.example.toolbox.ledger.BackupTool
-import com.example.toolbox.totp.TotpVaultException
-import com.example.toolbox.ledger.ReplacePlan
-import com.example.toolbox.ledger.LedgerWebDavSync
-import com.example.toolbox.ledger.NotificationLedgerCandidate
-import com.example.toolbox.ledger.NotificationLedgerDefaults
-import com.example.toolbox.ledger.NotificationLedgerStore
-import com.example.toolbox.ledger.NotificationPayment
-import com.example.toolbox.ledger.NotificationPaymentDirection
 import com.example.toolbox.ledger.SubscriptionRenewals
 import com.example.toolbox.ledger.TagFilterMode
-import com.example.toolbox.ledger.WebDavConfig
-import com.example.toolbox.ledger.WebDavConfigStore
-import com.example.toolbox.ledger.WebDavException
-import com.example.toolbox.ledger.WebDavFailure
-import com.example.toolbox.ledger.WebDavServiceProfile
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.io.IOException
-import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.UUID
-import kotlin.math.roundToLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val LEDGER_TAB_COUNT = 4
-
-private val notificationDraftSaver = listSaver<Pair<NotificationLedgerCandidate, Long>?, Any>(
-    save = { draft ->
-        draft?.let {
-            listOf(
-                it.first.id,
-                it.first.packageName,
-                it.first.occurredAtMillis,
-                it.second,
-                it.first.amountsCents.joinToString(","),
-                it.first.payment?.direction?.name ?: "",
-                it.first.payment?.amountCents ?: 0L,
-                it.first.payment?.label ?: "",
-                it.first.payment?.confident ?: false,
-            )
-        } ?: emptyList()
-    },
-    restore = { values ->
-        if (values.size != 9) null else {
-            val amount = values[3] as Long
-            val payment = (values[5] as String).takeIf { it.isNotEmpty() }?.let { name ->
-                runCatching {
-                    NotificationPayment(
-                        direction = NotificationPaymentDirection.valueOf(name),
-                        amountCents = values[6] as Long,
-                        label = (values[7] as String).takeIf { it.isNotEmpty() },
-                        confident = values[8] as Boolean,
-                    )
-                }.getOrNull()
-            }
-            NotificationLedgerCandidate(
-                id = values[0] as String,
-                packageName = values[1] as String,
-                occurredAtMillis = values[2] as Long,
-                amountsCents = (values[4] as String).split(',').mapNotNull { it.toLongOrNull() },
-                payment = payment,
-            ) to amount
-        }
-    },
-)
 
 internal data class LedgerSnapshot(
     val entries: List<LedgerEntry>,
@@ -216,84 +110,19 @@ internal fun LedgerScreen(
     var entriesLoaded by remember { mutableStateOf(cachedSnapshot != null) }
     var loadError by remember { mutableStateOf<Throwable?>(null) }
     var selectedTab by rememberSaveable { mutableIntStateOf(tabRequest ?: 0) }
-    var editingUuid by rememberSaveable { mutableStateOf<String?>(null) }
-    var pendingDeleteUuid by rememberSaveable { mutableStateOf<String?>(null) }
-    var showEditor by rememberSaveable { mutableStateOf(false) }
-    var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
-    var pendingReplace by remember { mutableStateOf<PendingReplace?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
-    var overviewOrder by remember { mutableStateOf(preferences.ledgerOverviewOrder()) }
-    var showOverviewOrderDialog by rememberSaveable { mutableStateOf(false) }
     var selectedMonthName by rememberSaveable {
         mutableStateOf(YearMonth.now().toString())
     }
-    var ledgerPassphrase by remember(context) {
-        mutableStateOf(TotpStore(context).savedDefaultBackupPassphrase().orEmpty())
-    }
-    var pendingBackupAction by remember { mutableStateOf<((String) -> Unit)?>(null) }
-    var showBackupHistory by remember { mutableStateOf(false) }
-    var showWebDavDialog by rememberSaveable { mutableStateOf(false) }
-    var showNotificationLedgerDialog by rememberSaveable { mutableStateOf(false) }
-    var notificationDraft by rememberSaveable(stateSaver = notificationDraftSaver) {
-        mutableStateOf<Pair<NotificationLedgerCandidate, Long>?>(null)
-    }
-    var notificationDefaults by remember { mutableStateOf<NotificationLedgerDefaults?>(null) }
-    var notificationLastAccount by remember { mutableStateOf<String?>(null) }
-    var entrySaveBusy by remember { mutableStateOf(false) }
-    var pendingDuplicateEntry by remember { mutableStateOf<LedgerEntry?>(null) }
-    var duplicateMatches by remember { mutableStateOf<List<LedgerEntry>>(emptyList()) }
-    val webDavStore = remember(context) { WebDavConfigStore(context) }
-    var webDavConfigVersion by remember { mutableIntStateOf(0) }
-    var webDavConfig by remember { mutableStateOf<WebDavConfig?>(null) }
-    var webDavTargets by remember { mutableStateOf<List<WebDavServiceProfile>>(emptyList()) }
-    var webDavPasswordUnavailable by remember { mutableStateOf(false) }
-    var webDavLastSyncAt by remember { mutableStateOf<Long?>(null) }
-    var webDavStatusLoaded by remember { mutableStateOf(false) }
-    val backupStatusStore = remember(context) { LedgerBackupStatusStore(context) }
-    var lastFileExportAt by remember { mutableStateOf<Long?>(null) }
-    var backupSnoozedUntil by remember { mutableStateOf<Long?>(null) }
-    var backupStatusLoaded by remember { mutableStateOf(false) }
-    var webDavBusyAction by remember { mutableStateOf<WebDavBusyAction?>(null) }
-    var webDavLastResult by remember { mutableStateOf<String?>(null) }
     var tags by remember { mutableStateOf(cachedSnapshot?.tags.orEmpty()) }
     var accounts by remember { mutableStateOf(cachedSnapshot?.accounts.orEmpty()) }
-    var detailAccount by remember { mutableStateOf<LedgerAccount?>(null) }
     var latestFxRates by remember { mutableStateOf(cachedSnapshot?.latestFxRates) }
-    var renewalBusy by remember { mutableStateOf(false) }
-    var renewalRateIssue by remember { mutableStateOf<RenewalRateIssue?>(null) }
-    var nearestForIssue by remember { mutableStateOf<Map<LocalDate, FxRates>>(emptyMap()) }
-    var confirmSkipDues by remember { mutableStateOf<List<DueRenewal>?>(null) }
-    var selectedEntryUuids by remember { mutableStateOf<Set<String>>(emptySet()) }
     // Non-null while the ledger search box is open; "" means "just opened".
     var searchQuery by rememberSaveable { mutableStateOf<String?>(null) }
-    var bulkTagPickAdd by remember { mutableStateOf(false) }
-    var bulkTagPickRemove by remember { mutableStateOf(false) }
     // True when the tags dialog opened from the ledger screen (entry rows
     // navigate to the editor); false when opened from inside the editor.
-    var tagsDialogEntryNav by remember { mutableStateOf(true) }
-    var disposalTarget by remember { mutableStateOf<LedgerEntry?>(null) }
-    var disposalStartAsSale by remember { mutableStateOf(true) }
-    var undoDisposalTarget by remember { mutableStateOf<LedgerEntry?>(null) }
-    var stopSubTarget by remember { mutableStateOf<LedgerEntry?>(null) }
-    var showTagsDialog by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
-    val budgetStore = remember(context) { LedgerBudgetStore(context) }
-    var budgets by remember { mutableStateOf(LedgerBudgets()) }
-    var showBudgetDialog by remember { mutableStateOf(false) }
     var showSnapshotDialog by rememberSaveable { mutableStateOf(false) }
-    var snapshots by remember {
-        mutableStateOf<List<LedgerDbSnapshots.Snapshot>?>(null)
-    }
-    var selectedSnapshot by remember {
-        mutableStateOf<LedgerDbSnapshots.Snapshot?>(null)
-    }
-    var restoreBusy by remember { mutableStateOf(false) }
-    val snapshotDir = remember(context) {
-        File(context.noBackupFilesDir, LedgerDbSnapshots.DIR_NAME)
-    }
-    val snapshotTimeFormat = remember {
-        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-    }
     var filterTagCsv by rememberSaveable { mutableStateOf("") }
     var filterModeName by rememberSaveable {
         mutableStateOf(TagFilterMode.ANY.name)
@@ -305,35 +134,6 @@ internal fun LedgerScreen(
         .getOrDefault(TagFilterMode.ANY)
     val zone = ZoneId.systemDefault()
     val fxStore = remember(context) { FxRateStore(context.applicationContext) }
-
-    LaunchedEffect(webDavConfigVersion) {
-        val loaded = withContext(Dispatchers.IO) {
-            val targets = webDavStore.selectedServices(BackupTool.LEDGER)
-            val cfg = webDavStore.load()
-            val unavailable = webDavStore.isPasswordUnavailable()
-            val lastSync = webDavStore.lastSyncAtMillis()
-            listOf(targets, cfg, unavailable, lastSync)
-        }
-        @Suppress("UNCHECKED_CAST")
-        webDavTargets = loaded[0] as List<WebDavServiceProfile>
-        webDavConfig = loaded[1] as? WebDavConfig
-        webDavPasswordUnavailable = loaded[2] as Boolean
-        webDavLastSyncAt = loaded[3] as? Long
-        webDavStatusLoaded = true
-    }
-
-    LaunchedEffect(budgetStore) {
-        budgets = withContext(Dispatchers.IO) { budgetStore.load() }
-    }
-
-    LaunchedEffect(backupStatusStore) {
-        val loaded = withContext(Dispatchers.IO) {
-            backupStatusStore.lastFileExportAtMillis() to backupStatusStore.snoozedUntilMillis()
-        }
-        lastFileExportAt = loaded.first
-        backupSnoozedUntil = loaded.second
-        backupStatusLoaded = true
-    }
 
     fun reloadEntries() {
         scope.launch {
@@ -365,18 +165,43 @@ internal fun LedgerScreen(
         reloadEntries()
     }
 
-    LaunchedEffect(notificationDraft) {
-        notificationDefaults = null
-        notificationDraft?.first?.let { candidate ->
-            val loaded = withContext(Dispatchers.IO) {
-                NotificationLedgerStore(context).defaultsFor(candidate.packageName) to
-                    AppPreferences(context).ledgerLastAccount()
-            }
-            notificationLastAccount = loaded.second
-            notificationDefaults = loaded.first
-        }
+    val managementSession = remember(context, store, strings) {
+        LedgerManagementSession(
+            context, store, scope, strings,
+            { LedgerSnapshot(entries, allEntries, tags, accounts, latestFxRates) },
+            preferences.ledgerOverviewOrder(), ::reloadEntries,
+        )
     }
-
+    val editorSaver = LedgerEditorSession.saver(
+        context, store, scope, strings,
+        snapshot = { LedgerSnapshot(entries, allEntries, tags, accounts, latestFxRates) },
+        loaded = { entriesLoaded },
+        onChanged = ::reloadEntries,
+        onManageTags = {
+            managementSession.tagsDialogEntryNav = false
+            managementSession.showTagsDialog = true
+        },
+    )
+    val editorSession = rememberSaveable(context, store, strings, saver = editorSaver) {
+        LedgerEditorSession(
+            context, store, scope, strings,
+            { LedgerSnapshot(entries, allEntries, tags, accounts, latestFxRates) }, { entriesLoaded },
+            ::reloadEntries,
+            {
+                managementSession.tagsDialogEntryNav = false
+                managementSession.showTagsDialog = true
+            },
+        )
+    }
+    val backupSession = remember(context, store, strings) {
+        LedgerBackupSession(context, store, scope, strings, ::reloadEntries, onOpenSettings)
+    }
+    val costSession = remember(context, store, strings) {
+        LedgerCostSession(context, store, scope, strings, { accounts }, { allEntries }, ::reloadEntries)
+    }
+    LaunchedEffect(managementSession) { managementSession.initialize() }
+    LaunchedEffect(backupSession) { backupSession.initialize() }
+    LaunchedEffect(backupSession.webDavConfigVersion) { backupSession.reloadStatus() }
     LaunchedEffect(tabRequest) {
         if (tabRequest != null) {
             selectedTab = tabRequest
@@ -394,75 +219,19 @@ internal fun LedgerScreen(
         snapshotFlow { pagerState.settledPage }.collect { page ->
             if (page != selectedTab) {
                 selectedTab = page
-                selectedEntryUuids = emptySet()
+                managementSession.selectedEntryUuids = emptySet()
             }
         }
     }
 
     LaunchedEffect(openEditorRequested) {
         if (openEditorRequested) {
-            editingUuid = null
-            notificationDraft = null
-            showEditor = true
+            editorSession.openEditor(null)
             onEditorRequestHandled()
         }
     }
 
-    fun restoreSnapshot(snapshot: LedgerDbSnapshots.Snapshot) {
-        if (restoreBusy) return
-        restoreBusy = true
-        scope.launch {
-            val restored = withContext(Dispatchers.IO) {
-                runCatching {
-                    store.restoreSnapshot(snapshot.file)
-                }.isSuccess
-            }
-            restoreBusy = false
-            if (restored) {
-                selectedSnapshot = null
-                showSnapshotDialog = false
-                Toast.makeText(
-                    context,
-                    strings.snapshotRestored,
-                    Toast.LENGTH_LONG,
-                ).show()
-                reloadEntries()
-            } else {
-                Toast.makeText(
-                    context,
-                    strings.snapshotRestoreFailed,
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-        }
-    }
-
-    fun openEditor(entry: LedgerEntry?) {
-        editingUuid = entry?.uuid
-        notificationDraft = null
-        showEditor = true
-    }
-
-    fun copyEntry(entry: LedgerEntry) {
-        copyToClipboard(
-            context = context,
-            label = entry.title,
-            value = ledgerEntryLine(
-                strings,
-                entry,
-                entry.tagUuids.mapNotNull { uuid ->
-                    tags.firstOrNull {
-                        it.uuid == uuid && it.deletedAtMillis == null
-                    }?.name
-                },
-                accounts.associate { it.uuid to it.name },
-            ),
-            copiedMessage = strings.copied(entry.title),
-        )
-    }
-
     val nowMillis = remember(entries) { System.currentTimeMillis() }
-    val quickPicks = remember(entries) { LedgerQuickPicks.from(entries, nowMillis) }
     val filteredEntries = remember(entries, filterSelected, filterMode) {
         entries.filter { LedgerTags.matches(it, filterSelected, filterMode) }
     }
@@ -499,751 +268,28 @@ internal fun LedgerScreen(
     }
     val selectedMonth = runCatching { YearMonth.parse(selectedMonthName) }
         .getOrElse { YearMonth.now() }
-    val editingEntry = editingUuid?.let { uuid ->
-        entries.firstOrNull { it.uuid == uuid }
-    }
-    val pendingDeleteEntry = pendingDeleteUuid?.let { uuid ->
-        entries.firstOrNull { it.uuid == uuid }
-    }
-
     // The referenced entry may be gone after a reload (deleted elsewhere).
-    LaunchedEffect(showEditor, editingUuid, entriesLoaded, editingEntry) {
-        if (showEditor && editingUuid != null && entriesLoaded && editingEntry == null) {
-            showEditor = false
-            editingUuid = null
+    LaunchedEffect(editorSession.showEditor, editorSession.editingUuid, entriesLoaded, editorSession.editingEntry) {
+        if (editorSession.showEditor && editorSession.editingUuid != null && entriesLoaded && editorSession.editingEntry == null) {
+            editorSession.showEditor = false
+            editorSession.editingUuid = null
         }
     }
-    LaunchedEffect(pendingDeleteUuid, pendingDeleteEntry, entriesLoaded) {
-        if (pendingDeleteUuid != null && pendingDeleteEntry == null && entriesLoaded) {
-            pendingDeleteUuid = null
-        }
-    }
-
-    fun toggleActive(entry: LedgerEntry) {
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                store.toggleActiveStatus(entry, !entry.isActiveCost)
-            }
-            reloadEntries()
-        }
-    }
-
-    /** Writes the built renewal rows; shared by the record/retry paths. */
-    fun commitRenewals(
-        dues: List<DueRenewal>,
-        ratesByDate: Map<LocalDate, FxRates>,
-        manualRate: Double? = null,
-    ) {
-        val now = System.currentTimeMillis()
-        val built = mutableListOf<LedgerEntry>()
-        val stillUnresolved = mutableSetOf<LocalDate>()
-        for (due in dues) {
-            val sub = due.subscription
-            val rates = ratesByDate[due.date]
-            // The chain-resolved rate always wins; the manual input only
-            // covers dates the chain could not resolve.
-            val cny = if (sub.currency == "CNY") {
-                1.0
-            } else {
-                rates?.cnyPerUnit(sub.currency)?.takeIf { it > 0 } ?: manualRate
-            }
-            if (cny == null || cny <= 0) {
-                stillUnresolved += due.date
-                continue
-            }
-            val account = accounts.firstOrNull {
-                it.uuid == (sub.accountUuid ?: LedgerAccounts.DEFAULT_ACCOUNT_UUID) &&
-                    it.deletedAtMillis == null
-            }
-            val needsAccountConversion = account != null && account.currency != sub.currency
-            val accountRate = if (needsAccountConversion) {
-                if (account.currency == "CNY") {
-                    1.0
-                } else {
-                    rates?.cnyPerUnit(account.currency)?.takeIf { it > 0 }
-                }
-            } else {
-                null
-            }
-            if (needsAccountConversion && accountRate == null) {
-                // Never post a renewal using the previous cycle's account
-                // amount while the base amount uses this cycle's rate.
-                stillUnresolved += due.date
-                continue
-            }
-            val accountAmountCents = if (needsAccountConversion) {
-                LedgerAccounts.accountAmountForEntry(sub.amountCents, cny, accountRate!!)
-            } else {
-                null
-            }
-            val date = if (sub.currency == "CNY") null else rates?.date
-            val source = if (sub.currency == "CNY") null else {
-                rates?.source?.id ?: FX_SOURCE_MANUAL
-            }
-            built += SubscriptionRenewals.buildRenewal(
-                sub,
-                due,
-                cny,
-                date,
-                source,
-                zone,
-                now,
-                accountAmountCents = accountAmountCents,
-            )
-        }
-        if (stillUnresolved.isNotEmpty()) {
-            // Nothing is written until every date has a rate — reopen the
-            // issue dialog for the dates still missing one.
-            scope.launch {
-                val nearest = withContext(Dispatchers.IO) {
-                    stillUnresolved.mapNotNull { date ->
-                        fxStore.nearestCached(date)?.let { date to it }
-                    }.toMap()
-                }
-                nearestForIssue = nearest
-                renewalRateIssue = RenewalRateIssue(
-                    dues = dues,
-                    resolved = ratesByDate,
-                    unresolvedDates = stillUnresolved.sorted(),
-                    attempts = renewalRateIssue?.attempts.orEmpty(),
-                )
-            }
-            return
-        }
-        scope.launch {
-            withContext(Dispatchers.IO) { store.insertIfAbsent(built) }
-            reloadEntries()
-            Toast.makeText(
-                context,
-                strings.renewalsRecorded(built.size),
-                Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
-
-    /** Resolves each due date's rate via the fallback chain, then writes. */
-    fun recordRenewals(dues: List<DueRenewal>) {
-        if (renewalBusy) return
-        renewalBusy = true
-        scope.launch {
-            var attempts: List<Pair<FxSource, FxFailure>> = emptyList()
-            val outcome = withContext(Dispatchers.IO) {
-                val datesNeedingRates = dues
-                    .filter { due ->
-                        val sub = due.subscription
-                        val account = accounts.firstOrNull {
-                            it.uuid == (sub.accountUuid ?: LedgerAccounts.DEFAULT_ACCOUNT_UUID) &&
-                                it.deletedAtMillis == null
-                        }
-                        sub.currency != "CNY" ||
-                            (account != null && account.currency != sub.currency &&
-                                account.currency != "CNY")
-                    }
-                    .map { it.date }
-                    .toSet()
-                val resolved = if (datesNeedingRates.isEmpty()) {
-                    emptyMap()
-                } else {
-                    try {
-                        fxStore.ratesForDates(datesNeedingRates, fetchIfMissing = true)
-                    } catch (e: FxException) {
-                        attempts = e.attempts
-                        emptyMap()
-                    }
-                }
-                val unresolved = datesNeedingRates.filter { it !in resolved }.sorted()
-                resolved to unresolved
-            }
-            renewalBusy = false
-            val unresolved = outcome.second
-            if (unresolved.isEmpty()) {
-                commitRenewals(dues, outcome.first)
-            } else {
-                scope.launch {
-                    val nearest = withContext(Dispatchers.IO) {
-                        unresolved.mapNotNull { date ->
-                            fxStore.nearestCached(date)?.let { date to it }
-                        }.toMap()
-                    }
-                    nearestForIssue = nearest
-                    renewalRateIssue = RenewalRateIssue(
-                        dues = dues,
-                        resolved = outcome.first,
-                        unresolvedDates = unresolved,
-                        attempts = attempts,
-                    )
-                }
-            }
-        }
-    }
-
-    fun skipRenewals(dues: List<DueRenewal>) {
-        if (renewalBusy) return
-        renewalBusy = true
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                val now = System.currentTimeMillis()
-                store.insertIfAbsent(
-                    dues.map { SubscriptionRenewals.buildSkipMarker(it.subscription, it, zone, now) },
-                )
-            }
-            renewalBusy = false
-            reloadEntries()
-        }
-    }
-
-    fun applyDisposal(
-        asset: LedgerEntry,
-        disposalType: String,
-        date: LocalDate,
-        saleCents: Long,
-        currency: String,
-        fxRateToCny: Double,
-        fxRateDate: String?,
-        fxRateSource: String?,
-        saleAccountUuid: String? = null,
-    ) {
-        disposalTarget = null
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                val now = System.currentTimeMillis()
-                val timeOfDay = Instant.ofEpochMilli(asset.occurredAtMillis)
-                    .atZone(zone).toLocalTime()
-                val retiredMillis = date.atTime(timeOfDay)
-                    .atZone(zone).toInstant().toEpochMilli()
-                val updatedAsset = asset.copy(
-                    isActiveCost = false,
-                    retiredAtMillis = retiredMillis,
-                    disposalType = disposalType,
-                    updatedAtMillis = now,
-                    syncStatus = LedgerSyncStatus.PENDING_PUSH,
-                )
-                val saleAccount = saleAccountUuid?.let { uuid ->
-                    accounts.firstOrNull { it.uuid == uuid }
-                }
-                val saleAccountCents = if (
-                    saleAccount != null && saleAccount.currency != currency
-                ) {
-                    val saleBase = (saleCents * fxRateToCny).roundToLong()
-                    val accRate = if (saleAccount.currency == "CNY") {
-                        1.0
-                    } else {
-                        runCatching { fxStore.latest() }
-                            .getOrNull()?.cnyPerUnit(saleAccount.currency)
-                    }
-                    accRate?.let {
-                        LedgerAccounts.accountAmountForEntry(saleBase, 1.0, it)
-                    }
-                } else {
-                    null
-                }
-                val sale = if (disposalType == DISPOSAL_SOLD) {
-                    LedgerEntry(
-                        uuid = SubscriptionRenewals.saleUuid(asset.uuid),
-                        title = strings.soldTitlePrefix(asset.title),
-                        amountCents = saleCents,
-                        currency = currency,
-                        fxRateToCny = fxRateToCny,
-                        fxRateDate = fxRateDate,
-                        fxRateSource = fxRateSource,
-                        type = LedgerEntryType.INCOME,
-                        category = asset.category,
-                        occurredAtMillis = retiredMillis,
-                        note = "",
-                        parentUuid = asset.uuid,
-                        linkType = LINK_TYPE_SALE,
-                        tagUuids = asset.tagUuids,
-                        accountUuid = saleAccountUuid ?: asset.accountUuid,
-                        accountAmountCents = saleAccountCents,
-                        createdAtMillis = now,
-                        updatedAtMillis = now,
-                        syncStatus = LedgerSyncStatus.PENDING_PUSH,
-                    )
-                } else {
-                    null
-                }
-                store.applyDisposal(updatedAsset, sale)
-            }
-            reloadEntries()
-        }
-    }
-
-    fun undoDisposal(asset: LedgerEntry) {
-        undoDisposalTarget = null
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                val now = System.currentTimeMillis()
-                val sale = allEntries.firstOrNull {
-                    it.uuid == SubscriptionRenewals.saleUuid(asset.uuid)
-                }
-                val restored = asset.copy(
-                    isActiveCost = true,
-                    retiredAtMillis = null,
-                    disposalType = null,
-                    updatedAtMillis = now,
-                    syncStatus = LedgerSyncStatus.PENDING_PUSH,
-                )
-                store.applyDisposal(
-                    restored,
-                    sale?.copy(
-                        deletedAtMillis = now,
-                        updatedAtMillis = now,
-                        syncStatus = LedgerSyncStatus.PENDING_PUSH,
-                    ),
-                )
-            }
-            reloadEntries()
-        }
-    }
-
-    fun stopSubscription(entry: LedgerEntry, date: LocalDate) {
-        stopSubTarget = null
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                val now = System.currentTimeMillis()
-                val timeOfDay = Instant.ofEpochMilli(entry.occurredAtMillis)
-                    .atZone(zone).toLocalTime()
-                store.applyDisposal(
-                    entry.copy(
-                        isActiveCost = false,
-                        retiredAtMillis = date.atTime(timeOfDay)
-                            .atZone(zone).toInstant().toEpochMilli(),
-                        updatedAtMillis = now,
-                        syncStatus = LedgerSyncStatus.PENDING_PUSH,
-                    ),
-                    null,
-                )
-            }
-            reloadEntries()
-        }
-    }
-
-    fun saveWebDavConfig(config: WebDavConfig) {
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                webDavStore.save(config)
-            }
-            webDavConfigVersion++
-        }
-    }
-
-    fun clearWebDavConfig() {
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                webDavStore.clear()
-            }
-            webDavLastResult = null
-            webDavConfigVersion++
-        }
-    }
-
-    fun webDavErrorMessage(error: Throwable): String {
-        if (error is TotpVaultException || error.cause is TotpVaultException) return strings.backupDecryptFailed
-        val webDavError = error as? WebDavException
-        return strings.webDavError(
-            webDavError?.failure ?: WebDavFailure.NETWORK,
-            webDavError?.httpCode,
-        )
-    }
-
-    fun runWebDavTest(config: WebDavConfig) {
-        if (webDavBusyAction != null) return
-        webDavBusyAction = WebDavBusyAction.TEST
-        webDavLastResult = null
-        scope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                webDavStore.save(config)
-                runCatching {
-                    LedgerWebDavSync(
-                        client = config.syncClient(),
-                        loadLocal = { emptyList() },
-                        loadLocalTags = { emptyList() },
-                        loadLocalAccounts = { emptyList() },
-                        applyMerged = {},
-                    ).testConnection()
-                }
-            }
-            webDavConfigVersion++
-            webDavBusyAction = null
-            webDavLastResult = outcome.fold(
-                onSuccess = { strings.webDavTestOk },
-                onFailure = { webDavErrorMessage(it) },
-            )
-        }
-    }
-
-    fun runWebDavSync(config: WebDavConfig, toastResult: Boolean) {
-        if (ledgerPassphrase.isEmpty()) {
-            pendingBackupAction = { pass ->
-                ledgerPassphrase = pass
-                runWebDavSync(config, toastResult)
-            }
-            return
-        }
-        if (webDavBusyAction != null) return
-        webDavBusyAction = WebDavBusyAction.SYNC
-        webDavLastResult = null
-        scope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                webDavStore.save(config)
-                runCatching {
-                    val result = LedgerWebDavSync(
-                        client = config.syncClient(),
-                        loadLocal = { store.queryAllEntriesForSync() },
-                        loadLocalTags = { store.queryTags(includeDeleted = true) },
-                        loadLocalAccounts = { store.queryAccounts(includeDeleted = true) },
-                        applyMerged = { merged -> store.importSyncPayload(merged) },
-                        legacyClients = config.legacyClients(),
-                        vault = LedgerBackupVault(ledgerPassphrase),
-                    ).sync()
-                    webDavStore.saveLastSync(System.currentTimeMillis())
-                    result
-                }
-            }
-            webDavConfigVersion++
-            webDavBusyAction = null
-            outcome.onSuccess { result ->
-                webDavLastResult = strings.webDavSyncSuccess(
-                    total = result.totalEntries,
-                    pulled = result.pulledCount,
-                    pushed = result.pushedCount,
-                    snapshotName = result.snapshotName,
-                ) + result.snapshotFailure?.let { failure ->
-                    "\n" + strings.webDavSnapshotFailed(strings.webDavError(failure))
-                }.orEmpty()
-                reloadEntries()
-            }
-            outcome.onFailure { error ->
-                webDavLastResult = webDavErrorMessage(error)
-            }
-            if (toastResult) {
-                webDavLastResult?.let {
-                    Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-                }
-            }
-        }
-    }
-
-    fun runSelectedWebDavSync(toastResult: Boolean) {
-        if (ledgerPassphrase.isEmpty()) {
-            pendingBackupAction = { pass ->
-                ledgerPassphrase = pass
-                runSelectedWebDavSync(toastResult)
-            }
-            return
-        }
-        val targets = webDavTargets.filter { it.isComplete }
-        if (targets.isEmpty()) {
-            Toast.makeText(context, strings.webDavNoTargetSelectedToast, Toast.LENGTH_LONG).show()
-            onOpenSettings()
-            return
-        }
-        if (targets.size == 1) {
-            runWebDavSync(targets.first().toWebDavConfig(), toastResult)
-            return
-        }
-        if (webDavBusyAction != null) return
-        webDavBusyAction = WebDavBusyAction.SYNC
-        webDavLastResult = null
-        scope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                var okCount = 0
-                val messages = mutableListOf<String>()
-                val now = System.currentTimeMillis()
-                val pullFailures = mutableMapOf<String, Throwable>()
-                for (service in targets) {
-                    runCatching {
-                        LedgerWebDavSync(
-                            client = service.syncClient(BackupTool.LEDGER),
-                            loadLocal = { store.queryAllEntriesForSync() },
-                            loadLocalTags = { store.queryTags(includeDeleted = true) },
-                            loadLocalAccounts = { store.queryAccounts(includeDeleted = true) },
-                            applyMerged = { store.importSyncPayload(it) },
-                            legacyClients = service.legacyClients(BackupTool.LEDGER),
-                            vault = LedgerBackupVault(ledgerPassphrase),
-                        ).pull()?.let { store.importSyncPayload(it) }
-                    }.onFailure { pullFailures[service.id] = it }
-                }
-                for (service in targets) {
-                    val res = runCatching {
-                        pullFailures[service.id]?.let { throw it }
-                        LedgerWebDavSync(
-                            client = service.syncClient(BackupTool.LEDGER),
-                            loadLocal = { store.queryAllEntriesForSync() },
-                            loadLocalTags = { store.queryTags(includeDeleted = true) },
-                            loadLocalAccounts = { store.queryAccounts(includeDeleted = true) },
-                            applyMerged = { merged -> store.importSyncPayload(merged) },
-                            legacyClients = service.legacyClients(BackupTool.LEDGER),
-                            vault = LedgerBackupVault(ledgerPassphrase),
-                        ).sync()
-                    }
-                    res.onSuccess { r ->
-                        okCount++
-                        messages += "${service.name}: " + strings.webDavSyncSuccess(
-                            total = r.totalEntries,
-                            pulled = r.pulledCount,
-                            pushed = r.pushedCount,
-                            snapshotName = r.snapshotName,
-                        )
-                    }.onFailure { err ->
-                        messages += "${service.name}: ${webDavErrorMessage(err)}"
-                    }
-                }
-                if (okCount > 0) {
-                    webDavStore.saveLastSync(now, BackupTool.LEDGER)
-                }
-                Triple(okCount, targets.size, messages.joinToString("\n"))
-            }
-            webDavConfigVersion++
-            webDavBusyAction = null
-            val summaryMsg = strings.webDavMultiSyncSummary(
-                outcome.first,
-                outcome.second,
-                outcome.third,
-            )
-            webDavLastResult = summaryMsg
-            if (outcome.first > 0) reloadEntries()
-            if (toastResult) {
-                Toast.makeText(context, summaryMsg, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    fun backupFileName(pattern: String, suffix: String): String =
-        "toolbox-ledger-" +
-            LocalDateTime.now().format(DateTimeFormatter.ofPattern(pattern)) +
-            suffix
-
-    fun writeTextToUri(uri: Uri, text: String) {
-        val stream = context.contentResolver.openOutputStream(uri, "wt")
-            ?: throw IOException("openOutputStream returned null")
-        stream.use { it.write(text.toByteArray(Charsets.UTF_8)) }
-    }
-
-    fun exportJsonBackup(uri: Uri) {
-        if (ledgerPassphrase.isEmpty()) {
-            pendingBackupAction = { pass -> ledgerPassphrase = pass; exportJsonBackup(uri) }
-            return
-        }
-        scope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                runCatching {
-                    val exportedAt = System.currentTimeMillis()
-                    val allRows = store.queryAllEntriesForSync()
-                    writeTextToUri(
-                        uri,
-                        LedgerBackupVault(ledgerPassphrase).encode(LedgerSyncSerializer.toJsonString(
-                            LedgerSyncPayload(
-                                entries = allRows,
-                                tags = store.queryTags(includeDeleted = true),
-                                accounts = store.queryAccounts(includeDeleted = true),
-                            ),
-                        )),
-                    )
-                    backupStatusStore.saveFileExport(exportedAt)
-                    exportedAt to allRows.count { it.deletedAtMillis == null }
-                }
-            }
-            outcome.onSuccess { lastFileExportAt = it.first }
-            Toast.makeText(
-                context,
-                outcome.fold(
-                    onSuccess = { strings.backupExported(it.second) },
-                    onFailure = { strings.backupExportFailed },
-                ),
-                Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
-
-    fun exportCsvBackup(uri: Uri) {
-        scope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                runCatching {
-                    val visible = store.queryVisibleEntries()
-                    val liveTagNames = store.queryTags(includeDeleted = false)
-                        .associate { it.uuid to it.name }
-                    val accountNames = store.queryAccounts(includeDeleted = false)
-                        .associate { it.uuid to it.name }
-                    writeTextToUri(
-                        uri,
-                        LedgerCsv.build(
-                            entries = visible,
-                            headers = strings.csvHeaders,
-                            typeLabel = { type ->
-                                when (type) {
-                                    LedgerEntryType.INCOME -> strings.incomeTypeLabel
-                                    LedgerEntryType.EXPENSE -> strings.expenseTypeLabel
-                                    LedgerEntryType.TRANSFER -> strings.transferTypeLabel
-                                    LedgerEntryType.ADJUSTMENT ->
-                                        strings.adjustmentTypeLabel
-                                }
-                            },
-                            tagsLabel = { entry ->
-                                entry.tagUuids
-                                    .mapNotNull { liveTagNames[it] }
-                                    .joinToString("、")
-                            },
-                            costModeLabel = { mode ->
-                                when (mode) {
-                                    CostTrackingMode.NONE -> strings.costModeNone
-                                    CostTrackingMode.ONE_TIME_AMORTIZED ->
-                                        strings.costModeOneTime
-                                    CostTrackingMode.PERIODIC_SUBSCRIPTION ->
-                                        strings.costModePeriodic
-                                }
-                            },
-                            accountLabel = { entry ->
-                                entry.accountUuid?.let { accountNames[it] } ?: ""
-                            },
-                            toAccountLabel = { entry ->
-                                entry.toAccountUuid?.let { accountNames[it] } ?: ""
-                            },
-                            zone = ZoneId.systemDefault(),
-                        ),
-                    )
-                    visible.size
-                }
-            }
-            Toast.makeText(
-                context,
-                outcome.fold(
-                    onSuccess = { strings.backupExported(it) },
-                    onFailure = { strings.backupExportFailed },
-                ),
-                Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
-
-    fun startImport(uri: Uri) {
-        if (ledgerPassphrase.isEmpty()) {
-            pendingBackupAction = { pass -> ledgerPassphrase = pass; startImport(uri) }
-            return
-        }
-        scope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                runCatching {
-                    val declaredSize = context.contentResolver
-                        .openAssetFileDescriptor(uri, "r")
-                        ?.use { it.length } ?: -1L
-                    if (declaredSize > LedgerBackupVault.MAX_BYTES) {
-                        throw BackupException(BackupFailure.TOO_LARGE)
-                    }
-                    val text = context.contentResolver.openInputStream(uri)
-                        ?.use { stream ->
-                            val out = ByteArrayOutputStream()
-                            val buffer = ByteArray(16 * 1024)
-                            var total = 0L
-                            while (true) {
-                                val read = stream.read(buffer)
-                                if (read < 0) break
-                                total += read
-                                if (total > LedgerBackupVault.MAX_BYTES) {
-                                    throw BackupException(BackupFailure.TOO_LARGE)
-                                }
-                                out.write(buffer, 0, read)
-                            }
-                            String(out.toByteArray(), Charsets.UTF_8)
-                        }
-                        ?: throw IOException("openInputStream returned null")
-                    val payload = LedgerBackup.parse(LedgerBackupVault(ledgerPassphrase).decode(text))
-                    PendingImport(
-                        payload = payload,
-                        preview = LedgerBackup.previewMerge(
-                            store.queryAllEntriesForSync(),
-                            payload.entries,
-                        ),
-                    )
-                }
-            }
-            outcome.onSuccess { pendingImport = it }
-            outcome.onFailure { error ->
-                val message = (error as? BackupException)
-                    ?.let { strings.backupError(it.failure) }
-                    ?: if (error is TotpVaultException) strings.backupDecryptFailed else strings.backupReadFailed
-                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    fun applyMergeImport(pending: PendingImport) {
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                store.importSyncPayload(pending.payload)
-            }
-            pendingImport = null
-            reloadEntries()
-            Toast.makeText(
-                context,
-                strings.backupMergedDone(
-                    pending.preview.added,
-                    pending.preview.updated,
-                ),
-                Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
-
-    fun currentBackupPayload() = LedgerSyncPayload(
-        entries = store.queryAllEntriesForSync(),
-        tags = store.queryTags(includeDeleted = true),
-        accounts = store.queryAccounts(includeDeleted = true),
-    )
-
-    fun replacementPlan(current: LedgerSyncPayload, incoming: LedgerSyncPayload) = LedgerBackup.planReplace(
-        current.entries, incoming.entries,
-        localTags = current.tags, incomingTags = incoming.tags,
-        localAccounts = current.accounts, incomingAccounts = incoming.accounts,
-        nowMillis = System.currentTimeMillis(),
-    )
-
-    fun restoreBackupPayload(payload: LedgerSyncPayload, pass: String): ReplacePlan {
-        val current = currentBackupPayload()
-        val plan = replacementPlan(current, payload)
-        BackupRecoveryStore(context, BackupTool.LEDGER).save(
-            LedgerBackupVault(pass).encode(LedgerSyncSerializer.toJsonString(current)),
-        )
-        store.applyReplace(plan)
-        return plan
-    }
-
-    fun requestReplace(pending: PendingImport) {
-        scope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                runCatching { replacementPlan(currentBackupPayload(), pending.payload) }
-            }
-            outcome.onSuccess { pendingReplace = PendingReplace(pending.payload, it) }
-            outcome.onFailure { Toast.makeText(context, strings.backupReadFailed, Toast.LENGTH_LONG).show() }
-        }
-    }
-
-    fun applyReplaceImport(pending: PendingReplace) {
-        scope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                // Recompute and checkpoint immediately before the deliberate replacement.
-                runCatching { restoreBackupPayload(pending.payload, ledgerPassphrase) }
-            }
-            outcome.onSuccess { plan ->
-                pendingReplace = null
-                pendingImport = null
-                reloadEntries()
-                Toast.makeText(context, strings.backupReplacedDone(plan.keptCount, plan.deletedCount),
-                    Toast.LENGTH_LONG).show()
-            }
-            outcome.onFailure { Toast.makeText(context, strings.backupReadFailed, Toast.LENGTH_LONG).show() }
+    LaunchedEffect(editorSession.pendingDeleteUuid, editorSession.pendingDeleteEntry, entriesLoaded) {
+        if (editorSession.pendingDeleteUuid != null && editorSession.pendingDeleteEntry == null && entriesLoaded) {
+            editorSession.pendingDeleteUuid = null
         }
     }
 
     val exportJsonLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
-    ) { uri -> uri?.let(::exportJsonBackup) }
+    ) { uri -> uri?.let(backupSession::exportJsonBackup) }
     val exportCsvLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv"),
-    ) { uri -> uri?.let(::exportCsvBackup) }
+    ) { uri -> uri?.let(backupSession::exportCsvBackup) }
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
-    ) { uri -> uri?.let(::startImport) }
+    ) { uri -> uri?.let(backupSession::startImport) }
 
     val searching = searchQuery != null
     BackHandler(enabled = searching) {
@@ -1258,8 +304,8 @@ internal fun LedgerScreen(
         }
     }
 
-    val lastBackupAt = listOfNotNull(lastFileExportAt, webDavLastSyncAt).maxOrNull()
-    val backupReminderDue = remember(allEntries, tags, accounts, lastBackupAt, backupSnoozedUntil) {
+    val lastBackupAt = listOfNotNull(backupSession.lastFileExportAt, backupSession.webDavLastSyncAt).maxOrNull()
+    val backupReminderDue = remember(allEntries, tags, accounts, lastBackupAt, backupSession.backupSnoozedUntil) {
         LedgerBackupReminder.isDue(
             lastBackupAtMillis = lastBackupAt,
             earliestDataAtMillis = allEntries.minOfOrNull { it.createdAtMillis },
@@ -1268,14 +314,14 @@ internal fun LedgerScreen(
                     tags.map { it.updatedAtMillis } +
                     accounts.map { it.updatedAtMillis }
                 ).filter { it > 0L }.maxOrNull(),
-            snoozedUntilMillis = backupSnoozedUntil,
+            snoozedUntilMillis = backupSession.backupSnoozedUntil,
             nowMillis = System.currentTimeMillis(),
         )
     }
     val showBackupReminder = backupReminderDue &&
         entriesLoaded &&
-        backupStatusLoaded &&
-        webDavStatusLoaded
+        backupSession.backupStatusLoaded &&
+        backupSession.webDavStatusLoaded
 
     if (loadError != null) {
         Scaffold(
@@ -1377,7 +423,7 @@ internal fun LedgerScreen(
                         actions = {
                             IconButton(
                                 onClick = {
-                                    selectedEntryUuids = emptySet()
+                                    managementSession.selectedEntryUuids = emptySet()
                                     searchQuery = ""
                                 },
                             ) {
@@ -1411,31 +457,29 @@ internal fun LedgerScreen(
                                             text = { Text(strings.notificationLedgerTitle) },
                                             onClick = {
                                                 menuExpanded = false
-                                                showNotificationLedgerDialog = true
+                                                editorSession.showNotificationLedgerDialog = true
                                             },
                                         )
                                     }
                                     DropdownMenuItem(
                                         text = { Text(strings.backupHistoryTitle) },
-                                        onClick = { menuExpanded = false; showBackupHistory = true },
+                                        onClick = { menuExpanded = false; backupSession.showBackupHistory = true },
                                     )
                                     DropdownMenuItem(
                                         text = { Text(strings.backupPasswordTitle) },
                                         onClick = {
                                             menuExpanded = false
-                                            pendingBackupAction = { ledgerPassphrase = it }
+                                            backupSession.pendingBackupAction = { backupSession.ledgerPassphrase = it }
                                         },
                                     )
-                                    if (webDavTargets.any { it.isComplete } ||
-                                        webDavConfig?.isComplete == true
-                                    ) {
+                                    if (backupSession.webDavTargets.any { it.isComplete }) {
                                         DropdownMenuItem(
                                             text = {
                                                 Text(strings.webDavSyncNow)
                                             },
                                             onClick = {
                                                 menuExpanded = false
-                                                runSelectedWebDavSync(toastResult = true)
+                                                backupSession.runSelectedWebDavSync(toastResult = true)
                                             },
                                         )
                                     }
@@ -1444,22 +488,22 @@ internal fun LedgerScreen(
                                         text = { Text(strings.manageTagsMenu) },
                                         onClick = {
                                             menuExpanded = false
-                                            tagsDialogEntryNav = true
-                                            showTagsDialog = true
+                                            managementSession.tagsDialogEntryNav = true
+                                            managementSession.showTagsDialog = true
                                         },
                                     )
                                     DropdownMenuItem(
                                         text = { Text(strings.budgetMenu) },
                                         onClick = {
                                             menuExpanded = false
-                                            showBudgetDialog = true
+                                            managementSession.showBudgetDialog = true
                                         },
                                     )
                                     DropdownMenuItem(
                                         text = { Text(strings.ledgerOverviewOrderMenu) },
                                         onClick = {
                                             menuExpanded = false
-                                            showOverviewOrderDialog = true
+                                            managementSession.showOverviewOrderDialog = true
                                         },
                                     )
                                     HorizontalDivider()
@@ -1468,7 +512,7 @@ internal fun LedgerScreen(
                                         onClick = {
                                             menuExpanded = false
                                             exportJsonLauncher.launch(
-                                                backupFileName(
+                                                backupSession.backupFileName(
                                                     "yyyyMMdd-HHmmss",
                                                     ".json",
                                                 ),
@@ -1480,7 +524,7 @@ internal fun LedgerScreen(
                                         onClick = {
                                             menuExpanded = false
                                             exportCsvLauncher.launch(
-                                                backupFileName("yyyyMMdd", ".csv"),
+                                                backupSession.backupFileName("yyyyMMdd", ".csv"),
                                             )
                                         },
                                     )
@@ -1501,14 +545,7 @@ internal fun LedgerScreen(
                                         text = { Text(strings.snapshotRestoreMenu) },
                                         onClick = {
                                             menuExpanded = false
-                                            snapshots = null
-                                            selectedSnapshot = null
                                             showSnapshotDialog = true
-                                            scope.launch {
-                                                snapshots = withContext(Dispatchers.IO) {
-                                                    LedgerDbSnapshots.list(snapshotDir)
-                                                }
-                                            }
                                         },
                                     )
                                 }
@@ -1536,7 +573,7 @@ internal fun LedgerScreen(
                                 selected = pagerState.currentPage == index,
                                 onClick = {
                                     selectedTab = index
-                                    selectedEntryUuids = emptySet()
+                                    managementSession.selectedEntryUuids = emptySet()
                                 },
                                 text = {
                                     Text(
@@ -1554,23 +591,22 @@ internal fun LedgerScreen(
                             daysSinceBackup = lastBackupAt?.let {
                                 LedgerBackupReminder.daysSince(it, System.currentTimeMillis())
                             },
-                            webDavAvailable = webDavTargets.any { it.isComplete } ||
-                                webDavConfig?.isComplete == true,
+                            webDavAvailable = backupSession.webDavTargets.any { it.isComplete },
                             onExport = {
                                 exportJsonLauncher.launch(
-                                    backupFileName("yyyyMMdd-HHmmss", ".json"),
+                                    backupSession.backupFileName("yyyyMMdd-HHmmss", ".json"),
                                 )
                             },
                             onWebDavSync = {
-                                runSelectedWebDavSync(toastResult = true)
+                                backupSession.runSelectedWebDavSync(toastResult = true)
                             },
                             onLater = {
                                 val until = LedgerBackupReminder.snoozeUntil(
                                     System.currentTimeMillis(),
                                 )
-                                backupSnoozedUntil = until
+                                backupSession.backupSnoozedUntil = until
                                 scope.launch(Dispatchers.IO) {
-                                    backupStatusStore.saveSnoozedUntil(until)
+                                    backupSession.backupStatusStore.saveSnoozedUntil(until)
                                 }
                             },
                         )
@@ -1579,9 +615,9 @@ internal fun LedgerScreen(
             }
         },
         floatingActionButton = {
-            if (!searching && selectedEntryUuids.isEmpty()) {
+            if (!searching && managementSession.selectedEntryUuids.isEmpty()) {
                 ExtendedFloatingActionButton(
-                    onClick = { openEditor(null) },
+                    onClick = { editorSession.openEditor(null) },
                     icon = {
                         Icon(
                             painter = painterResource(R.drawable.ic_add),
@@ -1604,15 +640,15 @@ internal fun LedgerScreen(
                     results = searchResults.orEmpty(),
                     tags = tags,
                     accounts = accounts.filter { it.deletedAtMillis == null },
-                    onOpenEntry = ::openEditor,
-                    onCopyEntry = ::copyEntry,
+                    onOpenEntry = editorSession::openEditor,
+                    onCopyEntry = editorSession::copyEntry,
                 )
             } else {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                     beyondViewportPageCount = 1,
-                    userScrollEnabled = selectedEntryUuids.isEmpty(),
+                    userScrollEnabled = managementSession.selectedEntryUuids.isEmpty(),
                 ) { page ->
                     when (page) {
                         0 -> LedgerOverviewTab(
@@ -1623,21 +659,21 @@ internal fun LedgerScreen(
                             tags = tags,
                             accounts = accounts.filter { it.deletedAtMillis == null },
                             pendingRenewals = pendingRenewals,
-                            renewalBusy = renewalBusy,
-                            onRecordRenewals = ::recordRenewals,
-                            onSkipRenewals = { confirmSkipDues = it },
-                            onOpenEntry = ::openEditor,
-                            onCopyEntry = ::copyEntry,
+                            renewalBusy = costSession.renewalBusy,
+                            onRecordRenewals = costSession::recordRenewals,
+                            onSkipRenewals = { costSession.confirmSkipDues = it },
+                            onOpenEntry = editorSession::openEditor,
+                            onCopyEntry = editorSession::copyEntry,
                             onSeeAll = { selectedTab = 1 },
                             onShowCosts = { selectedTab = 2 },
                             onOpenMonth = { month ->
                                 selectedMonthName = month.toString()
-                                selectedEntryUuids = emptySet()
+                                managementSession.selectedEntryUuids = emptySet()
                                 selectedTab = 1
                             },
-                            budgets = budgets,
-                            onEditBudgets = { showBudgetDialog = true },
-                            cardOrder = overviewOrder,
+                            budgets = managementSession.budgets,
+                            onEditBudgets = { managementSession.showBudgetDialog = true },
+                            cardOrder = managementSession.overviewOrder,
                         )
 
                         1 -> LedgerTransactionsTab(
@@ -1653,24 +689,24 @@ internal fun LedgerScreen(
                             onClearFilter = { filterTagCsv = "" },
                             onMonthChange = {
                                 selectedMonthName = it.toString()
-                                selectedEntryUuids = emptySet()
+                                managementSession.selectedEntryUuids = emptySet()
                             },
-                            onOpenEntry = ::openEditor,
-                            onCopyEntry = ::copyEntry,
-                            selectedUuids = selectedEntryUuids,
+                            onOpenEntry = editorSession::openEditor,
+                            onCopyEntry = editorSession::copyEntry,
+                            selectedUuids = managementSession.selectedEntryUuids,
                             onToggleSelect = { entry ->
-                                selectedEntryUuids = if (entry.uuid in selectedEntryUuids) {
-                                    selectedEntryUuids - entry.uuid
+                                managementSession.selectedEntryUuids = if (entry.uuid in managementSession.selectedEntryUuids) {
+                                    managementSession.selectedEntryUuids - entry.uuid
                                 } else {
-                                    selectedEntryUuids + entry.uuid
+                                    managementSession.selectedEntryUuids + entry.uuid
                                 }
                             },
-                            onClearSelection = { selectedEntryUuids = emptySet() },
-                            onBulkAddTag = { bulkTagPickAdd = true },
-                            onBulkRemoveTag = { bulkTagPickRemove = true },
+                            onClearSelection = { managementSession.selectedEntryUuids = emptySet() },
+                            onBulkAddTag = { managementSession.bulkTagPickAdd = true },
+                            onBulkRemoveTag = { managementSession.bulkTagPickRemove = true },
                             onBulkCopy = {
                                 val picked = entries
-                                    .filter { it.uuid in selectedEntryUuids }
+                                    .filter { it.uuid in managementSession.selectedEntryUuids }
                                     .sortedBy { it.occurredAtMillis }
                                 if (picked.isNotEmpty()) {
                                     copyToClipboard(
@@ -1693,8 +729,8 @@ internal fun LedgerScreen(
                                 }
                             },
                             onManageTags = {
-                                tagsDialogEntryNav = true
-                                showTagsDialog = true
+                                managementSession.tagsDialogEntryNav = true
+                                managementSession.showTagsDialog = true
                             },
                         )
 
@@ -1704,25 +740,25 @@ internal fun LedgerScreen(
                             summary = summary,
                             tags = tags,
                             pendingRenewals = pendingRenewals,
-                            renewalBusy = renewalBusy,
+                            renewalBusy = costSession.renewalBusy,
                             filterSelectedCount = filterSelected.size,
                             onOpenFilter = { showFilterDialog = true },
                             onClearFilter = { filterTagCsv = "" },
                             onManageTags = {
-                                tagsDialogEntryNav = true
-                                showTagsDialog = true
+                                managementSession.tagsDialogEntryNav = true
+                                managementSession.showTagsDialog = true
                             },
-                            onRecordRenewals = ::recordRenewals,
-                            onSkipRenewals = { confirmSkipDues = it },
+                            onRecordRenewals = costSession::recordRenewals,
+                            onSkipRenewals = { costSession.confirmSkipDues = it },
                             onDispose = { entry, startAsSale ->
-                                disposalStartAsSale = startAsSale
-                                disposalTarget = entry
+                                costSession.disposalStartAsSale = startAsSale
+                                costSession.disposalTarget = entry
                             },
-                            onUndoDisposal = { undoDisposalTarget = it },
-                            onStopSubscription = { stopSubTarget = it },
-                            onResume = ::toggleActive,
-                            onOpenEntry = ::openEditor,
-                            onCopyEntry = ::copyEntry,
+                            onUndoDisposal = { costSession.undoDisposalTarget = it },
+                            onStopSubscription = { costSession.stopSubTarget = it },
+                            onResume = costSession::toggleActive,
+                            onOpenEntry = editorSession::openEditor,
+                            onCopyEntry = editorSession::copyEntry,
                         )
 
                         3 -> LedgerAccountsTab(
@@ -1730,7 +766,7 @@ internal fun LedgerScreen(
                             accounts = accounts,
                             entries = entries,
                             fxRates = latestFxRates,
-                            onOpenAccount = { detailAccount = it },
+                            onOpenAccount = { managementSession.detailAccount = it },
                             onNewAccount = {
                                 val fresh = LedgerAccount(
                                     uuid = UUID.randomUUID().toString(),
@@ -1744,7 +780,7 @@ internal fun LedgerScreen(
                                     sortOrder = accounts.maxOfOrNull { it.sortOrder }
                                         ?.plus(1) ?: 0,
                                 )
-                                detailAccount = fresh
+                                managementSession.detailAccount = fresh
                             },
                         )
                     }
@@ -1753,697 +789,17 @@ internal fun LedgerScreen(
         }
     }
 
-    fun persistEntry(newEntry: LedgerEntry, candidate: NotificationLedgerCandidate?) {
-        entrySaveBusy = true
-        scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    store.upsert(newEntry)
-                    newEntry.accountUuid?.let { AppPreferences(context).saveLedgerLastAccount(it) }
-                    candidate?.let {
-                        NotificationLedgerStore(context).removeCandidate(
-                            it.id,
-                            it.occurredAtMillis,
-                            it.amountsCents,
-                        )
-                    }
-                }
-            }
-            entrySaveBusy = false
-            if (result.isSuccess) {
-                pendingDuplicateEntry = null
-                duplicateMatches = emptyList()
-                showEditor = false
-                editingUuid = null
-                notificationDraft = null
-                reloadEntries()
-            } else {
-                Toast.makeText(context, strings.ledgerSaveFailed, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
+    editorSession.Host()
 
-    if (showEditor && (editingUuid == null || editingEntry != null) &&
-        (notificationDraft == null || (notificationDefaults != null && entriesLoaded))
-    ) {
-        key(editingUuid ?: notificationDraft?.let { "${it.first.id}:${it.second}" } ?: "new") {
-            LedgerEntryEditor(
-                strings = strings,
-                initialEntry = editingEntry,
-                draftAmountCents = notificationDraft?.second,
-                draftOccurredAtMillis = notificationDraft?.first?.occurredAtMillis,
-                draftTitle = notificationDraft?.first?.payment?.label,
-                draftDefaults = notificationDefaults?.takeIf { notificationDraft != null }
-                    ?.resolve(accounts, tags)
-                    ?.let { resolved ->
-                        when (notificationDraft?.first?.payment?.direction) {
-                            NotificationPaymentDirection.EXPENSE ->
-                                resolved.copy(type = LedgerEntryType.EXPENSE)
-                            NotificationPaymentDirection.INCOME ->
-                                resolved.copy(type = LedgerEntryType.INCOME)
-                            else -> resolved
-                        }
-                    },
-                saveBusy = entrySaveBusy,
-                tags = tags,
-                entries = entries,
-                accounts = accounts,
-                defaultAccountUuid = if (notificationDraft != null) {
-                    notificationDefaults?.accountFor(accounts, notificationLastAccount)
-                        ?: LedgerAccounts.DEFAULT_ACCOUNT_UUID
-                } else {
-                    AppPreferences(context).ledgerLastAccount()
-                        .ifBlank { LedgerAccounts.DEFAULT_ACCOUNT_UUID }
-                },
-                quickPicks = quickPicks,
-                parentTitle = editingEntry?.parentUuid?.let { parent ->
-                    allEntries.firstOrNull { it.uuid == parent }?.title
-                },
-                onCreateTag = { tag ->
-                    scope.launch {
-                        withContext(Dispatchers.IO) { store.upsertTag(tag) }
-                        reloadEntries()
-                    }
-                },
-                // From inside the editor: manage tags without entry nav.
-                onManageTags = {
-                    tagsDialogEntryNav = false
-                    showTagsDialog = true
-                },
-                onDismiss = {
-                    if (!entrySaveBusy) {
-                        showEditor = false
-                        editingUuid = null
-                        notificationDraft = null
-                    }
-                },
-                onSave = { newEntry ->
-                    if (!entrySaveBusy) {
-                        val candidate = notificationDraft?.first
-                        if (candidate == null) persistEntry(newEntry, null) else {
-                            entrySaveBusy = true
-                            scope.launch {
-                                val result = withContext(Dispatchers.IO) {
-                                    runCatching {
-                                        LedgerDuplicateMatcher.find(newEntry, store.queryVisibleEntries())
-                                    }
-                                }
-                                val matches = result.getOrNull()
-                                when {
-                                    matches == null -> {
-                                        entrySaveBusy = false
-                                        Toast.makeText(context, strings.ledgerSaveFailed, Toast.LENGTH_LONG).show()
-                                    }
-                                    matches.isEmpty() -> persistEntry(newEntry, candidate)
-                                    else -> {
-                                        entrySaveBusy = false
-                                        duplicateMatches = matches
-                                        pendingDuplicateEntry = newEntry
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                onDelete = { entry ->
-                    if (!entrySaveBusy) pendingDeleteUuid = entry.uuid
-                },
-            )
-        }
-    }
-
-    if (NotificationBookkeeping.ENABLED && showNotificationLedgerDialog && entriesLoaded) {
-        NotificationLedgerDialog(
-            strings = strings,
-            accounts = accounts,
-            tags = tags,
-            onSelectAmount = { candidate, amount ->
-                showNotificationLedgerDialog = false
-                editingUuid = null
-                notificationDefaults = null
-                notificationDraft = candidate to amount
-                showEditor = true
-            },
-            onDismiss = { showNotificationLedgerDialog = false },
-        )
-    }
-
-    pendingDuplicateEntry?.let { pending ->
-        NotificationLedgerDuplicateDialog(
-            strings = strings,
-            matches = duplicateMatches,
-            accounts = accounts,
-            tags = tags,
-            busy = entrySaveBusy,
-            onSaveAnyway = {
-                if (!entrySaveBusy) persistEntry(pending, notificationDraft?.first)
-            },
-            onDismiss = {
-                if (!entrySaveBusy) {
-                    pendingDuplicateEntry = null
-                    duplicateMatches = emptyList()
-                }
-            },
-            onAlreadyRecorded = {
-                if (!entrySaveBusy) {
-                    val candidate = notificationDraft?.first
-                    entrySaveBusy = true
-                    scope.launch {
-                        val result = withContext(Dispatchers.IO) {
-                            runCatching {
-                                candidate?.let {
-                                    NotificationLedgerStore(context).removeCandidate(
-                                        it.id,
-                                        it.occurredAtMillis,
-                                        it.amountsCents,
-                                    )
-                                }
-                            }
-                        }
-                        entrySaveBusy = false
-                        if (result.isSuccess) {
-                            pendingDuplicateEntry = null
-                            showEditor = false
-                            editingUuid = null
-                            notificationDraft = null
-                        } else {
-                            Toast.makeText(context, strings.ledgerSaveFailed, Toast.LENGTH_LONG).show()
-                        }
-                    }
-                }
-            },
-        )
-    }
-
-    pendingBackupAction?.let { action ->
-        BackupPassphraseDialog(strings, ledgerPassphrase,
-            onDismiss = { pendingBackupAction = null },
-            onConfirm = { pass ->
-                pendingBackupAction = null
-                TotpStore(context).saveDefaultBackupPassphrase(pass)
-                action(pass)
-            })
-    }
-    if (showBackupHistory) {
-        BackupHistoryDialog(
-            strings, BackupTool.LEDGER, webDavTargets, ledgerPassphrase,
-            preview = { body, pass ->
-                LedgerBackup.parse(LedgerBackupVault(pass).decode(body)).entries.count { it.deletedAtMillis == null }
-            },
-            restore = { body, pass ->
-                val payload = LedgerBackup.parse(LedgerBackupVault(pass).decode(body))
-                restoreBackupPayload(payload, pass)
-            },
-            onRestored = { showBackupHistory = false; scope.launch { reloadEntries() } },
-            onDismiss = { showBackupHistory = false },
-        )
-    }
-
-    if (showWebDavDialog) {
-        LedgerWebDavDialog(
-            strings = strings,
-            initialConfig = webDavConfig,
-            passwordUnavailable = webDavPasswordUnavailable,
-            lastSyncMillis = webDavLastSyncAt,
-            pendingCount = summary.pendingSyncCount,
-            busyAction = webDavBusyAction,
-            lastResult = webDavLastResult,
-            onSaveConfig = { config ->
-                saveWebDavConfig(config)
-                Toast.makeText(
-                    context,
-                    strings.webDavConfigSaved,
-                    Toast.LENGTH_SHORT,
-                ).show()
-            },
-            onTestConnection = ::runWebDavTest,
-            onSyncNow = { runWebDavSync(it, toastResult = false) },
-            onClearConfig = ::clearWebDavConfig,
-            onDismiss = { showWebDavDialog = false },
-        )
-    }
-
-    pendingImport?.let { pending ->
-        LedgerImportDialog(
-            strings = strings,
-            pending = pending,
-            onMerge = { applyMergeImport(pending) },
-            onReplace = { requestReplace(pending) },
-            onDismiss = { pendingImport = null },
-        )
-    }
-
-    pendingReplace?.let { pending ->
-        LedgerReplaceConfirmDialog(
-            strings = strings,
-            plan = pending.plan,
-            onConfirm = { applyReplaceImport(pending) },
-            onDismiss = { pendingReplace = null },
-        )
-    }
-
-    pendingDeleteEntry?.let { entry ->
-        AlertDialog(
-            onDismissRequest = { pendingDeleteUuid = null },
-            title = { Text(entry.title) },
-            text = { Text(strings.deleteEntryConfirm) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        pendingDeleteUuid = null
-                        showEditor = false
-                        editingUuid = null
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                store.softDelete(entry.uuid)
-                            }
-                            reloadEntries()
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Text(strings.deleteAction)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDeleteUuid = null }) {
-                    Text(strings.cancelAction)
-                }
-            },
-        )
-    }
-
-    renewalRateIssue?.let { issue ->
-        RenewalRateIssueDialog(
-            strings = strings,
-            issue = issue,
-            nearest = nearestForIssue,
-            onUseCached = { nearest ->
-                renewalRateIssue = null
-                commitRenewals(issue.dues, issue.resolved + nearest)
-            },
-            onManual = { rate ->
-                renewalRateIssue = null
-                commitRenewals(issue.dues, issue.resolved, manualRate = rate)
-            },
-            onDismiss = { renewalRateIssue = null },
-        )
-    }
-
-    confirmSkipDues?.let { dues ->
-        AlertDialog(
-            onDismissRequest = { confirmSkipDues = null },
-            title = { Text(strings.skipAction) },
-            text = { Text(strings.skipRenewalsConfirm) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        confirmSkipDues = null
-                        skipRenewals(dues)
-                    },
-                ) {
-                    Text(strings.skipAction)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmSkipDues = null }) {
-                    Text(strings.cancelAction)
-                }
-            },
-        )
-    }
+    LedgerBackupHost(backupSession)
 
     if (showSnapshotDialog) {
-        AlertDialog(
-            onDismissRequest = { if (!restoreBusy) showSnapshotDialog = false },
-            title = { Text(strings.snapshotRestoreTitle) },
-            text = {
-                Column {
-                    Text(
-                        strings.snapshotRestoreHint,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    val current = snapshots
-                    when {
-                        current == null -> Text(
-                            strings.loading,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        current.isEmpty() -> Text(
-                            strings.snapshotRestoreEmpty,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        else -> Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            current.forEach { snapshot ->
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable { selectedSnapshot = snapshot }
-                                        .padding(vertical = 4.dp),
-                                ) {
-                                    RadioButton(
-                                        selected = selectedSnapshot == snapshot,
-                                        onClick = { selectedSnapshot = snapshot },
-                                    )
-                                    Column {
-                                        Text(
-                                            LocalDateTime.ofInstant(
-                                                Instant.ofEpochMilli(
-                                                    snapshot.takenAtMillis,
-                                                ),
-                                                zone,
-                                            ).format(snapshotTimeFormat),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                        )
-                                        Text(
-                                            strings.snapshotSchemaVersion(
-                                                snapshot.schemaVersion,
-                                            ) + " · " + formatBytes(snapshot.file.length()),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme
-                                                .onSurfaceVariant,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    enabled = selectedSnapshot != null && !restoreBusy,
-                    onClick = { selectedSnapshot?.let { restoreSnapshot(it) } },
-                ) {
-                    Text(strings.snapshotRestoreAction)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !restoreBusy,
-                    onClick = { showSnapshotDialog = false },
-                ) {
-                    Text(strings.cancelAction)
-                }
-            },
-        )
+        LedgerSnapshotHost(backupSession, onDismiss = { showSnapshotDialog = false })
     }
 
-    disposalTarget?.let { asset ->
-        LedgerDisposalDialog(
-            strings = strings,
-            asset = asset,
-            accounts = accounts.filter { it.deletedAtMillis == null },
-            initialIsSale = disposalStartAsSale,
-            onConfirm = { type, date, cents, currency, rate, rateDate, rateSource, acctUuid ->
-                applyDisposal(
-                    asset, type, date, cents, currency, rate, rateDate, rateSource,
-                    acctUuid,
-                )
-            },
-            onDismiss = { disposalTarget = null },
-        )
-    }
+    costSession.Host()
 
-    undoDisposalTarget?.let { asset ->
-        AlertDialog(
-            onDismissRequest = { undoDisposalTarget = null },
-            title = { Text(asset.title) },
-            text = { Text(strings.undoDisposalConfirm) },
-            confirmButton = {
-                Button(onClick = { undoDisposal(asset) }) {
-                    Text(strings.undoDisposalAction)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { undoDisposalTarget = null }) {
-                    Text(strings.cancelAction)
-                }
-            },
-        )
-    }
-
-    stopSubTarget?.let { entry ->
-        ToolboxDatePickerDialog(
-            initial = LocalDate.now(zone),
-            minDate = Instant.ofEpochMilli(entry.occurredAtMillis)
-                .atZone(zone).toLocalDate(),
-            maxDate = LocalDate.now(zone),
-            strings = strings,
-            onConfirm = { stopSubscription(entry, it) },
-            onDismiss = { stopSubTarget = null },
-        )
-    }
-
-    if (showBudgetDialog) {
-        LedgerBudgetDialog(
-            strings = strings,
-            budgets = budgets,
-            tags = tags.filter { it.deletedAtMillis == null },
-            onSave = { updated ->
-                budgets = updated
-                showBudgetDialog = false
-                scope.launch(Dispatchers.IO) { budgetStore.save(updated) }
-            },
-            onDismiss = { showBudgetDialog = false },
-        )
-    }
-
-    if (showOverviewOrderDialog) {
-        LedgerOverviewOrderDialog(
-            strings = strings,
-            order = overviewOrder,
-            onMove = { index, offset ->
-                val target = index + offset
-                if (target in overviewOrder.indices) {
-                    val next = overviewOrder.toMutableList()
-                    next.add(target, next.removeAt(index))
-                    overviewOrder = next
-                    scope.launch(Dispatchers.IO) {
-                        preferences.saveLedgerOverviewOrder(next)
-                    }
-                }
-            },
-            onReset = {
-                overviewOrder = LedgerOverviewOrder.DEFAULT
-                scope.launch(Dispatchers.IO) {
-                    preferences.saveLedgerOverviewOrder(LedgerOverviewOrder.DEFAULT)
-                }
-            },
-            onDismiss = { showOverviewOrderDialog = false },
-        )
-    }
-
-    // Back clears an active multi-select before the screen reacts.
-    if (selectedEntryUuids.isNotEmpty()) {
-        BackHandler { selectedEntryUuids = emptySet() }
-    }
-
-    // While searching, Back closes the search box instead of leaving.
-    if (searching) {
-        BackHandler { searchQuery = null }
-    }
-
-    // Bulk-tag pickers for the transactions selection mode.
-    if (bulkTagPickAdd || bulkTagPickRemove) {
-        val pickerTags = tags
-            .filter { it.deletedAtMillis == null }
-            .sortedWith(compareBy({ it.sortOrder }, { it.name }))
-        val candidateUuids = if (bulkTagPickAdd) {
-            pickerTags.map { it.uuid }.toSet()
-        } else {
-            // Removing offers only live tags present on the selection.
-            entries.filter { it.uuid in selectedEntryUuids }
-                .flatMapTo(HashSet()) { it.tagUuids }
-                .filterTo(HashSet()) { uuid ->
-                    pickerTags.any { it.uuid == uuid }
-                }
-        }
-        AlertDialog(
-            onDismissRequest = {
-                bulkTagPickAdd = false
-                bulkTagPickRemove = false
-            },
-            title = {
-                Text(
-                    if (bulkTagPickAdd) {
-                        strings.addTagsAction
-                    } else {
-                        strings.removeTagsAction
-                    },
-                )
-            },
-            text = {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                ) {
-                    pickerTags
-                        .filter { it.uuid in candidateUuids }
-                        .forEach { tag ->
-                            Text(
-                                text = "${tag.emoji.ifBlank { "🏷" }} ${tag.name}",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        val isAdd = bulkTagPickAdd
-                                        val uuids = selectedEntryUuids
-                                        scope.launch {
-                                            withContext(Dispatchers.IO) {
-                                                store.updateEntryTags(
-                                                    uuids,
-                                                    add = if (isAdd) tag.uuid else null,
-                                                    remove = if (isAdd) null else tag.uuid,
-                                                )
-                                            }
-                                            reloadEntries()
-                                        }
-                                        bulkTagPickAdd = false
-                                        bulkTagPickRemove = false
-                                        selectedEntryUuids = emptySet()
-                                    }
-                                    .padding(vertical = 10.dp, horizontal = 8.dp),
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                        }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        bulkTagPickAdd = false
-                        bulkTagPickRemove = false
-                    },
-                ) {
-                    Text(strings.cancelAction)
-                }
-            },
-        )
-    }
-
-    if (showTagsDialog) {
-        LedgerTagsDialog(
-            strings = strings,
-            tags = tags,
-            entries = entries,
-            accounts = accounts.filter { it.deletedAtMillis == null },
-            onUpsert = { tag ->
-                scope.launch {
-                    withContext(Dispatchers.IO) { store.upsertTag(tag) }
-                    reloadEntries()
-                }
-            },
-            onDelete = { tag ->
-                scope.launch {
-                    withContext(Dispatchers.IO) { store.softDeleteTag(tag.uuid) }
-                    reloadEntries()
-                }
-            },
-            onReorder = { ordered ->
-                scope.launch {
-                    withContext(Dispatchers.IO) { store.reorderTags(ordered) }
-                    reloadEntries()
-                }
-            },
-            onMerge = { from, to ->
-                scope.launch {
-                    withContext(Dispatchers.IO) { store.mergeTag(from, to) }
-                    reloadEntries()
-                }
-            },
-            onOpenEntry = if (tagsDialogEntryNav) { entry ->
-                showTagsDialog = false
-                openEditor(entry)
-            } else {
-                null
-            },
-            onDismiss = { showTagsDialog = false },
-        )
-    }
-
-    detailAccount?.let { account ->
-        LedgerAccountDetail(
-            strings = strings,
-            account = account,
-            entries = allEntries,
-            tags = tags,
-            accounts = accounts.filter { it.deletedAtMillis == null },
-            onReconcile = { acc, actualCents ->
-                scope.launch {
-                    val diff = withContext(Dispatchers.IO) {
-                        val all = store.queryAllEntriesForSync()
-                        actualCents - LedgerAccounts.balance(acc, all)
-                    }
-                    if (diff == 0L) {
-                        Toast.makeText(
-                            context,
-                            strings.balanceMatchesToast,
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    } else {
-                        withContext(Dispatchers.IO) {
-                            store.upsert(
-                                LedgerEntry(
-                                    uuid = UUID.randomUUID().toString(),
-                                    title = strings.adjustmentTitleText,
-                                    amountCents = diff,
-                                    currency = acc.currency,
-                                    fxRateToCny = 1.0,
-                                    type = LedgerEntryType.ADJUSTMENT,
-                                    category = LedgerCategory.OTHER.name,
-                                    occurredAtMillis = System.currentTimeMillis(),
-                                    note = "",
-                                    accountUuid = acc.uuid,
-                                ),
-                            )
-                        }
-                        Toast.makeText(
-                            context,
-                            strings.adjustmentTitleText,
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                        reloadEntries()
-                    }
-                }
-            },
-            onSave = { updated ->
-                scope.launch {
-                    withContext(Dispatchers.IO) { store.upsertAccount(updated) }
-                    detailAccount = updated
-                    reloadEntries()
-                }
-            },
-            onArchive = { acc, archived ->
-                scope.launch {
-                    withContext(Dispatchers.IO) {
-                        store.upsertAccount(acc.copy(isArchived = archived))
-                    }
-                    detailAccount = null
-                    reloadEntries()
-                }
-            },
-            onDelete = { acc ->
-                scope.launch {
-                    withContext(Dispatchers.IO) { store.softDeleteAccount(acc.uuid) }
-                    detailAccount = null
-                    reloadEntries()
-                }
-            },
-            onOpenEntry = ::openEditor,
-            onCopyEntry = ::copyEntry,
-            onDismiss = { detailAccount = null },
-        )
-    }
+    managementSession.Host(editorSession::openEditor, editorSession::copyEntry)
 
     if (showFilterDialog) {
         TagFilterDialog(

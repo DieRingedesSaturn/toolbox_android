@@ -39,7 +39,15 @@ data class MockLocationState(
     val config: MockLocationConfig? = null,
     val endsAtMillis: Long? = null,
     val failure: MockLocationFailure? = null,
+    val environment: MockLocationEnvironment = MockLocationEnvironment(),
 ) {
     val busy: Boolean
         get() = phase in listOf(MockLocationPhase.STARTING, MockLocationPhase.RUNNING, MockLocationPhase.STOPPING)
 }
+
+data class MockLocationEnvironment(
+    val access: Boolean = false,
+    val cleanup: Boolean = false,
+    val notifications: Boolean = false,
+    val servicesEnabled: Boolean = false,
+)

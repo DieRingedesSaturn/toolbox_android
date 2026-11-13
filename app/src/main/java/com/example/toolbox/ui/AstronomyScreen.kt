@@ -1,6 +1,5 @@
 package com.example.toolbox.ui
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -74,7 +73,7 @@ import com.example.toolbox.astronomy.MoonPhaseInfo
 import com.example.toolbox.astronomy.NightTimeline
 import com.example.toolbox.location.LocationInfoReader
 import com.example.toolbox.location.formatShortCoordinates
-import com.example.toolbox.location.isMockFix
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -103,23 +102,12 @@ fun AstronomyScreen(
     val colorScheme = MaterialTheme.colorScheme
 
     suspend fun applyLastKnownLocation() {
-        val loc = withContext(Dispatchers.IO) {
-            if (!locationReader.hasLocationPermission()) return@withContext null
-            runCatching {
-                val lm = context.getSystemService(android.location.LocationManager::class.java)
-                @SuppressLint("MissingPermission")
-                lm?.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
-                    ?: run {
-                        @SuppressLint("MissingPermission")
-                        lm?.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
-                    }
-            }.getOrNull()
-        }
-        if (loc != null) {
+        val loc = withContext(Dispatchers.IO) { locationReader.readLastKnown() }
+        if (loc != null && loc.latitude != null && loc.longitude != null) {
             latitude = loc.latitude
             longitude = loc.longitude
             isUsingDefaultLocation = false
-            isUsingMockLocation = loc.isMockFix()
+            isUsingMockLocation = loc.isMock
         }
     }
 

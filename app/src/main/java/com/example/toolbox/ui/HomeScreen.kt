@@ -49,16 +49,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.toolbox.R
 import com.example.toolbox.device.DeviceInfo
-import com.example.toolbox.device.DeviceInfoReader
-import com.example.toolbox.fx.FxRateStore
-import com.example.toolbox.ledger.LedgerAccounts
-import com.example.toolbox.ledger.LedgerCalculator
-import com.example.toolbox.ledger.LedgerStore
-import com.example.toolbox.network.NetworkInfoReader
-import com.example.toolbox.network.NetworkTransport
-import java.time.LocalDate
-import java.time.YearMonth
-import java.time.ZoneId
+import com.example.toolbox.device.HomeStatusReader
+import com.example.toolbox.device.HomeStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -129,33 +121,6 @@ internal object HomeSummaryConfig {
             .joinToString(",") { it.name }
 }
 
-internal data class HomeStatus(
-    val batteryPercent: Int?,
-    val isCharging: Boolean?,
-    val storageAvailable: Long,
-    val storageTotal: Long,
-    val monthExpenseCents: Long,
-    val monthIncomeCents: Long,
-    val totalAssetsCnyCents: Long?,
-    val assetsPartial: Boolean,
-    val memoryAvailable: Long = 0L,
-    val memoryTotal: Long = 0L,
-    val networkConnected: Boolean = false,
-    val networkTransports: List<NetworkTransport> = emptyList(),
-    val networkAddress: String? = null,
-    val todayExpenseCents: Long = 0L,
-    val todayIncomeCents: Long = 0L,
-)
-
-private data class LedgerHomeSnapshot(
-    val monthExpenseCents: Long,
-    val monthIncomeCents: Long,
-    val totalAssetsCnyCents: Long?,
-    val assetsPartial: Boolean,
-    val todayExpenseCents: Long,
-    val todayIncomeCents: Long,
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HomeScreen(
@@ -223,68 +188,7 @@ internal fun HomeScreen(
         if (!needsLiveStatus) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             currentOnStatusChange(withContext(Dispatchers.IO) {
-                runCatching {
-                    val quick = if (needsQuickStatus) {
-                        DeviceInfoReader.readQuickStatus(context)
-                    } else {
-                        null
-                    }
-                    val network = if (needsNetworkStatus) {
-                        NetworkInfoReader(context).readLocal()
-                    } else {
-                        null
-                    }
-                    val ledger = if (needsLedgerStatus) {
-                        val (allEntries, accounts) = LedgerStore(context).use { store ->
-                            store.queryAllEntriesForSync() to store.queryAccounts(includeDeleted = false)
-                        }
-                        val entries = allEntries.filter { it.deletedAtMillis == null }
-                        val zone = ZoneId.systemDefault()
-                        val today = LocalDate.now(zone)
-                        val month = YearMonth.from(today)
-                        val summary = LedgerCalculator.monthSummary(allEntries, month, zone)
-                        val (totalCny, allConverted) = LedgerAccounts.totalAssetsCnyCents(
-                            accounts,
-                            entries,
-                            FxRateStore(context.applicationContext).latest(),
-                        )
-                        val (todayExpense, todayIncome) = LedgerCalculator.dayTotals(
-                            allEntries,
-                            today,
-                            zone,
-                        )
-                        LedgerHomeSnapshot(
-                            monthExpenseCents = summary.regularExpenseCents,
-                            monthIncomeCents = summary.incomeCents,
-                            totalAssetsCnyCents = totalCny,
-                            assetsPartial = !allConverted,
-                            todayExpenseCents = todayExpense,
-                            todayIncomeCents = todayIncome,
-                        )
-                    } else {
-                        null
-                    }
-                    val ipv4 = network?.localAddresses?.firstOrNull { address ->
-                        address.contains('.') && !address.contains(':')
-                    }
-                    HomeStatus(
-                        batteryPercent = quick?.batteryPercent,
-                        isCharging = quick?.isCharging,
-                        storageAvailable = quick?.storageAvailable ?: 0L,
-                        storageTotal = quick?.storageTotal ?: 0L,
-                        monthExpenseCents = ledger?.monthExpenseCents ?: 0L,
-                        monthIncomeCents = ledger?.monthIncomeCents ?: 0L,
-                        totalAssetsCnyCents = ledger?.totalAssetsCnyCents,
-                        assetsPartial = ledger?.assetsPartial == true,
-                        memoryAvailable = quick?.memoryAvailable ?: 0L,
-                        memoryTotal = quick?.memoryTotal ?: 0L,
-                        networkConnected = network?.isConnected == true,
-                        networkTransports = network?.transports.orEmpty(),
-                        networkAddress = ipv4 ?: network?.localAddresses?.firstOrNull(),
-                        todayExpenseCents = ledger?.todayExpenseCents ?: 0L,
-                        todayIncomeCents = ledger?.todayIncomeCents ?: 0L,
-                    )
-                }.getOrNull()
+                HomeStatusReader.read(context, needsQuickStatus, needsNetworkStatus, needsLedgerStatus)
             })
         }
     }

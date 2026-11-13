@@ -1,5 +1,7 @@
 package com.example.toolbox.ui
 
+import com.example.toolbox.device.HomeStatus
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context

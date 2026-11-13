@@ -239,16 +239,7 @@ class MonitorOverlayView @JvmOverloads constructor(
                 barRect.set(left, barTop, right, barBottom)
                 canvas.drawRoundRect(barRect, radius, radius, barBackgroundPaint)
 
-                val minMhz = core.minimumFrequencyMhz ?: 0
-                val maxMhz = core.maximumFrequencyMhz ?: 0
-                val curMhz = core.currentFrequencyMhz
-                val fraction = if (curMhz == null || curMhz <= 0 || maxMhz <= 0) {
-                    0f
-                } else if (maxMhz > minMhz) {
-                    ((curMhz - minMhz).toFloat() / (maxMhz - minMhz).toFloat()).coerceIn(0f, 1f)
-                } else {
-                    (curMhz.toFloat() / maxMhz.toFloat()).coerceIn(0f, 1f)
-                }
+                val fraction = core.fillFraction()
                 if (fraction > 0.008f) {
                     val fillTop = barBottom - barHeight * fraction
                     barRect.set(left, fillTop, right, barBottom)

@@ -33,40 +33,23 @@ data class TotpMergeResult(
 
 object TotpSyncMerge {
     fun merge(local: List<TotpEntry>, remote: List<TotpEntry>): TotpMergeResult {
-        val localByUuid = local.associateBy { it.uuid }
-        val remoteByUuid = remote.associateBy { it.uuid }
-        var pulled = 0
-        var pushed = 0
-        val merged = (localByUuid.keys + remoteByUuid.keys).map { uuid ->
-            val localItem = localByUuid[uuid]
-            val remoteItem = remoteByUuid[uuid]
-            when {
-                remoteItem == null -> {
-                    pushed++
-                    localItem!!
-                }
-                localItem == null -> {
-                    pulled++
-                    remoteItem
-                }
-                remoteItem.updatedAtMillis >= localItem.updatedAtMillis -> {
-                    if (remoteItem.updatedAtMillis > localItem.updatedAtMillis) pulled++
-                    remoteItem
-                }
-                else -> {
-                    pushed++
-                    localItem
-                }
-            }
-        }
+        val result = com.example.toolbox.ledger.LastWriteWins.merge(
+            local,
+            remote,
+            id = { it.uuid },
+            updatedAt = { it.updatedAtMillis },
+            sort = { items ->
+                items.sortedWith(
+                    compareBy<TotpEntry> { it.issuer.lowercase() }
+                        .thenBy { it.accountName.lowercase() }
+                        .thenBy { it.createdAtMillis },
+                )
+            },
+        )
         return TotpMergeResult(
-            entries = merged.sortedWith(
-                compareBy<TotpEntry> { it.issuer.lowercase() }
-                    .thenBy { it.accountName.lowercase() }
-                    .thenBy { it.createdAtMillis },
-            ),
-            pulledCount = pulled,
-            pushedCount = pushed,
+            entries = result.items,
+            pulledCount = result.pulledCount,
+            pushedCount = result.pushedCount,
         )
     }
 }

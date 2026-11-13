@@ -17,7 +17,7 @@ import androidx.core.content.ContextCompat
 import com.example.toolbox.MainActivity
 import com.example.toolbox.R
 import com.example.toolbox.ui.AppLanguage
-import com.example.toolbox.ui.ToolboxStrings
+import com.example.toolbox.ui.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -32,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -68,7 +69,7 @@ class MockLocationService : Service() {
             intent.getIntExtra("minutes", 0),
         )
         if (!config.isValid()) {
-            mutableState.value = MockLocationState(MockLocationPhase.ERROR, failure = MockLocationFailure.START)
+            publish(MockLocationState(MockLocationPhase.ERROR, failure = MockLocationFailure.START))
             stopSelf()
             return START_NOT_STICKY
         }
@@ -81,11 +82,11 @@ class MockLocationService : Service() {
         try {
             startStatusNotification(strings, config)
         } catch (_: Exception) {
-            mutableState.value = MockLocationState(MockLocationPhase.ERROR, failure = MockLocationFailure.NOTIFICATIONS)
+            publish(MockLocationState(MockLocationPhase.ERROR, failure = MockLocationFailure.NOTIFICATIONS))
             stopSelf()
             return START_NOT_STICKY
         }
-        mutableState.value = MockLocationState(MockLocationPhase.STARTING)
+        publish(MockLocationState(MockLocationPhase.STARTING))
         // Even an immediate Stop must enter finally and remove any test providers.
         session = scope.launch(start = CoroutineStart.ATOMIC) {
             var controller: MockLocationController? = null
@@ -103,9 +104,9 @@ class MockLocationService : Service() {
                     return@launch
                 }
                 activeController.start(config)
-                mutableState.value = MockLocationState(
+                publish(MockLocationState(
                     MockLocationPhase.RUNNING, config, sessionEndWall,
-                )
+                ))
                 while (isActive && SystemClock.elapsedRealtime() < sessionEndElapsed) {
                     if (!activeController.servicesEnabled()) {
                         failure = MockLocationFailure.SERVICES_DISABLED
@@ -127,20 +128,20 @@ class MockLocationService : Service() {
                 failure = MockLocationFailure.PROVIDER
             } finally {
                 withContext(NonCancellable) {
-                    mutableState.value = MockLocationState(MockLocationPhase.STOPPING)
+                    publish(MockLocationState(MockLocationPhase.STOPPING))
                     val cleaned = runCatching {
                         (controller ?: MockLocationController(this@MockLocationService)).stop()
                     }.getOrDefault(false)
                     withContext(Dispatchers.Main) {
                         session = null
-                        mutableState.value = MockLocationState(
+                        publish(MockLocationState(
                             when {
                                 !cleaned -> MockLocationPhase.CLEANUP_REQUIRED
                                 failure != null -> MockLocationPhase.ERROR
                                 else -> MockLocationPhase.STOPPED
                             },
                             failure = failure,
-                        )
+                        ))
                         stopSelf()
                     }
                 }
@@ -150,14 +151,14 @@ class MockLocationService : Service() {
     }
 
     private fun stopSession() {
-        mutableState.value = MockLocationState(MockLocationPhase.STOPPING)
+        publish(MockLocationState(MockLocationPhase.STOPPING))
         val current = session
         if (current != null) current.cancel() else {
             session = scope.launch {
                 val cleaned = runCatching { MockLocationController(this@MockLocationService).stop() }.getOrDefault(false)
-                mutableState.value = MockLocationState(
+                publish(MockLocationState(
                     if (cleaned) MockLocationPhase.STOPPED else MockLocationPhase.CLEANUP_REQUIRED,
-                )
+                ))
                 withContext(Dispatchers.Main) {
                     session = null
                     stopSelf()
@@ -256,6 +257,19 @@ class MockLocationService : Service() {
         private const val NOTIFICATION_ID = 7100
         private val mutableState = MutableStateFlow(MockLocationState())
         val state = mutableState.asStateFlow()
+
+        private fun publish(next: MockLocationState) {
+            mutableState.update { next.copy(environment = it.environment) }
+        }
+        internal fun environmentChanged(environment: MockLocationEnvironment) {
+            mutableState.update { it.copy(environment = environment) }
+        }
+        internal fun startRequested() = publish(MockLocationState(MockLocationPhase.STARTING))
+        internal fun startRejected() = publish(MockLocationState(MockLocationPhase.ERROR, failure = MockLocationFailure.START))
+        internal fun reportFailure(reason: MockLocationFailure) {
+            mutableState.update { it.copy(failure = reason) }
+        }
+
 
         fun notificationsAvailable(context: Context): Boolean =
             NotificationManagerCompat.from(context).areNotificationsEnabled() &&

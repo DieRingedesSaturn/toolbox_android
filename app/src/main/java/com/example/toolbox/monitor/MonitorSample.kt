@@ -98,7 +98,7 @@ private fun MonitorSample.weightedCorePercent(
     }.toFloat() / totalCapacity
 }
 
-private fun frequencyRatioPercent(current: Int?, minimum: Int?, maximum: Int?): Float? {
+internal fun frequencyRatioPercent(current: Int?, minimum: Int?, maximum: Int?): Float? {
     val currentValue = current ?: return null
     val maximumValue = maximum?.takeIf { it > 0 } ?: return null
     val minimumValue = minimum?.coerceIn(0, maximumValue) ?: 0
@@ -110,3 +110,10 @@ private fun frequencyRatioPercent(current: Int?, minimum: Int?, maximum: Int?): 
 }
 
 private const val FPS_CHART_MAX_HZ = 240f
+
+/** Shared topology fill rule for Compose, the overlay and reader estimates. */
+fun CpuCoreFrequency.fillFraction(usage: Boolean = false): Float {
+    if (currentFrequencyMhz == null || currentFrequencyMhz <= 0) return 0f
+    return if (usage) (usagePercent ?: 0f).div(100f).coerceIn(0f, 1f)
+    else (frequencyRatioPercent(currentFrequencyMhz, minimumFrequencyMhz, maximumFrequencyMhz) ?: 0f) / 100f
+}

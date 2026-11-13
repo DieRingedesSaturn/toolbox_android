@@ -36,7 +36,7 @@ Settings → WebDAV includes a separate **App settings backup** action. It uses 
 
 Changing an entered or remembered backup passphrase does **not** rotate existing backups. Older exports, snapshots and recovery checkpoints still need their original passphrase. A sync/backup against an existing remote vault first decrypts it, so a different passphrase fails before writing. New local exports use the newly entered passphrase. WebDAV login credentials are separate. There is no automatic password migration.
 
-Main files and snapshot indexes require strong ETags and conditional writes. Multiple selected services are read and merged before publishing to each; failures are reported per service. This is manual whole-file Last-Write-Wins sync, not an atomic transaction across servers. A server or device changed concurrently may require another sync.
+Main files and snapshot indexes require strong ETags and conditional writes. All selected services are read concurrently, merged once locally, then published concurrently; a 412 conflict retries the whole group up to three rounds. Read/decrypt failures prevent main-file publication. Duplicate destinations are coalesced, and publication failures are reported per service. This is manual whole-file Last-Write-Wins sync, not an atomic transaction across servers. A server or device changed concurrently may require another sync.
 
 ## Screenshots
 

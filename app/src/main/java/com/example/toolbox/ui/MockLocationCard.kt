@@ -15,15 +15,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.FilledTonalButton
@@ -56,20 +53,17 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.toolbox.location.MockLocationConfig
-import com.example.toolbox.location.MockLocationController
+import com.example.toolbox.location.MockLocationSession
 import com.example.toolbox.location.MockLocationFailure
 import com.example.toolbox.location.MockLocationPhase
-import com.example.toolbox.location.MockLocationService
 import com.example.toolbox.location.PlaceNameReader
 import com.example.toolbox.network.NetworkInfoReader
 import java.text.SimpleDateFormat
 import java.util.Date
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @Composable
 internal fun MockLocationCard(strings: ToolboxStrings) {
@@ -79,7 +73,7 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
     val preferences = remember(context) { AppPreferences(context) }
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val state by MockLocationService.state.collectAsStateWithLifecycle()
+    val state by MockLocationSession.state.collectAsStateWithLifecycle()
     var latitude by rememberSaveable { mutableStateOf("") }
     var longitude by rememberSaveable { mutableStateOf("") }
     var accuracy by rememberSaveable { mutableStateOf(preferences.mockLocationAccuracyText()) }
@@ -90,12 +84,11 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
     var lookingUpPlace by remember { mutableStateOf(false) }
     var fetchingIp by remember { mutableStateOf(false) }
     var ipFailed by remember { mutableStateOf(false) }
-    var access by remember { mutableStateOf(false) }
-    var cleanup by remember { mutableStateOf(false) }
-    var notifications by remember { mutableStateOf(false) }
-    var servicesEnabled by remember { mutableStateOf(false) }
-    var startFailure by remember { mutableStateOf<MockLocationFailure?>(null) }
-    var launching by remember { mutableStateOf(false) }
+    val access = state.environment.access
+    val cleanup = state.environment.cleanup
+    val notifications = state.environment.notifications
+    val servicesEnabled = state.environment.servicesEnabled
+    val launching = state.phase == MockLocationPhase.STARTING
     var showMapPicker by rememberSaveable { mutableStateOf(false) }
     val config = MockLocationConfig.parse(latitude, longitude, accuracy, minutes)
     val idle = !state.busy && !launching && !fetchingIp
@@ -147,39 +140,25 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
     }
 
     LaunchedEffect(lifecycle, state.phase) {
-        if (state.phase != MockLocationPhase.STOPPED) launching = false
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            val current = withContext(Dispatchers.IO) {
-                val controller = MockLocationController(context)
-                Triple(controller.hasAccess(), controller.hasPendingCleanup(),
-                    MockLocationService.notificationsAvailable(context) to controller.servicesEnabled())
-            }
-            access = current.first
-            cleanup = current.second
-            notifications = current.third.first
-            servicesEnabled = current.third.second
+            MockLocationSession.refresh(context)
             awaitCancellation()
         }
     }
 
     fun begin() {
         val target = config ?: return
-        if (state.busy || launching) return
+        if (state.busy) return
         persistAccuracy(accuracy)
-        startFailure = null
-        launching = true
-        runCatching { MockLocationService.start(context, target, strings.language == AppLanguage.CHINESE) }.onFailure {
-            launching = false
-            startFailure = MockLocationFailure.START
-        }
+        MockLocationSession.start(context, target, strings.language == AppLanguage.CHINESE)
     }
 
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) begin() else startFailure = MockLocationFailure.NOTIFICATIONS
+        if (granted) begin() else MockLocationSession.failure(MockLocationFailure.NOTIFICATIONS)
     }
 
     fun openSettings(intent: Intent) {
-        runCatching { context.startActivity(intent) }.onFailure { startFailure = MockLocationFailure.START }
+        runCatching { context.startActivity(intent) }.onFailure { MockLocationSession.failure(MockLocationFailure.START) }
     }
 
     InfoCard(strings.mockLocationTitle) {
@@ -189,7 +168,7 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
                 style = MaterialTheme.typography.titleSmall,
             )
         }
-        (startFailure ?: state.failure)?.let {
+        state.failure?.let {
             Text(
                 strings.mockLocationFailure(it),
                 style = MaterialTheme.typography.bodySmall,
@@ -243,7 +222,7 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.small,
                 onClick = {
-                    runCatching { MockLocationService.stop(context) }.onFailure { startFailure = MockLocationFailure.START }
+                    MockLocationSession.stop(context)
                 },
             ) { Text(if (state.busy) strings.mockLocationStop else strings.mockLocationCleanup) }
         }

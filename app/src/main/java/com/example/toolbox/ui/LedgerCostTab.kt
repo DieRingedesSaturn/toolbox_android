@@ -498,7 +498,7 @@ private fun CostAssetCard(
                 )
             }
         }
-        breakdown.targetDailyCostYuan
+        breakdown.actualDailyCostYuan
             ?.takeIf { breakdown.targetDays != null }
             ?.let { actual ->
                 add(

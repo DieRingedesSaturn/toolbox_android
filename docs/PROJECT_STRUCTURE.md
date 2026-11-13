@@ -44,6 +44,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── MonitorOverlayTheme.kt
 │   ├── MonitorOverlayView.kt
 │   ├── MonitorReader.kt
+│   ├── MonitorSession.kt
 │   └── MonitorSample.kt
 ├── location/
 │   ├── CoordinateFormatter.kt
@@ -52,6 +53,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── PlaceNameReader.kt
 │   ├── MockLocationConfig.kt
 │   ├── MockLocationController.kt
+│   ├── MockLocationSession.kt
 │   └── MockLocationService.kt
 ├── astronomy/
 │   ├── AstronomyCalculator.kt
@@ -88,10 +90,15 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerCsv.kt
 │   ├── LedgerSyncContract.kt
 │   ├── LedgerStore.kt
+│   ├── LedgerDb.kt
+│   ├── LedgerMapping.kt
+│   ├── LedgerEntryDraft.kt
 │   ├── LedgerDbSnapshots.kt
 │   ├── LedgerWebDavConfig.kt
 │   ├── LedgerWebDavClient.kt
 │   ├── LedgerWebDavSync.kt
+│   ├── LastWriteWins.kt
+│   ├── WholeFileWebDavSync.kt
 │   ├── NotificationLedger.kt
 │   ├── NotificationLedgerDefaults.kt
 │   ├── PaymentNotificationParser.kt
@@ -118,6 +125,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── Components.kt
 │   ├── WindowSize.kt
 │   ├── AppStrings.kt
+│   ├── *Strings.kt              # Feature-specific ToolboxStrings extensions
 │   ├── AppPreferences.kt
 │   ├── AppBackground.kt
 │   ├── BackgroundImageEditor.kt
@@ -130,6 +138,9 @@ app/src/main/java/com/example/toolbox/
 │   ├── HomeGridRows.kt
 │   ├── HomeModuleGrid.kt
 │   ├── MonitorScreen.kt
+│   ├── MonitorMetrics.kt
+│   ├── MonitorCpuCards.kt
+│   ├── MonitorOverlaySettings.kt
 │   ├── DeviceScreen.kt
 │   ├── LocationScreen.kt
 │   ├── MockLocationCard.kt
@@ -139,6 +150,10 @@ app/src/main/java/com/example/toolbox/
 │   ├── PrivacyScreen.kt
 │   ├── AppUsageScreen.kt
 │   ├── LedgerScreen.kt
+│   ├── LedgerBackupSession.kt
+│   ├── LedgerCostSession.kt
+│   ├── LedgerEditorSession.kt
+│   ├── LedgerManagementSession.kt
 │   ├── LedgerAccountsTab.kt
 │   ├── LedgerAccountDetail.kt
 │   ├── LedgerOverviewTab.kt
@@ -147,6 +162,8 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerTransactionsTab.kt
 │   ├── LedgerCostTab.kt
 │   ├── LedgerEntryEditor.kt
+│   ├── LedgerCostFields.kt
+│   ├── LedgerEntryFields.kt
 │   ├── LedgerRenewals.kt
 │   ├── LedgerDisposalDialog.kt
 │   ├── LedgerTagsDialog.kt
@@ -154,7 +171,8 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerBackupDialogs.kt
 │   ├── LedgerBackupReminderCard.kt
 │   ├── LedgerBudgetDialog.kt
-│   ├── LedgerWebDavDialog.kt
+│   ├── WebDavSettings.kt
+│   ├── TotpScreenDialogs.kt
 │   ├── NotificationLedgerDialog.kt
 │   ├── NotificationLedgerDefaultsDialog.kt
 │   ├── NotificationLedgerDuplicateDialog.kt
@@ -163,6 +181,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── SettingsScreen.kt
 │   └── AboutScreen.kt
 └── device/
+    ├── HomeStatusReader.kt
     ├── DeviceInfo.kt
     └── DeviceInfoReader.kt
 ```
@@ -176,14 +195,23 @@ Responsibility boundaries:
 | `ui/*Screen.kt` | Layout, state presentation, user events | File reads, HTTP implementations, long-running loops |
 | `ui/Components.kt` | Shared `InfoCard` and `InfoRow` components | Components private to one screen |
 | `ui/ToolboxTheme.kt` | Material theme, colors, typography | Screen state |
-| `ui/AppStrings.kt` | Centralized user-facing strings | Android system value parsing |
-| `device/` | Device models and reader logic | Compose UI |
+| `ui/AppStrings.kt`, `ui/*Strings.kt` | String receiver/enums and feature-grouped bilingual extensions | Android system value parsing |
+| `device/` | Device models/readers and local home summaries via `HomeStatusReader` | Compose UI |
 | `monitor/` | Sampling, CPU topology math, overlay service, and views | UI-only settings or unrelated device summaries |
 | `usage/` | App usage / traffic statistics reader and offline category resolver | Direct Compose UI rendering |
 | `astronomy/` | Solar/lunar ephemeris math and models | Android system services |
 | `ledger/` | Bookkeeping models and custom tags, one-time/periodic cost amortization calculator, calendar renewal scheduling, native SQLite store (tags + accounts tables, parent/link/disposal/account fields), shared backup/WebDAV exchange format, file backup (JSON/CSV) logic, manual WebDAV backup/sync client, source-aware WeChat/Alipay payment-notification parser with opt-in auto-booking and undo (notification quick entry is temporarily disabled: the listener component ships off and notification bodies are not stored in plaintext), notification listener/store, and the RemoteViews widget provider | Compose UI rendering |
 | `fx/` | Exchange-rate models and blocking reader with a Frankfurter → ECB → community mirror fallback chain, plus a SharedPreferences cache of latest + up to 120 dated rates (fetch only on explicit actions) | Compose UI rendering |
 | `privacy/` | Data-driven shortcuts to exported Google and system settings activities, plus PackageManager resolution | Compose UI rendering |
+
+
+### Sessions and shared logic
+
+- `LedgerScreen` owns paging, filtering, list loading and navigation. Screen-scoped `LedgerBackupSession`, `LedgerCostSession`, `LedgerEditorSession` and `LedgerManagementSession` own backup, renewal/disposal, entry saving, and tag/account/budget actions respectively. They use the caller's coroutine scope, cancelled when the screen leaves; they create no permanent jobs. Dialog Hosts live beside their sessions.
+- `LedgerEntryDraft.resolve()` converts form values into an entry without I/O. Cost and account/transfer fields have separate components. `LedgerDb` owns schema creation, migrations and pre-upgrade snapshots; `LedgerMapping` owns row mapping; `LedgerStore` owns CRUD and transactions. The schema version is unchanged.
+- `WholeFileWebDavSync` shares legacy fallback, conditional writes, retries and history. Ledger/TOTP supply codecs and merge functions. Multi-target sync reads every target concurrently, merges once locally and publishes concurrently with conditional PUTs. A 412 retries the entire group, up to three rounds. Duplicate folder/credential destinations are coalesced. Read/decrypt failures prevent main-file publication; publication can partially succeed and reports results per target, without cross-server atomicity.
+- `MonitorSession.state` is shared by the page and overlay service: the service samples while running, otherwise only the visible page samples. `MockLocationSession` exposes the service's same state flow instead of mirroring launch/stop state in the UI; test-provider ownership and cleanup remain with the service.
+- `ToolboxStrings` calls stay unchanged; their implementations live in sibling feature `*Strings.kt` extensions. Home reads local summaries through `HomeStatusReader` rather than querying the ledger in the screen. This adds no network behavior.
 
 ## Incremental v0.1 layout
 

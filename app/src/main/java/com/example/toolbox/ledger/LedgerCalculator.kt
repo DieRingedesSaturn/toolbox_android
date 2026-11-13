@@ -91,16 +91,14 @@ object LedgerCalculator {
         endedBySchedule: Boolean,
         zone: ZoneId,
     ): Int {
+        val start = Instant.ofEpochMilli(entry.occurredAtMillis).atZone(zone).toLocalDate()
         val stoppedAt = entry.retiredAtMillis?.takeIf { !entry.isActiveCost }
-        val days = when {
-            stoppedAt != null -> (stoppedAt - entry.occurredAtMillis) / MILLIS_PER_DAY
-            endedBySchedule && endDate != null -> ChronoUnit.DAYS.between(
-                Instant.ofEpochMilli(entry.occurredAtMillis).atZone(zone).toLocalDate(),
-                endDate,
-            )
-            else -> (nowMillis - entry.occurredAtMillis) / MILLIS_PER_DAY
+        val end = when {
+            stoppedAt != null -> Instant.ofEpochMilli(stoppedAt).atZone(zone).toLocalDate()
+            endedBySchedule && endDate != null -> endDate
+            else -> Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
         }
-        return days.toInt().coerceAtLeast(1)
+        return ChronoUnit.DAYS.between(start, end).toInt().coerceAtLeast(1)
     }
 
     private fun calculateOneTimeBreakdown(
@@ -159,8 +157,8 @@ object LedgerCalculator {
             dailyCostYuan = primaryDailyYuan,
             monthlyCostYuan = primaryMonthlyYuan,
             yearlyCostYuan = primaryYearlyYuan,
-            targetDailyCostYuan = actualDailyYuan, // Expose actual-to-date daily cost for comparison
-            targetMonthlyCostYuan = actualMonthlyYuan,
+            actualDailyCostYuan = actualDailyYuan,
+            actualMonthlyCostYuan = actualMonthlyYuan,
             nextRenewalMillis = null,
             daysUntilRenewal = null,
             accumulatedCyclesCount = 1,
@@ -239,8 +237,8 @@ object LedgerCalculator {
             dailyCostYuan = dailyCostYuan,
             monthlyCostYuan = monthlyCostYuan,
             yearlyCostYuan = yearlyCostYuan,
-            targetDailyCostYuan = null,
-            targetMonthlyCostYuan = null,
+            actualDailyCostYuan = null,
+            actualMonthlyCostYuan = null,
             nextRenewalMillis = nextRenewal,
             daysUntilRenewal = daysUntilRenewal,
             accumulatedCyclesCount = payments.size,
@@ -270,8 +268,8 @@ object LedgerCalculator {
 
         val currentMonth = monthSummary(
             visibleEntries,
-            YearMonth.from(Instant.ofEpochMilli(nowMillis).atZone(ZoneId.systemDefault())),
-            ZoneId.systemDefault(),
+            YearMonth.from(Instant.ofEpochMilli(nowMillis).atZone(zone)),
+            zone,
         )
 
         for (entry in visibleEntries) {
@@ -449,7 +447,7 @@ object LedgerCalculator {
         // Renewal children have mode NONE; their billing rule belongs to the parent.
         // An orphan renewal has no known cycle, so keep it in actual outlays only.
         val source = if (entry.linkType == LINK_TYPE_RENEWAL) {
-            byUuid[entry.parentUuid] ?: return ExpenseKind.ONE_TIME
+            byUuid[entry.parentUuid] ?: entry
         } else {
             entry
         }

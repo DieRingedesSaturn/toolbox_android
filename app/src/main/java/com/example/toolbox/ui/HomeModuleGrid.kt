@@ -1,5 +1,7 @@
 package com.example.toolbox.ui
 
+import com.example.toolbox.device.HomeStatus
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

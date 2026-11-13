@@ -53,6 +53,9 @@ class WebDavClient(
 ) {
     private val authHeader = WebDavPaths.basicAuthHeader(username, password)
 
+    internal fun sameDestination(other: WebDavClient): Boolean =
+        folderUrl == other.folderUrl && authHeader == other.authHeader
+
     fun get(name: String): WebDavFile? = execute(name, "GET") { conn ->
         conn.setRequestProperty("Cache-Control", "no-cache")
         val code = conn.responseCode
@@ -88,6 +91,12 @@ class WebDavClient(
             val code = conn.responseCode
             if (code != 404) throwForStatus(code, "DELETE")
         }
+    }
+
+    fun testConnection() {
+        ensureFolder()
+        put(TEST_FILE, "{}")
+        delete(TEST_FILE)
     }
 
     /**
@@ -216,6 +225,7 @@ class WebDavClient(
         private const val CONNECT_TIMEOUT_MS = 15_000
         private const val READ_TIMEOUT_MS = 30_000
         private const val MAX_RESPONSE_BYTES = LedgerBackupVault.MAX_BYTES.toLong()
+        private const val TEST_FILE = ".toolbox-connection-test"
 
         fun failureForStatus(code: Int, method: String): WebDavFailure? = when {
             code in 200..299 -> null

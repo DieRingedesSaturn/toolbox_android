@@ -85,17 +85,6 @@ class MonitorReader(context: Context) {
         )
     }
 
-    private fun frequencyRatioPercent(current: Int?, minimum: Int?, maximum: Int?): Float? {
-        val currentValue = current ?: return null
-        val maximumValue = maximum?.takeIf { it > 0 } ?: return null
-        val minimumValue = minimum?.coerceIn(0, maximumValue) ?: 0
-        return if (maximumValue > minimumValue) {
-            ((currentValue - minimumValue) * 100f / (maximumValue - minimumValue)).coerceIn(0f, 100f)
-        } else {
-            (currentValue * 100f / maximumValue).coerceIn(0f, 100f)
-        }
-    }
-
     private fun readCpuFrequency(): List<CpuCoreFrequency> = discoverCpuIndexes().map { index ->
         CpuCoreFrequency(
             index = index,

@@ -1,7 +1,11 @@
 package com.example.toolbox.ledger
 
+import kotlinx.coroutines.runBlocking
 import com.example.toolbox.ui.AppSettingsBackup
 import com.example.toolbox.totp.TotpVaultException
+import com.example.toolbox.totp.TotpEntry
+import com.example.toolbox.totp.TotpVaultCrypto
+import com.example.toolbox.totp.TotpWebDavSync
 import org.json.JSONObject
 import org.junit.Assert.assertThrows
 import java.net.InetSocketAddress
@@ -33,6 +37,8 @@ class LedgerWebDavSyncTest {
         private val expectedAuth: String,
     ) {
         private val files = ConcurrentHashMap<String, Pair<String, String>>()
+        private val requests = ConcurrentHashMap<String, Int>()
+        fun requests(method: String, name: String): Int = requests["$method:$name"] ?: 0
         private var etagCounter = 0
         private val serverSocket = ServerSocket()
 
@@ -100,6 +106,7 @@ class LedgerWebDavSyncTest {
                 if (requestParts.size < 2) return
                 val method = requestParts[0]
                 val name = requestParts[1].removePrefix("/dav/")
+                requests.merge("$method:$name", 1, Int::plus)
                 val headers = lines.drop(1)
                     .filter { ':' in it }
                     .associate {
@@ -250,6 +257,143 @@ class LedgerWebDavSyncTest {
             fail("expected WebDavException $failure")
         } catch (e: WebDavException) {
             assertEquals(failure, e.failure)
+        }
+    }
+
+    @Test
+    fun allTargetsReceiveTheUnionWithOneMainGetEach() = runBlocking {
+        val other = FakeWebDavServer(WebDavPaths.basicAuthHeader("user", "pass"))
+        try {
+            server.putRaw(LedgerWebDavSync.LEDGER_FILE, LedgerSyncSerializer.toJsonString(LedgerSyncPayload(entries = listOf(entry("a", 100)))))
+            other.putRaw(LedgerWebDavSync.LEDGER_FILE, LedgerSyncSerializer.toJsonString(LedgerSyncPayload(entries = listOf(entry("b", 200)))))
+            var local = LedgerSyncPayload(entries = emptyList())
+            var applied = 0
+            val engines = listOf(server, other).map { target -> LedgerWebDavSync(
+                WebDavClient(target.folderUrl, "user", "pass"), loadLocal = { emptyList() }, loadLocalTags = { emptyList() }, applyMerged = {},
+            ).engine }
+            val results = WholeFileWebDavSync.syncTargets(engines, { local }, { local = it; applied++ }, 1000L)
+            assertTrue(results.all { it.isSuccess })
+            for (target in listOf(server, other)) {
+                assertEquals(setOf("a", "b"), LedgerBackup.parse(target.bodyOf(LedgerWebDavSync.LEDGER_FILE)!!).entries.map { it.uuid }.toSet())
+                assertEquals(1, target.requests("GET", LedgerWebDavSync.LEDGER_FILE))
+            }
+            assertEquals(1, applied)
+        } finally { other.stop() }
+    }
+
+    @Test
+    fun failedTargetReadDoesNotPublishOrPartiallyApplyOtherTargets() = runBlocking {
+        val other = FakeWebDavServer(WebDavPaths.basicAuthHeader("user", "pass"))
+        try {
+            val body = LedgerSyncSerializer.toJsonString(LedgerSyncPayload(entries = listOf(entry("remote", 100))))
+            server.putRaw(LedgerWebDavSync.LEDGER_FILE, body)
+            other.putRaw(LedgerWebDavSync.LEDGER_FILE, body)
+            other.omitEtagOnGet = true
+            var applied = false
+            val engines = listOf(server, other).map { target -> LedgerWebDavSync(
+                WebDavClient(target.folderUrl, "user", "pass"), loadLocal = { emptyList() }, loadLocalTags = { emptyList() }, applyMerged = {},
+            ).engine }
+            val result = WholeFileWebDavSync.syncTargets(engines, { LedgerSyncPayload(entries = emptyList()) }, { applied = true }, 1000L)
+            assertTrue(result.all { it.isFailure })
+            assertFalse(applied)
+            assertEquals(0, server.requests("PUT", LedgerWebDavSync.LEDGER_FILE))
+            assertEquals(body, server.bodyOf(LedgerWebDavSync.LEDGER_FILE))
+        } finally { other.stop() }
+    }
+
+    @Test
+    fun conflictRetriesTheWholeFanOutAndAppliesLocalOnlyOnce() = runBlocking {
+        val other = FakeWebDavServer(WebDavPaths.basicAuthHeader("user", "pass"))
+        try {
+            for (target in listOf(server, other)) target.putRaw(LedgerWebDavSync.LEDGER_FILE,
+                LedgerSyncSerializer.toJsonString(LedgerSyncPayload(entries = listOf(entry(if (target === server) "a" else "b", 100)))))
+            other.bumpEtagAfterNextGet = true
+            var applied = 0
+            val engines = listOf(server, other).map { target -> LedgerWebDavSync(
+                WebDavClient(target.folderUrl, "user", "pass"), loadLocal = { emptyList() }, loadLocalTags = { emptyList() }, applyMerged = {},
+            ).engine }
+            val result = WholeFileWebDavSync.syncTargets(engines, { LedgerSyncPayload(entries = emptyList()) }, { applied++ }, 1000L)
+            assertTrue(result.all { it.isSuccess })
+            assertEquals(1, applied)
+            for (target in listOf(server, other)) {
+                assertEquals(2, target.requests("GET", LedgerWebDavSync.LEDGER_FILE))
+                assertEquals(setOf("a", "b"), LedgerBackup.parse(target.bodyOf(LedgerWebDavSync.LEDGER_FILE)!!).entries.map { it.uuid }.toSet())
+            }
+        } finally { other.stop() }
+    }
+
+    @Test
+    fun rejectedPublicationDoesNotApplyRemoteRowsLocally() = runBlocking {
+        server.putRaw(LedgerWebDavSync.LEDGER_FILE,
+            LedgerSyncSerializer.toJsonString(LedgerSyncPayload(entries = listOf(entry("remote", 100)))))
+        server.folderMissing = true
+        var applied = false
+        val engine = LedgerWebDavSync(
+            WebDavClient(server.folderUrl, "user", "pass"),
+            loadLocal = { emptyList() }, loadLocalTags = { emptyList() }, applyMerged = {},
+        ).engine
+        val result = WholeFileWebDavSync.syncTargets(
+            listOf(engine), { LedgerSyncPayload(entries = listOf(entry("local", 200))) },
+            { applied = true }, 1000L,
+        )
+        assertEquals(WebDavFailure.FOLDER_MISSING,
+            (result.single().exceptionOrNull() as WebDavException).failure)
+        assertFalse(applied)
+        assertEquals(listOf("remote"), LedgerBackup.parse(
+            server.bodyOf(LedgerWebDavSync.LEDGER_FILE)!!).entries.map { it.uuid })
+    }
+
+    @Test
+    fun duplicateDestinationsPublishOnceAndReportBothProfiles() = runBlocking {
+        val local = LedgerSyncPayload(entries = listOf(entry("local", 100)))
+        var applied = 0
+        val engines = List(2) {
+            LedgerWebDavSync(
+                WebDavClient(server.folderUrl, "user", "pass"),
+                loadLocal = { emptyList() }, loadLocalTags = { emptyList() }, applyMerged = {},
+            ).engine
+        }
+        val results = WholeFileWebDavSync.syncTargets(engines, { local }, { applied++ }, 1000L)
+        assertEquals(2, results.size)
+        assertTrue(results.all { it.isSuccess })
+        assertEquals(1, applied)
+        assertEquals(1, server.requests("GET", LedgerWebDavSync.LEDGER_FILE))
+        assertEquals(1, server.requests("PUT", LedgerWebDavSync.LEDGER_FILE))
+    }
+
+    @Test
+    fun encryptedTotpTargetsConvergeWithoutDroppingLocalTokens() = runBlocking {
+        val other = FakeWebDavServer(WebDavPaths.basicAuthHeader("user", "pass"))
+        val password = "test-backup-passphrase"
+        fun token(id: String) = TotpEntry(uuid = id, issuer = id, accountName = "account",
+            secret = "JBSWY3DPEHPK3PXP", createdAtMillis = 100L)
+        try {
+            server.putRaw(TotpWebDavSync.VAULT_FILE,
+                TotpVaultCrypto.encryptVault(listOf(token("a")), password, iterations = 1000))
+            other.putRaw(TotpWebDavSync.VAULT_FILE,
+                TotpVaultCrypto.encryptVault(listOf(token("b")), password, iterations = 1000))
+            var local = listOf(token("local"))
+            var applied = 0
+            val engines = listOf(server, other).map { target ->
+                TotpWebDavSync(WebDavClient(target.folderUrl, "user", "pass"), password,
+                    loadLocal = { emptyList() }, applyMerged = {}, iterations = 1000).engine
+            }
+            val result = WholeFileWebDavSync.syncTargets(engines, { local }, {
+                local = it
+                applied++
+            }, 1000L)
+            assertTrue(result.all { it.isSuccess })
+            assertEquals(1, applied)
+            assertEquals(setOf("a", "b", "local"), local.map { it.uuid }.toSet())
+            for (target in listOf(server, other)) {
+                val body = target.bodyOf(TotpWebDavSync.VAULT_FILE)!!
+                assertFalse(body.contains("JBSWY3DPEHPK3PXP"))
+                assertEquals(setOf("a", "b", "local"),
+                    TotpVaultCrypto.decryptVault(body, password).map { it.uuid }.toSet())
+                assertEquals(1, target.requests("GET", TotpWebDavSync.VAULT_FILE))
+            }
+        } finally {
+            other.stop()
         }
     }
 

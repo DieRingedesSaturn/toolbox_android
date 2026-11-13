@@ -44,6 +44,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── MonitorOverlayTheme.kt
 │   ├── MonitorOverlayView.kt
 │   ├── MonitorReader.kt
+│   ├── MonitorSession.kt
 │   └── MonitorSample.kt
 ├── location/
 │   ├── CoordinateFormatter.kt
@@ -52,6 +53,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── PlaceNameReader.kt
 │   ├── MockLocationConfig.kt
 │   ├── MockLocationController.kt
+│   ├── MockLocationSession.kt
 │   └── MockLocationService.kt
 ├── astronomy/
 │   ├── AstronomyCalculator.kt
@@ -88,10 +90,15 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerCsv.kt
 │   ├── LedgerSyncContract.kt
 │   ├── LedgerStore.kt
+│   ├── LedgerDb.kt
+│   ├── LedgerMapping.kt
+│   ├── LedgerEntryDraft.kt
 │   ├── LedgerDbSnapshots.kt
 │   ├── LedgerWebDavConfig.kt
 │   ├── LedgerWebDavClient.kt
 │   ├── LedgerWebDavSync.kt
+│   ├── LastWriteWins.kt
+│   ├── WholeFileWebDavSync.kt
 │   ├── NotificationLedger.kt
 │   ├── NotificationLedgerDefaults.kt
 │   ├── PaymentNotificationParser.kt
@@ -118,6 +125,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── Components.kt
 │   ├── WindowSize.kt
 │   ├── AppStrings.kt
+│   ├── *Strings.kt              # 按功能分组的 ToolboxStrings 扩展
 │   ├── AppPreferences.kt
 │   ├── AppBackground.kt
 │   ├── BackgroundImageEditor.kt
@@ -130,6 +138,9 @@ app/src/main/java/com/example/toolbox/
 │   ├── HomeGridRows.kt
 │   ├── HomeModuleGrid.kt
 │   ├── MonitorScreen.kt
+│   ├── MonitorMetrics.kt
+│   ├── MonitorCpuCards.kt
+│   ├── MonitorOverlaySettings.kt
 │   ├── DeviceScreen.kt
 │   ├── LocationScreen.kt
 │   ├── MockLocationCard.kt
@@ -139,6 +150,10 @@ app/src/main/java/com/example/toolbox/
 │   ├── PrivacyScreen.kt
 │   ├── AppUsageScreen.kt
 │   ├── LedgerScreen.kt
+│   ├── LedgerBackupSession.kt
+│   ├── LedgerCostSession.kt
+│   ├── LedgerEditorSession.kt
+│   ├── LedgerManagementSession.kt
 │   ├── LedgerAccountsTab.kt
 │   ├── LedgerAccountDetail.kt
 │   ├── LedgerOverviewTab.kt
@@ -147,6 +162,8 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerTransactionsTab.kt
 │   ├── LedgerCostTab.kt
 │   ├── LedgerEntryEditor.kt
+│   ├── LedgerCostFields.kt
+│   ├── LedgerEntryFields.kt
 │   ├── LedgerRenewals.kt
 │   ├── LedgerDisposalDialog.kt
 │   ├── LedgerTagsDialog.kt
@@ -154,7 +171,8 @@ app/src/main/java/com/example/toolbox/
 │   ├── LedgerBackupDialogs.kt
 │   ├── LedgerBackupReminderCard.kt
 │   ├── LedgerBudgetDialog.kt
-│   ├── LedgerWebDavDialog.kt
+│   ├── WebDavSettings.kt
+│   ├── TotpScreenDialogs.kt
 │   ├── NotificationLedgerDialog.kt
 │   ├── NotificationLedgerDefaultsDialog.kt
 │   ├── NotificationLedgerDuplicateDialog.kt
@@ -163,6 +181,7 @@ app/src/main/java/com/example/toolbox/
 │   ├── SettingsScreen.kt
 │   └── AboutScreen.kt
 └── device/
+    ├── HomeStatusReader.kt
     ├── DeviceInfo.kt
     └── DeviceInfoReader.kt
 ```
@@ -176,14 +195,23 @@ app/src/main/java/com/example/toolbox/
 | `ui/*Screen.kt` | 页面布局、状态呈现、用户事件 | 文件读取、HTTP 实现、长时间循环 |
 | `ui/Components.kt` | 多页面复用的 `InfoCard`、`InfoRow` | 单一页面私有组件 |
 | `ui/ToolboxTheme.kt` | Material 主题、颜色、排版 | 页面状态 |
-| `ui/AppStrings.kt` | 集中的用户可见文案 | Android 系统值解析 |
-| `device/` | Device 数据模型和读取逻辑 | Compose UI |
+| `ui/AppStrings.kt`、`ui/*Strings.kt` | 文案接收者、枚举及按功能分组的双语扩展 | Android 系统值解析 |
+| `device/` | Device 数据模型和读取逻辑、`HomeStatusReader` 首页摘要读取 | Compose UI |
 | `monitor/` | 性能采样、CPU 拓扑计算、悬浮窗服务与渲染视图 | 无关的页面设置或设备摘要 |
 | `usage/` | 应用与流量统计读取、离线分类解析模型 | 直接 Compose UI 渲染 |
 | `astronomy/` | 日月升落计算、天文模型算法 | Android 系统服务调用 |
 | `ledger/` | 记账模型与自定义多标签、一次性大件摊销/周期订阅计算、按日历日期的续费调度、原生 SQLite 存储（标签表、账户表与父级关联/处置/账户字段）、共享的备份/WebDAV 交换格式、文件备份（JSON/CSV）逻辑、手动 WebDAV 备份同步客户端、来源感知的微信/支付宝支付通知解析与可选自动入账（含撤销；通知快速记账暂时关闭：监听组件默认禁用，通知正文不再明文写入偏好设置）、通知监听与记录存储，以及 RemoteViews 小组件提供器 | 直接 Compose UI 渲染 |
 | `fx/` | 汇率模型与阻塞式读取器（Frankfurter → 欧洲央行官网 → 社区镜像的回退链），以及 SharedPreferences 缓存（最新汇率 + 最多 120 个历史日期；仅在用户主动操作时联网） | 直接 Compose UI 渲染 |
 | `privacy/` | 打开已导出的 Google 与系统设置的数据列表，以及 PackageManager 解析 | 直接 Compose UI 渲染 |
+
+
+### 会话与共享逻辑
+
+- `LedgerScreen` 保留分页、筛选、列表加载及导航；页面作用域内的 `LedgerBackupSession`、`LedgerCostSession`、`LedgerEditorSession` 和 `LedgerManagementSession` 分别承接备份、续费/处置、编辑保存、标签/账户/预算操作。它们使用页面传入的协程作用域，离开页面即取消；不创建常驻任务。弹窗 Host 与对应会话放在一起。
+- `LedgerEntryDraft.resolve()` 负责纯表单到条目的转换；成本、账户与转账输入组件独立。`LedgerDb` 管建表、迁移及升级前快照，`LedgerMapping` 管行映射，`LedgerStore` 管 CRUD 和事务；数据库版本保持不变。
+- `WholeFileWebDavSync` 共用旧路径回退、条件写入、重试和历史快照。记账/TOTP 仅提供编解码与合并函数。多目标同步并行读取全部目标，本地合并一次，再并行条件写入；412 会整组重新读取重试，最多三轮。同目录同凭据的重复配置合并为一个目标。读取或解密失败时不发布主文件；写入阶段可能部分成功，按目标报告结果，不能保证跨服务器原子性。
+- `MonitorSession.state` 是页面和悬浮窗服务的共享状态：服务运行时由服务采样，否则仅可见页面采样。`MockLocationSession` 暴露服务的同一个状态流，页面不再镜像启动/停止状态；test provider 的所有权及清理仍归服务负责。
+- `ToolboxStrings` 保持原有调用方式，文案实现按功能放在同级 `*Strings.kt` 扩展中。首页通过 `HomeStatusReader` 读取本机摘要，不直接查询账本；不会因此增加联网行为。
 
 ## v0.1 的增量结构
 

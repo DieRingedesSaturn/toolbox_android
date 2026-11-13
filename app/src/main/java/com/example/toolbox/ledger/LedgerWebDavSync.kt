@@ -20,76 +20,40 @@ object LedgerSyncMerge {
      * updatedAtMillis ascending.
      */
     fun merge(local: List<LedgerEntry>, remote: List<LedgerEntry>): MergeResult {
-        val localByUuid = local.associateBy { it.uuid }
-        val remoteByUuid = remote.associateBy { it.uuid }
-        var pulled = 0
-        var pushed = 0
-        val merged = (localByUuid.keys + remoteByUuid.keys).map { uuid ->
-            val localEntry = localByUuid[uuid]
-            val remoteEntry = remoteByUuid[uuid]
-            val chosen = when {
-                remoteEntry == null -> {
-                    pushed++
-                    localEntry!!
-                }
-                localEntry == null -> {
-                    pulled++
-                    remoteEntry
-                }
-                remoteEntry.updatedAtMillis >= localEntry.updatedAtMillis -> {
-                    if (remoteEntry.updatedAtMillis > localEntry.updatedAtMillis) pulled++
-                    remoteEntry
-                }
-                else -> {
-                    pushed++
-                    localEntry
-                }
-            }
-            chosen.copy(syncStatus = LedgerSyncStatus.SYNCED)
-        }
+        val result = LastWriteWins.merge(
+            local,
+            remote,
+            id = { it.uuid },
+            updatedAt = { it.updatedAtMillis },
+            finish = { it.copy(syncStatus = LedgerSyncStatus.SYNCED) },
+        )
         return MergeResult(
-            entries = merged.sortedBy { it.updatedAtMillis },
-            pulledCount = pulled,
-            pushedCount = pushed,
+            entries = result.items,
+            pulledCount = result.pulledCount,
+            pushedCount = result.pushedCount,
         )
     }
 
-    /** Same Last-Write-Wins rule applied to tags. */
-    fun mergeTags(local: List<LedgerTag>, remote: List<LedgerTag>): List<LedgerTag> {
-        val localByUuid = local.associateBy { it.uuid }
-        val remoteByUuid = remote.associateBy { it.uuid }
-        return (localByUuid.keys + remoteByUuid.keys).map { uuid ->
-            val localTag = localByUuid[uuid]
-            val remoteTag = remoteByUuid[uuid]
-            val chosen = when {
-                remoteTag == null -> localTag!!
-                localTag == null -> remoteTag
-                remoteTag.updatedAtMillis >= localTag.updatedAtMillis -> remoteTag
-                else -> localTag
-            }
-            chosen.copy(syncStatus = LedgerSyncStatus.SYNCED)
-        }.sortedBy { it.updatedAtMillis }
-    }
+    fun mergeTags(local: List<LedgerTag>, remote: List<LedgerTag>): List<LedgerTag> =
+        LastWriteWins.merge(
+            local,
+            remote,
+            id = { it.uuid },
+            updatedAt = { it.updatedAtMillis },
+            finish = { it.copy(syncStatus = LedgerSyncStatus.SYNCED) },
+        ).items
 
-    /** Same Last-Write-Wins rule applied to accounts. */
     fun mergeAccounts(
         local: List<LedgerAccount>,
         remote: List<LedgerAccount>,
-    ): List<LedgerAccount> {
-        val localByUuid = local.associateBy { it.uuid }
-        val remoteByUuid = remote.associateBy { it.uuid }
-        return (localByUuid.keys + remoteByUuid.keys).map { uuid ->
-            val localAccount = localByUuid[uuid]
-            val remoteAccount = remoteByUuid[uuid]
-            val chosen = when {
-                remoteAccount == null -> localAccount!!
-                localAccount == null -> remoteAccount
-                remoteAccount.updatedAtMillis >= localAccount.updatedAtMillis -> remoteAccount
-                else -> localAccount
-            }
-            chosen.copy(syncStatus = LedgerSyncStatus.SYNCED)
-        }.sortedBy { it.updatedAtMillis }
-    }
+    ): List<LedgerAccount> =
+        LastWriteWins.merge(
+            local,
+            remote,
+            id = { it.uuid },
+            updatedAt = { it.updatedAtMillis },
+            finish = { it.copy(syncStatus = LedgerSyncStatus.SYNCED) },
+        ).items
 }
 
 object WebDavSnapshots {
@@ -156,118 +120,79 @@ class LedgerWebDavSync(
     private val vault: LedgerBackupVault? = null,
 ) {
 
-    fun testConnection() {
-        client.ensureFolder()
-        client.put(TEST_FILE, "{}")
-        client.delete(TEST_FILE)
-    }
-
-    fun pull(): LedgerSyncPayload? {
-        val remote = client.get(LEDGER_FILE)
-        if (remote != null && WebDavClient.ifMatchValue(remote.etag) == null) {
-            throw WebDavException(WebDavFailure.VERSION_UNAVAILABLE)
-        }
-        val file = remote ?: legacyClients.firstNotNullOfOrNull { it.get(LEDGER_FILE) } ?: return null
-        return LedgerBackup.parse(vault?.decode(file.body) ?: file.body)
-    }
-
-    fun sync(nowMillis: Long = System.currentTimeMillis()): WebDavSyncResult {
-        client.ensureFolder()
-        var merged: MergeResult? = null
-        var mergedTags: List<LedgerTag> = emptyList()
-        var mergedAccounts: List<LedgerAccount> = emptyList()
-        var body = ""
-        var attempt = 0
-        while (true) {
-            attempt++
-            val remote = client.get(LEDGER_FILE)
-            // A missing tool file migrates from the nearest legacy folder;
-            // only the new tool folder is written. Legacy files stay untouched.
-            val remoteSource = remote ?: legacyClients.firstNotNullOfOrNull { it.get(LEDGER_FILE) }
-            val etag = remote?.let { WebDavClient.ifMatchValue(it.etag) }
-            if (remote != null && etag == null) {
-                throw WebDavException(WebDavFailure.VERSION_UNAVAILABLE)
+    internal val engine = WholeFileWebDavSync(
+        client = client,
+        tool = BackupTool.LEDGER,
+        fileName = LEDGER_FILE,
+        legacyClients = legacyClients,
+        empty = { LedgerSyncPayload(entries = emptyList()) },
+        decode = { body ->
+            val payload = try {
+                LedgerSyncSerializer.fromJsonString(vault?.decode(body) ?: body)
+            } catch (error: Exception) {
+                throw WebDavException(WebDavFailure.INVALID_REMOTE_FILE, cause = error)
             }
-            val remotePayload = remoteSource?.let { file ->
-                try {
-                    LedgerSyncSerializer.fromJsonString(vault?.decode(file.body) ?: file.body)
-                } catch (e: Exception) {
-                    throw WebDavException(WebDavFailure.INVALID_REMOTE_FILE, cause = e)
-                }.also { payload ->
-                    if (payload.schemaVersion > LEDGER_SCHEMA_VERSION) {
-                        throw WebDavException(WebDavFailure.NEWER_SCHEMA)
-                    }
-                }
-            }
-
-            merged = LedgerSyncMerge.merge(
-                loadLocal(),
-                remotePayload?.entries.orEmpty(),
-            )
-            mergedTags = LedgerSyncMerge.mergeTags(
-                loadLocalTags(),
-                remotePayload?.tags.orEmpty(),
-            )
-            mergedAccounts = LedgerSyncMerge.mergeAccounts(
-                loadLocalAccounts(),
-                remotePayload?.accounts.orEmpty(),
-            )
-            body = LedgerSyncSerializer.toJsonString(
+            if (payload.schemaVersion > LEDGER_SCHEMA_VERSION) throw WebDavException(WebDavFailure.NEWER_SCHEMA)
+            payload
+        },
+        encode = { payload, now ->
+            val body = LedgerSyncSerializer.toJsonString(payload.copy(clientTimestampMillis = now))
+            vault?.encode(body) ?: body
+        },
+        merge = { local, remote ->
+            val entries = LedgerSyncMerge.merge(local.entries, remote.entries)
+            FileMerge(
                 LedgerSyncPayload(
-                    clientTimestampMillis = nowMillis,
-                    entries = merged.entries,
-                    tags = mergedTags,
-                    accounts = mergedAccounts,
+                    entries = entries.entries,
+                    tags = LedgerSyncMerge.mergeTags(local.tags, remote.tags),
+                    accounts = LedgerSyncMerge.mergeAccounts(local.accounts, remote.accounts),
                 ),
+                entries.pulledCount,
+                entries.pushedCount,
             )
-            body = vault?.encode(body) ?: body
-            try {
-                client.put(
-                    LEDGER_FILE,
-                    body,
-                    ifMatch = etag,
-                    ifNoneMatch = if (remote == null) "*" else null,
-                )
-                break
-            } catch (e: WebDavException) {
-                if (e.failure == WebDavFailure.PRECONDITION_FAILED && attempt < MAX_ATTEMPTS) {
-                    continue
-                }
-                throw e
-            }
-        }
+        },
+        zone = zone,
+    )
 
-        applyMerged(
-            LedgerSyncPayload(
-                clientTimestampMillis = nowMillis,
-                entries = merged.entries,
-                tags = mergedTags,
-                accounts = mergedAccounts,
-            ),
-        )
+    private fun localPayload() = LedgerSyncPayload(
+        entries = loadLocal(), tags = loadLocalTags(), accounts = loadLocalAccounts(),
+    )
 
-        var snapshotName: String? = null
-        var snapshotFailure: WebDavFailure? = null
-        try {
-            snapshotName = WebDavHistory(client, BackupTool.LEDGER).save(body, nowMillis, zone)
-        } catch (e: WebDavException) {
-            snapshotFailure = e.failure
-        } catch (e: Exception) {
-            snapshotFailure = WebDavFailure.NETWORK
-        }
+    fun testConnection() = client.testConnection()
 
-        return WebDavSyncResult(
-            totalEntries = merged.entries.size,
-            pulledCount = merged.pulledCount,
-            pushedCount = merged.pushedCount,
-            snapshotName = snapshotName,
-            snapshotFailure = snapshotFailure,
-        )
-    }
+    fun pull(): LedgerSyncPayload? = engine.read().payload
+
+    fun sync(nowMillis: Long = System.currentTimeMillis()): WebDavSyncResult =
+        engine.sync(::localPayload, applyMerged, nowMillis).toLedgerResult()
 
     companion object {
         const val LEDGER_FILE = "ledger.json"
-        private const val TEST_FILE = ".toolbox-connection-test"
-        private const val MAX_ATTEMPTS = 3
+
+        suspend fun syncTargets(
+            services: List<WebDavServiceProfile>,
+            passphrase: String,
+            loadLocal: () -> LedgerSyncPayload,
+            applyMerged: (LedgerSyncPayload) -> Unit,
+            nowMillis: Long = System.currentTimeMillis(),
+        ): List<Result<WebDavSyncResult>> {
+            val engines = services.map { service ->
+                LedgerWebDavSync(
+                    client = service.syncClient(BackupTool.LEDGER),
+                    loadLocal = { emptyList() }, loadLocalTags = { emptyList() }, applyMerged = {},
+                    legacyClients = service.legacyClients(BackupTool.LEDGER),
+                    vault = LedgerBackupVault(passphrase),
+                ).engine
+            }
+            return WholeFileWebDavSync.syncTargets(engines, loadLocal, applyMerged, nowMillis)
+                .map { result -> result.map { it.toLedgerResult() } }
+        }
     }
 }
+
+private fun FileSyncResult<LedgerSyncPayload>.toLedgerResult() = WebDavSyncResult(
+    totalEntries = payload.entries.size,
+    pulledCount = pulled,
+    pushedCount = pushed,
+    snapshotName = snapshotName,
+    snapshotFailure = snapshotFailure,
+)

@@ -161,6 +161,17 @@ class LocationInfoReader(context: Context) {
         }
     }
 
+    @android.annotation.SuppressLint("MissingPermission")
+    fun readLastKnown(): LocationInfo? {
+        if (!hasLocationPermission()) return null
+        val manager = locationManager ?: return null
+        val location = runCatching {
+            manager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+        }.getOrNull() ?: return null
+        return location.toLocationInfo()
+    }
+
     suspend fun readCurrentLocation(): LocationInfo {
         if (!hasLocationPermission()) {
             return LocationInfo(
