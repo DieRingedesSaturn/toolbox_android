@@ -88,11 +88,8 @@ internal fun LedgerAccountsTab(
 
         if (live.isEmpty()) {
             item {
-                Card(
+                ToolboxCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    ),
                 ) {
                     Text(
                         text = strings.accountEmptyHint,
@@ -106,14 +103,11 @@ internal fun LedgerAccountsTab(
 
         items(live, key = { "acct-${it.uuid}" }) { account ->
             val balance = LedgerAccounts.balance(account, entries)
-            Card(
+            ToolboxCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(MaterialTheme.shapes.medium)
                     .clickable { onOpenAccount(account) },
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
             ) {
                 Row(
                     modifier = Modifier

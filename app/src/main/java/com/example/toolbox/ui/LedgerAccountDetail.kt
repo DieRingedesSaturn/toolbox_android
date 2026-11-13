@@ -18,10 +18,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,9 +89,16 @@ internal fun LedgerAccountDetail(
     var showReconcile by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val opaqueBg = MaterialTheme.colorScheme.background.copy(alpha = 1f)
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+    CompositionLocalProvider(LocalAcrylicBackground provides AcrylicBackgroundState()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = opaqueBg,
+        ) {
+            Scaffold(
+                containerColor = opaqueBg,
+                modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             ToolboxTopBar(
                 title = account.name,
@@ -241,6 +250,8 @@ internal fun LedgerAccountDetail(
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
+            }
+        }
             }
         }
     }

@@ -318,97 +318,107 @@ internal fun LedgerTransactionsTab(
                     }
                 }
             } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    FilterChip(
-                        selected = filterSelected.isNotEmpty(),
-                        onClick = onOpenFilter,
-                        label = { Text(strings.tagFilterAction) },
-                    )
-                    val selectedTags = filterSelected.mapNotNull { uuid ->
-                        tags.firstOrNull { it.uuid == uuid }
-                    }
-                    selectedTags.take(3).forEach { tag ->
-                        Spacer(modifier = Modifier.padding(horizontal = 3.dp))
-                        FilterChip(
-                            selected = true,
+                ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ToolboxFilterChip(
+                            selected = filterSelected.isNotEmpty(),
                             onClick = onOpenFilter,
-                            label = {
-                                Text(
-                                    (if (tag.emoji.isNotBlank()) "${tag.emoji} " else "") +
-                                        tag.name,
-                                )
-                            },
+                            label = { Text(strings.tagFilterAction) },
                         )
-                    }
-                    if (selectedTags.size > 3) {
-                        Text(
-                            text = " +${selectedTags.size - 3}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-                    if (filterSelected.isNotEmpty()) {
-                        TextButton(onClick = onClearFilter) {
-                            Text(strings.clearFilter)
+                        val selectedTags = filterSelected.mapNotNull { uuid ->
+                            tags.firstOrNull { it.uuid == uuid }
                         }
-                    }
-                    TextButton(onClick = onManageTags) {
-                        Text(strings.manageTagsChip)
+                        selectedTags.take(3).forEach { tag ->
+                            Spacer(modifier = Modifier.padding(horizontal = 3.dp))
+                            ToolboxFilterChip(
+                                selected = true,
+                                onClick = onOpenFilter,
+                                label = {
+                                    Text(
+                                        (if (tag.emoji.isNotBlank()) "${tag.emoji} " else "") +
+                                            tag.name,
+                                    )
+                                },
+                            )
+                        }
+                        if (selectedTags.size > 3) {
+                            Text(
+                                text = " +${selectedTags.size - 3}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        if (filterSelected.isNotEmpty()) {
+                            TextButton(onClick = onClearFilter) {
+                                Text(strings.clearFilter)
+                            }
+                        }
+                        TextButton(onClick = onManageTags) {
+                            Text(strings.manageTagsChip)
+                        }
                     }
                 }
             }
         }
 
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { onMonthChange(selectedMonth.minusMonths(1)) }) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_chevron_left),
-                        contentDescription = strings.prevMonth,
-                    )
-                }
-                Text(
-                    text = strings.formatLedgerMonth(selectedMonth),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                )
-                IconButton(
-                    onClick = { onMonthChange(selectedMonth.plusMonths(1)) },
-                    enabled = selectedMonth < currentMonth,
+            ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_chevron_right),
-                        contentDescription = strings.nextMonth,
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = { onMonthChange(selectedMonth.minusMonths(1)) }) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_chevron_left),
+                                contentDescription = strings.prevMonth,
+                            )
+                        }
+                        Text(
+                            text = strings.formatLedgerMonth(selectedMonth),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                        )
+                        IconButton(
+                            onClick = { onMonthChange(selectedMonth.plusMonths(1)) },
+                            enabled = selectedMonth < currentMonth,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_chevron_right),
+                                contentDescription = strings.nextMonth,
+                            )
+                        }
+                    }
+                    Text(
+                        text = "${strings.monthExpenseLabel} ${LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0)}" +
+                            " · ${strings.monthIncomeLabel} ${LedgerCalculator.formatCurrency(monthSummary.incomeCents / 100.0)}" +
+                            " · ${strings.monthNetLabel} ${LedgerCalculator.formatCurrency(monthSummary.netCents / 100.0)}",
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }
-            Text(
-                text = "${strings.monthExpenseLabel} ${LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0)}" +
-                    " · ${strings.monthIncomeLabel} ${LedgerCalculator.formatCurrency(monthSummary.incomeCents / 100.0)}" +
-                    " · ${strings.monthNetLabel} ${LedgerCalculator.formatCurrency(monthSummary.netCents / 100.0)}",
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
         }
 
         if (dayGroups.isEmpty()) {
             item {
-                Card(
+                ToolboxCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    ),
                 ) {
                     Text(
                         text = strings.emptyMonthEntries,
@@ -420,22 +430,20 @@ internal fun LedgerTransactionsTab(
             }
         } else {
             dayGroups.forEach { group ->
-                item(key = "day-${group.date}") {
-                    LedgerDayHeader(
-                        strings = strings,
-                        date = group.date,
-                        expenseCents = group.expenseCents,
-                        incomeCents = group.incomeCents,
-                    )
-                }
                 item(key = "card-${group.date}") {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        ),
-                    ) {
+                    ToolboxCard(modifier = Modifier.fillMaxWidth()) {
                         Column {
+                            Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                LedgerDayHeader(
+                                    strings = strings,
+                                    date = group.date,
+                                    expenseCents = group.expenseCents,
+                                    incomeCents = group.incomeCents,
+                                )
+                            }
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            )
                             group.entries.forEachIndexed { index, entry ->
                                 if (index > 0) {
                                     HorizontalDivider(
@@ -547,11 +555,8 @@ internal fun LedgerSearchResults(
         }
         if (results.isEmpty()) {
             item {
-                Card(
+                ToolboxCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    ),
                 ) {
                     Text(
                         text = strings.searchEmptyResult,
@@ -563,26 +568,24 @@ internal fun LedgerSearchResults(
             }
         } else {
             groups.forEach { (date, dayEntries) ->
-                item(key = "sday-$date") {
-                    LedgerDayHeader(
-                        strings = strings,
-                        date = date,
-                        expenseCents = dayEntries
-                            .filter { it.type == LedgerEntryType.EXPENSE }
-                            .sumOf { it.baseAmountCents },
-                        incomeCents = dayEntries
-                            .filter { it.type == LedgerEntryType.INCOME }
-                            .sumOf { it.baseAmountCents },
-                    )
-                }
                 item(key = "scard-$date") {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        ),
-                    ) {
+                    ToolboxCard(modifier = Modifier.fillMaxWidth()) {
                         Column {
+                            Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                LedgerDayHeader(
+                                    strings = strings,
+                                    date = date,
+                                    expenseCents = dayEntries
+                                        .filter { it.type == LedgerEntryType.EXPENSE }
+                                        .sumOf { it.baseAmountCents },
+                                    incomeCents = dayEntries
+                                        .filter { it.type == LedgerEntryType.INCOME }
+                                        .sumOf { it.baseAmountCents },
+                                )
+                            }
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            )
                             dayEntries.forEachIndexed { index, entry ->
                                 if (index > 0) {
                                     HorizontalDivider(

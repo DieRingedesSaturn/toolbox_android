@@ -124,20 +124,35 @@ class TotpStore internal constructor(
     }
 
     fun savedPassphrase(): String? =
-        prefs.getString(KEY_VAULT_PASSPHRASE_ENC, null)?.let { encoded ->
+        decryptStored(KEY_VAULT_PASSPHRASE_ENC) ?: decryptStored(KEY_DEFAULT_BACKUP_PASSPHRASE_ENC)
+
+    fun savePassphrase(passphrase: String?) {
+        encryptAndStore(KEY_VAULT_PASSPHRASE_ENC, passphrase)
+    }
+
+    /** Shared backup passphrase for general settings and ledger; TOTP may override its own. */
+    fun savedDefaultBackupPassphrase(): String? =
+        decryptStored(KEY_DEFAULT_BACKUP_PASSPHRASE_ENC) ?: decryptStored(KEY_VAULT_PASSPHRASE_ENC)
+
+    fun saveDefaultBackupPassphrase(passphrase: String?) {
+        encryptAndStore(KEY_DEFAULT_BACKUP_PASSPHRASE_ENC, passphrase)
+    }
+
+    private fun decryptStored(key: String): String? =
+        prefs.getString(key, null)?.let { encoded ->
             runCatching {
                 val bytes = Base64.decode(encoded, Base64.NO_WRAP)
                 cipher.decrypt(bytes)
             }.getOrNull()
         }
 
-    fun savePassphrase(passphrase: String?) {
+    private fun encryptAndStore(key: String, passphrase: String?) {
         prefs.edit {
             if (passphrase.isNullOrEmpty()) {
-                remove(KEY_VAULT_PASSPHRASE_ENC)
+                remove(key)
             } else {
                 val encrypted = cipher.encrypt(passphrase)
-                putString(KEY_VAULT_PASSPHRASE_ENC, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                putString(key, Base64.encodeToString(encrypted, Base64.NO_WRAP))
             }
         }
     }
@@ -183,6 +198,7 @@ class TotpStore internal constructor(
         internal const val LOCAL_FILE_NAME = "totp-local.bin"
         private const val PREFS_NAME = "totp_prefs"
         private const val KEY_VAULT_PASSPHRASE_ENC = "vault_passphrase_enc"
+        private const val KEY_DEFAULT_BACKUP_PASSPHRASE_ENC = "default_backup_passphrase_enc"
     }
 }
 

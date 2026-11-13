@@ -19,6 +19,7 @@ import org.json.JSONObject
 enum class BackupTool(val key: String) {
     LEDGER("ledger"),
     TOTP("totp"),
+    SETTINGS("settings"),
 }
 
 data class WebDavServiceProfile(
@@ -310,6 +311,7 @@ class WebDavConfigStore(context: Context) {
         val key = when (tool) {
             BackupTool.LEDGER -> KEY_LAST_SYNC_AT
             BackupTool.TOTP -> KEY_LAST_TOTP_SYNC_AT
+            BackupTool.SETTINGS -> "last_settings_backup_at"
         }
         return if (prefs.contains(key)) prefs.getLong(key, 0L) else null
     }
@@ -318,6 +320,7 @@ class WebDavConfigStore(context: Context) {
         val key = when (tool) {
             BackupTool.LEDGER -> KEY_LAST_SYNC_AT
             BackupTool.TOTP -> KEY_LAST_TOTP_SYNC_AT
+            BackupTool.SETTINGS -> "last_settings_backup_at"
         }
         prefs.edit { putLong(key, millis) }
     }

@@ -4,12 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,10 +31,20 @@ import com.example.toolbox.ledger.BackupTool
 import com.example.toolbox.ledger.WebDavHistory
 import com.example.toolbox.ledger.WebDavServiceProfile
 import com.example.toolbox.totp.TotpVaultCrypto
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private data class BackupVersion(
+    val name: String,
+    val time: LocalDateTime?,
+    val read: () -> String,
+    val legacy: Boolean = false,
+    val local: Boolean = false,
+)
 
 @Composable
 internal fun BackupPassphraseDialog(
@@ -50,7 +62,7 @@ internal fun BackupPassphraseDialog(
                 Text(strings.backupPasswordHint)
                 OutlinedTextField(value = pass, onValueChange = { pass = it }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    visualTransformation = PasswordVisualTransformation(), label = { Text(strings.webDavPasswordLabel) })
+                    visualTransformation = PasswordVisualTransformation(), label = { Text(strings.backupPasswordLabel) })
             }
         },
         confirmButton = {
@@ -79,7 +91,7 @@ internal fun BackupHistoryDialog(
     val recovery = remember(context, tool) { BackupRecoveryStore(context, tool) }
     var selected by remember { mutableStateOf(targets.firstOrNull()?.id) }
     var pass by remember { mutableStateOf(initialPassphrase) }
-    var versions by remember { mutableStateOf<List<Pair<String, () -> String>>>(emptyList()) }
+    var versions by remember { mutableStateOf<List<BackupVersion>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<Pair<String, Int>?>(null) }
@@ -110,7 +122,7 @@ internal fun BackupHistoryDialog(
                 Text(strings.backupPasswordHint)
                 OutlinedTextField(value = pass, onValueChange = { pass = it }, enabled = !busy, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    visualTransformation = PasswordVisualTransformation(), label = { Text(strings.webDavPasswordLabel) })
+                    visualTransformation = PasswordVisualTransformation(), label = { Text(strings.backupPasswordLabel) })
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     targets.forEach { service ->
                         FilterChip(selected = selected == service.id, enabled = !busy, onClick = {
@@ -126,23 +138,25 @@ internal fun BackupHistoryDialog(
                     scope.launch {
                         try {
                             val result = withContext(Dispatchers.IO) {
-                                val found = mutableListOf<Pair<String, () -> String>>()
+                                val found = mutableListOf<BackupVersion>()
                                 var failed = false
-                                if (recovery.exists()) found += strings.backupBeforeRestore to { recovery.read() }
+                                if (recovery.exists()) found += BackupVersion(strings.backupBeforeRestore, null, { recovery.read() }, local = true)
                                 targets.firstOrNull { it.id == selected }?.let { service ->
                                     val clients = listOf(service.syncClient(tool)) + service.legacyClients(tool)
                                     clients.forEachIndexed { index, client ->
                                         try {
                                             val history = WebDavHistory(client, tool)
                                             history.list().forEach { name ->
-                                                found += (if (index == 0) name else "$name · ${strings.backupLegacy}") to { history.read(name) }
+                                                found += BackupVersion(name, WebDavHistory.snapshotTime(tool, name),
+                                                    { history.read(name) }, legacy = index != 0)
                                             }
                                         } catch (failure: CancellationException) {
                                             throw failure
                                         } catch (_: Exception) { failed = true }
                                     }
                                 }
-                                found.toList() to failed
+                                found.sortedWith(compareByDescending<BackupVersion> { it.local }
+                                    .thenByDescending { it.time }.thenByDescending { it.name }) to failed
                             }
                             versions = result.first
                             error = result.second
@@ -156,9 +170,28 @@ internal fun BackupHistoryDialog(
                 if (busy) CircularProgressIndicator()
                 if (error) Text(strings.backupHistoryFailed)
                 if (loaded && versions.isEmpty()) Text(strings.backupHistoryEmpty)
-                versions.forEach { (name, read) ->
-                    TextButton(enabled = !busy && TotpVaultCrypto.validatePassphrase(pass), onClick = { readVersion(read) }) {
-                        Text(name)
+                versions.groupBy { version ->
+                    when {
+                        version.local -> strings.backupBeforeRestore
+                        version.time != null -> version.time.toLocalDate().toString()
+                        else -> strings.backupTimeUnknown
+                    }
+                }.forEach { (date, items) ->
+                    Text(date, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    items.forEach { version ->
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !busy && TotpVaultCrypto.validatePassphrase(pass),
+                            onClick = { readVersion(version.read) },
+                        ) {
+                            Column(Modifier.fillMaxWidth()) {
+                                Text(version.time?.format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS")) ?: version.name)
+                                if (!version.local) {
+                                    Text(version.name, style = MaterialTheme.typography.bodySmall)
+                                    if (version.legacy) Text(strings.backupLegacy, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -169,7 +202,7 @@ internal fun BackupHistoryDialog(
         AlertDialog(
             onDismissRequest = { if (!busy) pending = null },
             title = { Text(strings.backupHistoryTitle) },
-            text = { Text(strings.backupRestoreWarning(count)) },
+            text = { Text(if (tool == BackupTool.SETTINGS) strings.settingsRestoreWarning(count) else strings.backupRestoreWarning(count)) },
             confirmButton = {
                 TextButton(enabled = !busy, onClick = {
                     busy = true

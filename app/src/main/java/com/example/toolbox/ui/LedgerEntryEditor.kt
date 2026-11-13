@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -488,11 +489,14 @@ internal fun LedgerEntryEditor(
             decorFitsSystemWindows = false,
         ),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
+        val opaqueBackground = MaterialTheme.colorScheme.background.copy(alpha = 1f)
+        CompositionLocalProvider(LocalAcrylicBackground provides AcrylicBackgroundState()) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = opaqueBackground,
+            ) {
             Scaffold(
+                containerColor = opaqueBackground,
                 topBar = {
                     TopAppBar(
                         title = {
@@ -1316,6 +1320,7 @@ internal fun LedgerEntryEditor(
                     )
                 }
             }
+        }
         }
     }
 

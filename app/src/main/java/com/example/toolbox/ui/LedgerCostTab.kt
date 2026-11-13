@@ -134,26 +134,30 @@ internal fun LedgerCostTab(
         }
 
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FilterChip(
-                    selected = isFiltered,
-                    onClick = onOpenFilter,
-                    label = { Text(strings.tagFilterAction) },
-                )
-                if (isFiltered) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    LedgerStatusChip(text = strings.filteredBadge, active = false)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(onClick = onClearFilter) {
-                        Text(strings.clearFilter)
+            ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ToolboxFilterChip(
+                        selected = isFiltered,
+                        onClick = onOpenFilter,
+                        label = { Text(strings.tagFilterAction) },
+                    )
+                    if (isFiltered) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        LedgerStatusChip(text = strings.filteredBadge, active = false)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextButton(onClick = onClearFilter) {
+                            Text(strings.clearFilter)
+                        }
                     }
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                TextButton(onClick = onManageTags) {
-                    Text(strings.manageTagsChip)
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(onClick = onManageTags) {
+                        Text(strings.manageTagsChip)
+                    }
                 }
             }
         }
@@ -195,11 +199,8 @@ internal fun LedgerCostTab(
 
         if (costItems.isEmpty()) {
             item {
-                Card(
+                ToolboxCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    ),
                 ) {
                     Text(
                         text = strings.emptyCostItemsHint,
@@ -213,12 +214,15 @@ internal fun LedgerCostTab(
 
         if (assets.isNotEmpty()) {
             item(key = "assets-header") {
-                Text(
-                    text = strings.costSectionAssets,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = strings.costSectionAssets,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                }
             }
             items(assets, key = { "asset-${it.first.uuid}" }) { (entry, breakdown) ->
                 CostAssetCard(
@@ -236,12 +240,15 @@ internal fun LedgerCostTab(
 
         if (subscriptions.isNotEmpty()) {
             item(key = "subs-header") {
-                Text(
-                    text = strings.costSectionSubscriptions,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = strings.costSectionSubscriptions,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                }
             }
             items(subscriptions, key = { "sub-${it.first.uuid}" }) { (entry, breakdown) ->
                 CostSubscriptionCard(
@@ -259,12 +266,15 @@ internal fun LedgerCostTab(
 
         if (fixedIncomes.isNotEmpty()) {
             item(key = "income-header") {
-                Text(
-                    text = strings.fixedIncomeSection,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = strings.fixedIncomeSection,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                }
             }
             items(fixedIncomes, key = { "inc-${it.first.uuid}" }) { (entry, breakdown) ->
                 CostSubscriptionCard(
@@ -398,14 +408,11 @@ private fun CostAssetCard(
         )
     }
 
-    Card(
+    ToolboxCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(MaterialTheme.shapes.medium)
             .combinedClickable(onClick = onOpen, onLongClick = onCopy),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(
             modifier = Modifier
@@ -562,14 +569,11 @@ private fun CostSubscriptionCard(
     val dailyStr = "${LedgerCalculator.formatCurrency(breakdown.dailyCostYuan)}${strings.perDayUnit}"
     val monthlyStr = "${LedgerCalculator.formatCurrency(breakdown.monthlyCostYuan)}${strings.perMonthUnit}"
 
-    Card(
+    ToolboxCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(MaterialTheme.shapes.medium)
             .combinedClickable(onClick = onOpen, onLongClick = onCopy),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(
             modifier = Modifier

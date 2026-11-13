@@ -13,6 +13,7 @@ class WebDavPathsTest {
         assertEquals("https://h/a%20b/Toolbox/ledger/", ledger)
         assertEquals(ledger, WebDavPaths.toolFolderUrl(ledger, BackupTool.LEDGER))
         assertEquals("https://h/a%20b/Toolbox/totp/", WebDavPaths.toolFolderUrl(ledger, BackupTool.TOTP))
+        assertEquals("https://h/a%20b/Toolbox/settings/", WebDavPaths.toolFolderUrl(ledger, BackupTool.SETTINGS))
         assertEquals(listOf("https://h/a%20b/Toolbox/", base),
             WebDavPaths.legacyFolderUrls(base, BackupTool.LEDGER))
     }

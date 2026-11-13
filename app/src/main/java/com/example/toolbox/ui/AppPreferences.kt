@@ -3,6 +3,8 @@ package com.example.toolbox.ui
 import android.content.Context
 import androidx.core.content.edit
 import com.example.toolbox.fx.FxPinnedCurrencies
+import org.json.JSONArray
+import org.json.JSONObject
 import com.example.toolbox.location.MockLocationConfig
 import com.example.toolbox.monitor.MonitorCpuDisplayMode
 import com.example.toolbox.monitor.MonitorMetric
@@ -22,8 +24,18 @@ private const val MONITOR_OVERLAY_OPACITY_KEY = "monitor_overlay_opacity"
 private const val LEDGER_LAST_ACCOUNT_KEY = "ledger_last_account"
 private const val LEDGER_OVERVIEW_ORDER_KEY = "ledger_overview_order"
 private const val HOME_MODULE_ORDER_KEY = "home_module_order"
+private const val HOME_SUMMARY_ENABLED_KEY = "home_summary_enabled"
+private const val HOME_SUMMARY_ITEMS_KEY = "home_summary_items"
+private const val HOME_SUMMARY_CUSTOM_TEXT_KEY = "home_summary_custom_text"
 private const val FX_PINNED_CURRENCIES_KEY = "fx_pinned_currencies"
 private const val MOCK_LOCATION_ACCURACY_KEY = "mock_location_accuracy"
+private const val BACKGROUND_STRENGTH_KEY = "background_strength"
+private const val BACKGROUND_BLUR_ENABLED_KEY = "background_blur_enabled"
+private const val BACKGROUND_BLUR_STRENGTH_KEY = "background_blur_strength"
+private const val BACKGROUND_SCALE_KEY = "background_scale"
+private const val BACKGROUND_OFFSET_X_KEY = "background_offset_x"
+private const val BACKGROUND_OFFSET_Y_KEY = "background_offset_y"
+private const val BACKGROUND_SEED_RGB_KEY = "background_seed_rgb"
 
 /** Retired accent presets seed the custom accent instead of reverting. */
 private val LEGACY_ACCENT_SEEDS = mapOf(
@@ -61,6 +73,65 @@ class AppPreferences(context: Context) {
 
     fun saveCustomAccentRgb(value: Int) {
         preferences.edit { putInt(CUSTOM_ACCENT_RGB_KEY, value and 0x00FFFFFF) }
+    }
+
+    /** How strongly the picked background image shows through; 0 hides it entirely. */
+    fun backgroundStrength(): Float =
+        preferences.getFloat(BACKGROUND_STRENGTH_KEY, DEFAULT_BACKGROUND_STRENGTH)
+            .coerceIn(0f, MAX_BACKGROUND_STRENGTH)
+
+    fun saveBackgroundStrength(value: Float) {
+        preferences.edit { putFloat(BACKGROUND_STRENGTH_KEY, value.coerceIn(0f, MAX_BACKGROUND_STRENGTH)) }
+    }
+
+    /** Accent seed sampled from the background image; 0 = never sampled. */
+    fun backgroundSeedRgb(): Int = preferences.getInt(BACKGROUND_SEED_RGB_KEY, 0)
+
+    fun saveBackgroundSeedRgb(value: Int) {
+        preferences.edit { putInt(BACKGROUND_SEED_RGB_KEY, value and 0x00FFFFFF) }
+    }
+
+    fun backgroundBlurEnabled(): Boolean = preferences.getBoolean(BACKGROUND_BLUR_ENABLED_KEY, true)
+
+    fun saveBackgroundBlurEnabled(value: Boolean) {
+        preferences.edit { putBoolean(BACKGROUND_BLUR_ENABLED_KEY, value) }
+    }
+
+    fun backgroundBlurStrength(): Float =
+        preferences.getFloat(BACKGROUND_BLUR_STRENGTH_KEY, DEFAULT_BACKGROUND_BLUR_STRENGTH)
+            .coerceIn(0f, 1f)
+
+    fun saveBackgroundBlurStrength(value: Float) {
+        preferences.edit { putFloat(BACKGROUND_BLUR_STRENGTH_KEY, value.coerceIn(0f, 1f)) }
+    }
+
+    fun saveBackgroundTransform(scale: Float, offsetX: Float, offsetY: Float) {
+        preferences.edit {
+            putFloat(BACKGROUND_SCALE_KEY, scale.coerceIn(1f, 3f))
+            putFloat(BACKGROUND_OFFSET_X_KEY, offsetX.coerceIn(-1f, 1f))
+            putFloat(BACKGROUND_OFFSET_Y_KEY, offsetY.coerceIn(-1f, 1f))
+        }
+    }
+
+    fun backgroundScale(): Float =
+        preferences.getFloat(BACKGROUND_SCALE_KEY, 1f).coerceIn(1f, 3f)
+
+    fun saveBackgroundScale(value: Float) {
+        preferences.edit { putFloat(BACKGROUND_SCALE_KEY, value.coerceIn(1f, 3f)) }
+    }
+
+    fun backgroundOffsetX(): Float =
+        preferences.getFloat(BACKGROUND_OFFSET_X_KEY, 0f).coerceIn(-1f, 1f)
+
+    fun saveBackgroundOffsetX(value: Float) {
+        preferences.edit { putFloat(BACKGROUND_OFFSET_X_KEY, value.coerceIn(-1f, 1f)) }
+    }
+
+    fun backgroundOffsetY(): Float =
+        preferences.getFloat(BACKGROUND_OFFSET_Y_KEY, 0f).coerceIn(-1f, 1f)
+
+    fun saveBackgroundOffsetY(value: Float) {
+        preferences.edit { putFloat(BACKGROUND_OFFSET_Y_KEY, value.coerceIn(-1f, 1f)) }
     }
 
     fun saveLanguage(value: AppLanguage) {
@@ -161,6 +232,27 @@ class AppPreferences(context: Context) {
         preferences.edit { putString(HOME_MODULE_ORDER_KEY, HomeModuleOrder.format(value)) }
     }
 
+    fun homeSummaryEnabled(): Boolean =
+        preferences.getBoolean(HOME_SUMMARY_ENABLED_KEY, true)
+
+    fun saveHomeSummaryEnabled(value: Boolean) {
+        preferences.edit { putBoolean(HOME_SUMMARY_ENABLED_KEY, value) }
+    }
+
+    internal fun homeSummaryItems(): Set<HomeSummaryItem> =
+        HomeSummaryConfig.parseItems(preferences.getString(HOME_SUMMARY_ITEMS_KEY, null))
+
+    internal fun saveHomeSummaryItems(value: Set<HomeSummaryItem>) {
+        preferences.edit { putString(HOME_SUMMARY_ITEMS_KEY, HomeSummaryConfig.formatItems(value)) }
+    }
+
+    fun homeSummaryCustomText(): String =
+        preferences.getString(HOME_SUMMARY_CUSTOM_TEXT_KEY, "").orEmpty()
+
+    fun saveHomeSummaryCustomText(value: String) {
+        preferences.edit { putString(HOME_SUMMARY_CUSTOM_TEXT_KEY, value.take(200)) }
+    }
+
     fun fxPinnedCurrencies(): List<String> =
         FxPinnedCurrencies.parse(preferences.getString(FX_PINNED_CURRENCIES_KEY, null))
 
@@ -180,4 +272,91 @@ class AppPreferences(context: Context) {
         if (MockLocationConfig.parseAccuracyMeters(trimmed) == null) return
         preferences.edit { putString(MOCK_LOCATION_ACCURACY_KEY, trimmed) }
     }
+    /** Explicit allowlist: credentials, tokens, ledger records and device grants never travel. */
+    fun backupSettings(): JSONObject = JSONObject().apply {
+        preferences.all.forEach { (key, value) ->
+            if (key in BACKUP_KEYS) {
+                put(key, if (value is Set<*>) JSONArray(value.filterIsInstance<String>().sorted()) else value)
+            }
+        }
+    }
+
+    fun restoreSettings(json: JSONObject) {
+        val values = validateBackupSettings(json)
+        val editor = preferences.edit()
+        BACKUP_KEYS.forEach { editor.remove(it) }
+        values.forEach { (key, value) ->
+            when (value) {
+                is String -> editor.putString(key, value)
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is Float -> editor.putFloat(key, value)
+                is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+            }
+        }
+        check(editor.commit()) { "Couldn't save restored settings" }
+    }
+
+    companion object {
+        private const val DEFAULT_BACKGROUND_STRENGTH = 0.35f
+        private const val MAX_BACKGROUND_STRENGTH = 1.0f
+        private const val DEFAULT_BACKGROUND_BLUR_STRENGTH = 0.6f
+
+        private val STRING_KEYS = setOf(LANGUAGE_KEY, THEME_KEY, ACCENT_KEY, MONITOR_CPU_DISPLAY_MODE_KEY,
+            MONITOR_OVERLAY_THEME_KEY, LEDGER_LAST_ACCOUNT_KEY, LEDGER_OVERVIEW_ORDER_KEY,
+            HOME_MODULE_ORDER_KEY, HOME_SUMMARY_ITEMS_KEY, HOME_SUMMARY_CUSTOM_TEXT_KEY,
+            FX_PINNED_CURRENCIES_KEY, MOCK_LOCATION_ACCURACY_KEY)
+        private val INT_KEYS = setOf(CUSTOM_ACCENT_RGB_KEY, MONITOR_OVERLAY_CUSTOM_COLOR_KEY,
+            BACKGROUND_SEED_RGB_KEY)
+        private val BACKUP_KEYS = STRING_KEYS + INT_KEYS + setOf(MONITOR_OVERLAY_FIXED_KEY,
+            HOME_SUMMARY_ENABLED_KEY, MONITOR_OVERLAY_OPACITY_KEY, BACKGROUND_STRENGTH_KEY,
+            BACKGROUND_BLUR_ENABLED_KEY, BACKGROUND_BLUR_STRENGTH_KEY, BACKGROUND_SCALE_KEY,
+            BACKGROUND_OFFSET_X_KEY, BACKGROUND_OFFSET_Y_KEY, "monitor_metrics")
+
+        internal fun sanitizedBackupSettings(json: JSONObject): JSONObject = JSONObject().apply {
+            validateBackupSettings(json).forEach { (key, value) ->
+                put(key, if (value is Set<*>) JSONArray(value.toList()) else value)
+            }
+        }
+
+        internal fun validateBackupSettings(json: JSONObject): Map<String, Any> = buildMap {
+            json.keys().forEach { key ->
+                if (key !in BACKUP_KEYS) return@forEach
+                val raw = json.get(key)
+                val value: Any = when (key) {
+                    in STRING_KEYS -> { require(raw is String); raw }
+                    in INT_KEYS -> {
+                        require(raw is Number && raw.toDouble() == raw.toInt().toDouble())
+                        raw.toInt()
+                    }
+                    MONITOR_OVERLAY_FIXED_KEY, BACKGROUND_BLUR_ENABLED_KEY, HOME_SUMMARY_ENABLED_KEY -> {
+                        require(raw is Boolean); raw
+                    }
+                    MONITOR_OVERLAY_OPACITY_KEY, BACKGROUND_STRENGTH_KEY, BACKGROUND_BLUR_STRENGTH_KEY -> {
+                        require(raw is Number && raw.toDouble().isFinite() && raw.toDouble() in 0.0..1.0)
+                        raw.toFloat()
+                    }
+                    BACKGROUND_SCALE_KEY -> {
+                        require(raw is Number && raw.toDouble().isFinite() && raw.toDouble() in 1.0..3.0)
+                        raw.toFloat()
+                    }
+                    BACKGROUND_OFFSET_X_KEY, BACKGROUND_OFFSET_Y_KEY -> {
+                        require(raw is Number && raw.toDouble().isFinite() && raw.toDouble() in -1.0..1.0)
+                        raw.toFloat()
+                    }
+                    "monitor_metrics" -> {
+                        require(raw is JSONArray && raw.length() <= MonitorMetric.entries.size)
+                        (0 until raw.length()).map { index ->
+                            val metric = raw.get(index)
+                            require(metric is String && MonitorMetric.entries.any { it.name == metric })
+                            metric
+                        }.toSet()
+                    }
+                    else -> error("Unsupported setting")
+                }
+                put(key, value)
+            }
+        }
+    }
+
 }

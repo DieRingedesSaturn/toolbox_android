@@ -26,7 +26,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -238,9 +238,10 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
             )
         }
         if (state.busy || cleanup || state.phase == MockLocationPhase.CLEANUP_REQUIRED) {
-            OutlinedButton(
+            FilledTonalButton(
                 enabled = state.phase != MockLocationPhase.STOPPING,
                 modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.small,
                 onClick = {
                     runCatching { MockLocationService.stop(context) }.onFailure { startFailure = MockLocationFailure.START }
                 },
@@ -353,17 +354,11 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     MockLocationConfig.DURATIONS_MINUTES.forEach { value ->
-                        FilterChip(
+                        ToolboxFilterChip(
                             selected = value == minutes,
                             onClick = { minutes = value },
                             enabled = !launching,
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = !launching,
-                                selected = value == minutes,
-                                borderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f),
-                            ),
                             label = {
                                 Text(
                                     text = strings.mockLocationMinutes(value),

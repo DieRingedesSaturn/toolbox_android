@@ -1,6 +1,8 @@
 package com.example.toolbox.ledger
 
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.format.ResolverStyle
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -58,6 +60,17 @@ class WebDavHistory(private val client: WebDavClient, private val tool: BackupTo
         fun nameRegex(tool: BackupTool) = Regex(
             "^${tool.key}-backup-\\d{8}-\\d{6}(?:-\\d{3}-[0-9a-f]{8})?\\.json$",
         )
+
+        /** Filenames store the creating device's wall-clock time, including legacy names. */
+        fun snapshotTime(tool: BackupTool, name: String): LocalDateTime? {
+            if (!nameRegex(tool).matches(name)) return null
+            return runCatching {
+                val stamp = name.substringAfter("-backup-").removeSuffix(".json")
+                val time = LocalDateTime.parse(stamp.take(15),
+                    DateTimeFormatter.ofPattern("uuuuMMdd-HHmmss").withResolverStyle(ResolverStyle.STRICT))
+                if (stamp.length > 15) time.withNano(stamp.substring(16, 19).toInt() * 1_000_000) else time
+            }.getOrNull()
+        }
 
         fun snapshotName(tool: BackupTool, millis: Long, zone: ZoneId): String =
             "${tool.key}-backup-${Instant.ofEpochMilli(millis).atZone(zone).format(

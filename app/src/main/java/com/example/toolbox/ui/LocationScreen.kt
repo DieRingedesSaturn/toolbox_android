@@ -32,7 +32,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
@@ -585,8 +585,9 @@ private fun GnssSkyViewCard(
                         color = if (status != null && status.usedInFixCount > 0) MaterialTheme.colorScheme.primary else Color(0xFFF5A623),
                     )
                 }
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = onStop,
+                    shape = MaterialTheme.shapes.small,
                 ) {
                     Text(strings.gnssStopObservation)
                 }

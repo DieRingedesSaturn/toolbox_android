@@ -195,11 +195,8 @@ private fun MonthSummaryCard(
 ) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
-    Card(
+    ToolboxCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(
             modifier = Modifier
@@ -342,13 +339,10 @@ private fun DailyCostCard(
     summary: LedgerSummary,
     onShowCosts: () -> Unit,
 ) {
-    Card(
+    ToolboxCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onShowCosts),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(
             modifier = Modifier
@@ -510,11 +504,8 @@ private fun RecentEntriesCard(
     onCopyEntry: (LedgerEntry) -> Unit,
     onSeeAll: () -> Unit,
 ) {
-    Card(
+    ToolboxCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(

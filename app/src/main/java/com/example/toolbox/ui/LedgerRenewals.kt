@@ -70,12 +70,10 @@ internal fun PendingRenewalsCard(
     onRecordAll: (List<DueRenewal>) -> Unit,
 ) {
     val dateFormat = remember { DateTimeFormatter.ofPattern("MM-dd") }
-    Card(
+    ToolboxCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
     ) {
         Column(
             modifier = Modifier.padding(16.dp),

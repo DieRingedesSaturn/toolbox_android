@@ -1,5 +1,9 @@
 package com.example.toolbox.ledger
 
+import com.example.toolbox.ui.AppSettingsBackup
+import com.example.toolbox.totp.TotpVaultException
+import org.json.JSONObject
+import org.junit.Assert.assertThrows
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -247,6 +251,40 @@ class LedgerWebDavSyncTest {
         } catch (e: WebDavException) {
             assertEquals(failure, e.failure)
         }
+    }
+
+    @Test
+    fun testSettingsBackupIsEncryptedVersionedAndWrongPasswordDoesNotOverwrite() {
+        val client = WebDavClient(server.folderUrl + "Toolbox/settings/", "user", "pass",
+            parentFolderUrl = server.folderUrl + "Toolbox/")
+        val pass = "settings-test-password"
+        val first = AppSettingsBackup.backup(client, JSONObject().put("language", "CHINESE"), pass)
+        val main = "Toolbox/settings/settings.json"
+        val before = server.bodyOf(main)!!
+        assertFalse(before.contains("CHINESE"))
+        assertEquals("CHINESE", AppSettingsBackup.decode(before, pass).getString("language"))
+        assertThrows(TotpVaultException::class.java) {
+            AppSettingsBackup.backup(client, JSONObject().put("language", "ENGLISH"), "different-password")
+        }
+        assertEquals(before, server.bodyOf(main))
+        val second = AppSettingsBackup.backup(client, JSONObject().put("language", "ENGLISH"), pass)
+        assertFalse(first.snapshotName == second.snapshotName)
+        assertEquals(2, WebDavHistory(client, BackupTool.SETTINGS).list().size)
+        assertEquals("CHINESE", AppSettingsBackup.decode(
+            WebDavHistory(client, BackupTool.SETTINGS).read(first.snapshotName!!), pass).getString("language"))
+    }
+
+    @Test
+    fun testSettingsConcurrentChangeIsNotOverwritten() {
+        val client = WebDavClient(server.folderUrl, "user", "pass")
+        val pass = "settings-test-password"
+        AppSettingsBackup.backup(client, JSONObject().put("language", "CHINESE"), pass)
+        val before = server.bodyOf("settings.json")!!
+        server.bumpEtagAfterNextGet = true
+        assertSyncFails(WebDavFailure.PRECONDITION_FAILED) {
+            AppSettingsBackup.backup(client, JSONObject().put("language", "ENGLISH"), pass)
+        }
+        assertEquals(before, server.bodyOf("settings.json"))
     }
 
     @Test

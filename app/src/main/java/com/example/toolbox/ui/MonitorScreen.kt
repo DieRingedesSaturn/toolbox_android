@@ -289,7 +289,7 @@ fun MonitorScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         MonitorCpuDisplayMode.entries.forEach { mode ->
-                            FilterChip(
+                            ToolboxFilterChip(
                                 selected = mode == cpuDisplayMode,
                                 onClick = {
                                     cpuDisplayModeName = mode.name
@@ -374,7 +374,7 @@ fun MonitorScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         MonitorMetric.entries.forEach { metric ->
-                            FilterChip(
+                            ToolboxFilterChip(
                                 selected = metric in selectedMetrics,
                                 onClick = {
                                     val updated = selectedMetrics.toMutableSet()
@@ -601,7 +601,7 @@ private fun CpuFrequencyCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                FilterChip(
+                ToolboxFilterChip(
                     selected = displayMode == CpuTopologyDisplayMode.FREQUENCY,
                     onClick = {
                         displayMode = CpuTopologyDisplayMode.FREQUENCY
@@ -609,7 +609,7 @@ private fun CpuFrequencyCard(
                     },
                     label = { Text(strings.frequencyMode) },
                 )
-                FilterChip(
+                ToolboxFilterChip(
                     selected = displayMode == CpuTopologyDisplayMode.USAGE,
                     onClick = {
                         displayMode = CpuTopologyDisplayMode.USAGE
@@ -954,7 +954,7 @@ private fun OverlayAppearanceCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             MonitorOverlayTheme.entries.forEach { theme ->
-                FilterChip(
+                ToolboxFilterChip(
                     selected = theme == selectedTheme,
                     onClick = { onThemeChange(theme) },
                     label = {

@@ -1,6 +1,9 @@
 package com.example.toolbox.ui
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,7 +33,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,7 +44,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -56,8 +63,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -95,8 +108,29 @@ fun SettingsScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     onAccentColorChange: (AccentColor) -> Unit,
     onCustomAccentChange: (Int) -> Unit,
+    backgroundImage: ImageBitmap?,
+    backgroundStrength: Float,
+    onBackgroundStrengthChange: (Float) -> Unit,
+    backgroundBlurEnabled: Boolean,
+    onBackgroundBlurEnabledChange: (Boolean) -> Unit,
+    backgroundBlurStrength: Float,
+    onBackgroundBlurStrengthChange: (Float) -> Unit,
+    backgroundScale: Float,
+    backgroundOffsetX: Float,
+    backgroundOffsetY: Float,
+    onBackgroundTransformChange: (Float, Float, Float) -> Unit,
+    onBackgroundChanged: () -> Unit,
+    onSettingsRestored: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val preferences = remember(context) { AppPreferences(context) }
+    var summaryEnabled by remember { mutableStateOf(preferences.homeSummaryEnabled()) }
+    var summaryItems by remember { mutableStateOf(preferences.homeSummaryItems()) }
+    var summaryCustomText by remember { mutableStateOf(preferences.homeSummaryCustomText()) }
+    var moduleOrder by remember { mutableStateOf(preferences.homeModuleOrder()) }
+    var showSummaryConfigDialog by rememberSaveable { mutableStateOf(false) }
+    var showModuleOrderDialog by rememberSaveable { mutableStateOf(false) }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -153,6 +187,7 @@ fun SettingsScreen(
                                 AccentColor.EVERFOREST -> strings.everforest
                                 AccentColor.SAGE -> strings.sage
                                 AccentColor.CUSTOM -> strings.custom
+                                AccentColor.BACKGROUND -> strings.accentBackground
                             }
                         },
                         leading = { color ->
@@ -160,7 +195,7 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .size(18.dp)
                                     .clip(CircleShape)
-                                    .background(color.swatch(customAccentRgb))
+                                    .background(color.swatch(customAccentRgb, preferences.backgroundSeedRgb()))
                                     .border(
                                         width = 1.dp,
                                         color = MaterialTheme.colorScheme.outline
@@ -182,6 +217,11 @@ fun SettingsScreen(
                             customAccentRgb = customAccentRgb,
                             onCustomAccentChange = onCustomAccentChange,
                         )
+                        AccentColor.BACKGROUND -> Text(
+                            text = strings.backgroundAccentHint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         AccentColor.EVERFOREST,
                         AccentColor.SAGE,
                         -> Unit
@@ -189,8 +229,60 @@ fun SettingsScreen(
                 }
             }
             item {
+                SettingsCard(title = strings.backgroundTitle) {
+                    BackgroundSettingsSection(
+                        strings = strings,
+                        backgroundImage = backgroundImage,
+                        backgroundStrength = backgroundStrength,
+                        onBackgroundStrengthChange = onBackgroundStrengthChange,
+                        backgroundBlurEnabled = backgroundBlurEnabled,
+                        onBackgroundBlurEnabledChange = onBackgroundBlurEnabledChange,
+                        backgroundBlurStrength = backgroundBlurStrength,
+                        onBackgroundBlurStrengthChange = onBackgroundBlurStrengthChange,
+                        backgroundScale = backgroundScale,
+                        backgroundOffsetX = backgroundOffsetX,
+                        backgroundOffsetY = backgroundOffsetY,
+                        onBackgroundTransformChange = onBackgroundTransformChange,
+                        onAccentColorChange = onAccentColorChange,
+                        onBackgroundChanged = onBackgroundChanged,
+                    )
+                }
+            }
+            item {
+                SettingsCard(title = strings.homeSettingsTitle) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilledTonalButton(
+                            onClick = { showSummaryConfigDialog = true },
+                            modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.small,
+                        ) {
+                            Text(strings.homeSummaryConfigTitle)
+                        }
+                        FilledTonalButton(
+                            onClick = { showModuleOrderDialog = true },
+                            modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.small,
+                        ) {
+                            Text(strings.homeModulesOrderTitle)
+                        }
+                    }
+                }
+            }
+            item {
                 SettingsCard(title = strings.webDavSettingsCardTitle) {
-                    WebDavBackupSettingsSection(strings = strings)
+                    WebDavBackupSettingsSection(
+                        strings = strings,
+                        onSettingsRestored = {
+                            summaryEnabled = preferences.homeSummaryEnabled()
+                            summaryItems = preferences.homeSummaryItems()
+                            summaryCustomText = preferences.homeSummaryCustomText()
+                            moduleOrder = preferences.homeModuleOrder()
+                            onSettingsRestored()
+                        },
+                    )
                 }
             }
             item {
@@ -204,6 +296,51 @@ fun SettingsScreen(
             }
         }
     }
+
+    if (showSummaryConfigDialog) {
+        HomeSummaryConfigDialog(
+            strings = strings,
+            enabled = summaryEnabled,
+            items = summaryItems,
+            customText = summaryCustomText,
+            onEnabledChange = {
+                summaryEnabled = it
+                preferences.saveHomeSummaryEnabled(it)
+            },
+            onItemsChange = {
+                summaryItems = it
+                preferences.saveHomeSummaryItems(it)
+            },
+            onCustomTextChange = {
+                val trimmed = it.take(200)
+                summaryCustomText = trimmed
+                preferences.saveHomeSummaryCustomText(trimmed)
+            },
+            onDismiss = { showSummaryConfigDialog = false },
+        )
+    }
+
+    if (showModuleOrderDialog) {
+        HomeModuleOrderDialog(
+            strings = strings,
+            order = moduleOrder,
+            onMove = { index, offset ->
+                val target = (index + offset).coerceIn(0, moduleOrder.lastIndex)
+                if (target != index) {
+                    val mutable = moduleOrder.toMutableList()
+                    val moved = mutable.removeAt(index)
+                    mutable.add(target, moved)
+                    moduleOrder = mutable
+                    preferences.saveHomeModuleOrder(mutable)
+                }
+            },
+            onReset = {
+                moduleOrder = HomeModuleOrder.DEFAULT
+                preferences.saveHomeModuleOrder(HomeModuleOrder.DEFAULT)
+            },
+            onDismiss = { showModuleOrderDialog = false },
+        )
+    }
 }
 
 @Composable
@@ -211,11 +348,8 @@ private fun SettingsCard(
     title: String,
     content: @Composable () -> Unit,
 ) {
-    Card(
+    ToolboxCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -227,6 +361,210 @@ private fun SettingsCard(
                 color = MaterialTheme.colorScheme.primary,
             )
             content()
+        }
+    }
+}
+
+@Composable
+private fun BackgroundSettingsSection(
+    strings: ToolboxStrings,
+    backgroundImage: ImageBitmap?,
+    backgroundStrength: Float,
+    onBackgroundStrengthChange: (Float) -> Unit,
+    backgroundBlurEnabled: Boolean,
+    onBackgroundBlurEnabledChange: (Boolean) -> Unit,
+    backgroundBlurStrength: Float,
+    onBackgroundBlurStrengthChange: (Float) -> Unit,
+    backgroundScale: Float,
+    backgroundOffsetX: Float,
+    backgroundOffsetY: Float,
+    onBackgroundTransformChange: (Float, Float, Float) -> Unit,
+    onAccentColorChange: (AccentColor) -> Unit,
+    onBackgroundChanged: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val preferences = remember(context) { AppPreferences(context) }
+    var version by remember { mutableIntStateOf(0) }
+    var preview by remember { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(version) {
+        preview = withContext(Dispatchers.IO) {
+            if (AppBackground.exists(context)) {
+                AppBackground.loadPreview(context)?.asImageBitmap()
+            } else {
+                null
+            }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val seed = withContext(Dispatchers.IO) { AppBackground.import(context, uri) }
+            if (seed == null) {
+                Toast.makeText(context, strings.backgroundPickFailed, Toast.LENGTH_LONG).show()
+            } else {
+                preferences.saveBackgroundSeedRgb(seed)
+                preferences.saveAccentColor(AccentColor.BACKGROUND)
+                preferences.saveBackgroundTransform(1f, 0f, 0f)
+                onAccentColorChange(AccentColor.BACKGROUND)
+                onBackgroundChanged()
+                version++
+            }
+        }
+    }
+
+    // A delegated var cannot be smart-cast, so read it once.
+    val shown = preview
+    if (shown == null) {
+        Text(
+            text = strings.backgroundHint,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FilledTonalButton(
+            onClick = { picker.launch("image/*") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.small,
+        ) {
+            Text(strings.backgroundPick)
+        }
+    } else {
+        var editingPosition by rememberSaveable { mutableStateOf(false) }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .clipToBounds()
+                .clickable(onClickLabel = strings.backgroundAdjustPosition) { editingPosition = true },
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val bounds = backgroundImageBounds(
+                    rootW = size.width,
+                    rootH = size.height,
+                    imgW = shown.width.toFloat(),
+                    imgH = shown.height.toFloat(),
+                    bgScale = backgroundScale,
+                    bgOffsetX = backgroundOffsetX,
+                    bgOffsetY = backgroundOffsetY,
+                )
+                drawImage(
+                    image = backgroundImage ?: shown,
+                    dstOffset = IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()),
+                    dstSize = IntSize(
+                        bounds.width.roundToInt().coerceAtLeast(1),
+                        bounds.height.roundToInt().coerceAtLeast(1),
+                    ),
+                )
+            }
+        }
+        Text(
+            text = strings.backgroundPositionHint,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilledTonalButton(
+                onClick = { picker.launch("image/*") },
+                shape = MaterialTheme.shapes.small,
+            ) {
+                Text(strings.backgroundChange)
+            }
+            TextButton(
+                onClick = {
+                    editingPosition = true
+                },
+            ) {
+                Text(strings.backgroundAdjustPosition)
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            TextButton(
+                onClick = {
+                    AppBackground.clear(context)
+                    preferences.saveBackgroundSeedRgb(0)
+                    preferences.saveBackgroundTransform(1f, 0f, 0f)
+                    onBackgroundChanged()
+                    version++
+                },
+            ) {
+                Text(strings.backgroundRemove)
+            }
+        }
+        if (editingPosition) {
+            BackgroundImageEditor(
+                strings = strings,
+                image = backgroundImage ?: shown,
+                initial = BackgroundImageTransform(backgroundScale, backgroundOffsetX, backgroundOffsetY),
+                onDismiss = { editingPosition = false },
+                onSave = { transform ->
+                    onBackgroundTransformChange(transform.scale, transform.offsetX, transform.offsetY)
+                    editingPosition = false
+                },
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = strings.backgroundStrengthLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "${(backgroundStrength * 100).toInt()}%",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = backgroundStrength,
+            onValueChange = onBackgroundStrengthChange,
+            valueRange = 0f..1f,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = strings.backgroundBlurLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Switch(
+                checked = backgroundBlurEnabled,
+                onCheckedChange = onBackgroundBlurEnabledChange,
+            )
+        }
+        if (backgroundBlurEnabled) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = strings.backgroundBlurStrengthLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "${(backgroundBlurStrength * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Slider(
+                value = backgroundBlurStrength,
+                onValueChange = onBackgroundBlurStrengthChange,
+                valueRange = 0f..1f,
+            )
         }
     }
 }
@@ -252,6 +590,10 @@ private fun <T> ChoiceStrip(
                 onClick = { onSelected(option) },
                 label = { Text(label(option)) },
                 leadingIcon = leading?.let { content -> { content(option) } },
+                border = null,
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f),
+                ),
             )
         }
         Spacer(modifier = Modifier.size(1.dp))
@@ -319,6 +661,7 @@ private fun CustomAccentPicker(
 @Composable
 private fun WebDavBackupSettingsSection(
     strings: ToolboxStrings,
+    onSettingsRestored: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -423,7 +766,7 @@ private fun WebDavBackupSettingsSection(
         }
     }
 
-    OutlinedButton(
+    FilledTonalButton(
         onClick = {
             editingProfile = WebDavServiceProfile(
                 id = UUID.randomUUID().toString(),
@@ -435,7 +778,7 @@ private fun WebDavBackupSettingsSection(
             isCreating = true
         },
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = MaterialTheme.shapes.small,
     ) {
         Text(strings.webDavAddServiceAction)
     }
@@ -494,6 +837,8 @@ private fun WebDavBackupSettingsSection(
             }
         }
     }
+
+    SettingsBackupSection(strings, services.firstOrNull(), onSettingsRestored)
 
     editingProfile?.let { draft ->
         WebDavServiceEditDialog(
@@ -624,13 +969,15 @@ private fun WebDavServiceEditDialog(
             decorFitsSystemWindows = false,
         ),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
-            Scaffold(
-                containerColor = MaterialTheme.colorScheme.background,
-                topBar = {
+        val opaqueBg = MaterialTheme.colorScheme.background.copy(alpha = 1f)
+        CompositionLocalProvider(LocalAcrylicBackground provides AcrylicBackgroundState()) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = opaqueBg,
+            ) {
+                Scaffold(
+                    containerColor = opaqueBg,
+                    topBar = {
                     ToolboxTopBar(
                         title = if (isNew) {
                             strings.webDavNewServiceTitle
@@ -724,16 +1071,16 @@ private fun WebDavServiceEditDialog(
                     },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = {
-                        val profile = buildValidProfile() ?: return@OutlinedButton
+                        val profile = buildValidProfile() ?: return@FilledTonalButton
                         pendingTestProfile = profile
                     },
                     enabled = !testing,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = MaterialTheme.shapes.small,
                 ) {
                     if (testing) {
                         CircularProgressIndicator(
@@ -754,6 +1101,7 @@ private fun WebDavServiceEditDialog(
                             MaterialTheme.colorScheme.error
                         },
                     )
+                }
                 }
                 }
             }

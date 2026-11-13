@@ -1,5 +1,6 @@
 package com.example.toolbox.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -30,17 +31,21 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -68,6 +73,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.toolbox.R
@@ -116,6 +122,31 @@ internal object HomeModuleOrder {
         order.joinToString(",") { it.name }
 }
 
+internal enum class HomeSummaryItem {
+    DEVICE_INFO,
+    BATTERY,
+    STORAGE,
+    ASSETS,
+    MONTH_BALANCE,
+}
+
+internal object HomeSummaryConfig {
+    fun parseItems(raw: String?): Set<HomeSummaryItem> {
+        if (raw == null) return HomeSummaryItem.entries.toSet()
+        return raw.split(',')
+            .mapNotNull { token ->
+                val trimmed = token.trim()
+                HomeSummaryItem.entries.firstOrNull { it.name == trimmed }
+            }
+            .toSet()
+    }
+
+    fun formatItems(items: Set<HomeSummaryItem>): String =
+        HomeSummaryItem.entries
+            .filter { it in items }
+            .joinToString(",") { it.name }
+}
+
 internal data class HomeStatus(
     val batteryPercent: Int?,
     val isCharging: Boolean?,
@@ -141,6 +172,9 @@ internal fun HomeScreen(
     val preferences = remember(context) { AppPreferences(context) }
     var moduleOrder by remember { mutableStateOf(preferences.homeModuleOrder()) }
     var showOrderDialog by rememberSaveable { mutableStateOf(false) }
+    var summaryEnabled by remember { mutableStateOf(preferences.homeSummaryEnabled()) }
+    var summaryItems by remember { mutableStateOf(preferences.homeSummaryItems()) }
+    var summaryCustomText by remember { mutableStateOf(preferences.homeSummaryCustomText()) }
     val orderedTiles = remember(moduleOrder) {
         val map = moduleTiles.associateBy { it.module }
         moduleOrder.mapNotNull { map[it] }
@@ -154,7 +188,28 @@ internal fun HomeScreen(
         preferences.saveHomeModuleOrder(next)
     }
 
-    LaunchedEffect(Unit) {
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                moduleOrder = preferences.homeModuleOrder()
+                summaryEnabled = preferences.homeSummaryEnabled()
+                summaryItems = preferences.homeSummaryItems()
+                summaryCustomText = preferences.homeSummaryCustomText()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val needsLiveStatus = summaryEnabled && (
+        HomeSummaryItem.BATTERY in summaryItems ||
+            HomeSummaryItem.STORAGE in summaryItems ||
+            HomeSummaryItem.ASSETS in summaryItems ||
+            HomeSummaryItem.MONTH_BALANCE in summaryItems
+        )
+
+    LaunchedEffect(needsLiveStatus) {
+        if (!needsLiveStatus) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             currentOnStatusChange(withContext(Dispatchers.IO) {
                 runCatching {
@@ -222,39 +277,20 @@ internal fun HomeScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item {
-                    HomeSummaryCard(
-                        strings = strings,
-                        deviceInfo = deviceInfo,
-                        status = status,
-                        onOpen = onOpen,
-                        onOpenLedgerAccounts = onOpenLedgerAccounts,
-                    )
-                }
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = strings.allToolsLabel,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                val trimmedCustomText = summaryCustomText.trim()
+                val showSummaryCard = summaryEnabled &&
+                    (summaryItems.isNotEmpty() || trimmedCustomText.isNotEmpty())
+                if (showSummaryCard) {
+                    item {
+                        HomeSummaryCard(
+                            strings = strings,
+                            deviceInfo = deviceInfo,
+                            status = status,
+                            visibleItems = summaryItems,
+                            customText = trimmedCustomText,
+                            onOpen = onOpen,
+                            onOpenLedgerAccounts = onOpenLedgerAccounts,
                         )
-                        CompositionLocalProvider(
-                            LocalMinimumInteractiveComponentSize provides Dp.Unspecified,
-                        ) {
-                            TextButton(
-                                onClick = { showOrderDialog = true },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            ) {
-                                Text(
-                                    text = strings.homeModulesOrderAction,
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            }
-                        }
                     }
                 }
                 items(orderedTiles.chunked(columns)) { row ->
@@ -299,51 +335,27 @@ internal fun HomeScreen(
     }
 }
 
+private data class HomeStatTile(
+    val label: String,
+    val value: String,
+    val caption: String,
+    val onClick: () -> Unit,
+)
+
 @Composable
 private fun HomeSummaryCard(
     strings: ToolboxStrings,
     deviceInfo: DeviceInfo?,
     status: HomeStatus?,
+    visibleItems: Set<HomeSummaryItem>,
+    customText: String,
     onOpen: (ToolboxModule) -> Unit,
     onOpenLedgerAccounts: () -> Unit = {},
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                text = deviceInfo?.let {
-                    "${it.identity.manufacturer} ${it.identity.model}"
-                } ?: strings.loading,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = deviceInfo?.let {
-                    "Android ${it.identity.androidVersion} · API ${it.identity.apiLevel}"
-                } ?: strings.loading,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                HomeStat(
+    val statTiles = buildList {
+        if (HomeSummaryItem.BATTERY in visibleItems) {
+            add(
+                HomeStatTile(
                     label = strings.sectionTitle(DeviceSection.BATTERY),
                     value = if (status == null) {
                         "—"
@@ -358,24 +370,24 @@ private fun HomeSummaryCard(
                         } ?: strings.unknown
                     },
                     onClick = { onOpen(ToolboxModule.DEVICE) },
-                    modifier = Modifier.weight(1f),
-                )
-                HomeStat(
+                ),
+            )
+        }
+        if (HomeSummaryItem.STORAGE in visibleItems) {
+            add(
+                HomeStatTile(
                     label = strings.sectionTitle(DeviceSection.STORAGE),
                     value = status?.let { formatBytes(it.storageAvailable) } ?: "—",
                     caption = status?.let {
                         strings.storageOfTotal(formatBytes(it.storageTotal))
                     } ?: "—",
                     onClick = { onOpen(ToolboxModule.DEVICE) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // Total assets (all accounts, ≈ CNY) → Accounts tab.
-                HomeStat(
+                ),
+            )
+        }
+        if (HomeSummaryItem.ASSETS in visibleItems) {
+            add(
+                HomeStatTile(
                     label = strings.totalAssetsLabel,
                     value = status?.let { s ->
                         s.totalAssetsCnyCents?.let {
@@ -386,10 +398,12 @@ private fun HomeSummaryCard(
                         if (s.assetsPartial) strings.partialConversionNote else "CNY"
                     } ?: "—",
                     onClick = onOpenLedgerAccounts,
-                    modifier = Modifier.weight(1f),
-                )
-                // This month's net (income − expense) → Ledger.
-                HomeStat(
+                ),
+            )
+        }
+        if (HomeSummaryItem.MONTH_BALANCE in visibleItems) {
+            add(
+                HomeStatTile(
                     label = strings.monthBalanceLabel(""),
                     value = status?.let { s ->
                         val net = s.monthIncomeCents - s.monthExpenseCents
@@ -405,11 +419,190 @@ private fun HomeSummaryCard(
                         )
                     } ?: "—",
                     onClick = { onOpen(ToolboxModule.LEDGER) },
-                    modifier = Modifier.weight(1f),
+                ),
+            )
+        }
+    }
+
+    ToolboxCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (HomeSummaryItem.DEVICE_INFO in visibleItems) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = deviceInfo?.let {
+                            "${it.identity.manufacturer} ${it.identity.model}"
+                        } ?: strings.loading,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = deviceInfo?.let {
+                            "Android ${it.identity.androidVersion} · API ${it.identity.apiLevel}"
+                        } ?: strings.loading,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (customText.isNotEmpty()) {
+                Text(
+                    text = customText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
+            }
+            statTiles.chunked(2).forEach { rowTiles ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    rowTiles.forEach { tile ->
+                        HomeStat(
+                            label = tile.label,
+                            value = tile.value,
+                            caption = tile.caption,
+                            onClick = tile.onClick,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (rowTiles.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+internal fun HomeSummaryConfigDialog(
+    strings: ToolboxStrings,
+    enabled: Boolean,
+    items: Set<HomeSummaryItem>,
+    customText: String,
+    onEnabledChange: (Boolean) -> Unit,
+    onItemsChange: (Set<HomeSummaryItem>) -> Unit,
+    onCustomTextChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(strings.homeSummaryConfigTitle) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = strings.homeSummaryEnabledLabel,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = onEnabledChange,
+                    )
+                }
+                AnimatedVisibility(visible = enabled) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedTextField(
+                            value = customText,
+                            onValueChange = onCustomTextChange,
+                            label = { Text(strings.homeSummaryCustomTextLabel) },
+                            placeholder = { Text(strings.homeSummaryCustomTextHint) },
+                            maxLines = 3,
+                            trailingIcon = if (customText.isNotEmpty()) {
+                                {
+                                    IconButton(onClick = { onCustomTextChange("") }) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_close),
+                                            contentDescription = strings.cancelAction,
+                                        )
+                                    }
+                                }
+                            } else {
+                                null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            text = strings.homeSummaryItemsLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Column {
+                            HomeSummaryItem.entries.forEach { item ->
+                                val label = when (item) {
+                                    HomeSummaryItem.DEVICE_INFO -> strings.homeSummaryItemDeviceInfo
+                                    HomeSummaryItem.BATTERY -> strings.homeSummaryItemBattery
+                                    HomeSummaryItem.STORAGE -> strings.homeSummaryItemStorage
+                                    HomeSummaryItem.ASSETS -> strings.homeSummaryItemAssets
+                                    HomeSummaryItem.MONTH_BALANCE -> strings.homeSummaryItemMonthBalance
+                                }
+                                val checked = item in items
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(MaterialTheme.shapes.small)
+                                        .clickable {
+                                            val next = if (checked) items - item else items + item
+                                            onItemsChange(next)
+                                        }
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Checkbox(
+                                        checked = checked,
+                                        onCheckedChange = { isChecked ->
+                                            val next = if (isChecked) items + item else items - item
+                                            onItemsChange(next)
+                                        },
+                                    )
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                            }
+                        }
+                        if (items.isEmpty() && customText.isBlank()) {
+                            Text(
+                                text = strings.homeSummaryEmptyHint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(strings.doneAction)
+            }
+        },
+    )
 }
 
 @Composable
@@ -464,17 +657,14 @@ private fun ModuleTileCard(
     modifier: Modifier = Modifier,
 ) {
     val (badgeColor, badgeIconColor) = moduleBadgeColors(tile.module)
-    Card(
+    ToolboxCard(
         modifier = modifier
             .height(64.dp)
-            .clip(CardDefaults.shape)
+            .clip(MaterialTheme.shapes.medium)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
             ),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Row(
             modifier = Modifier
@@ -512,7 +702,7 @@ private fun ModuleTileCard(
 private val HomeOrderRowHeight = 52.dp
 
 @Composable
-private fun HomeModuleOrderDialog(
+internal fun HomeModuleOrderDialog(
     strings: ToolboxStrings,
     order: List<ToolboxModule>,
     onMove: (index: Int, offset: Int) -> Unit,

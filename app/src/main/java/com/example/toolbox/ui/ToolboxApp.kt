@@ -30,6 +30,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import com.example.toolbox.device.DeviceInfo
 import com.example.toolbox.device.DeviceInfoReader
@@ -73,6 +75,17 @@ fun ToolboxApp(
     var themeName by rememberSaveable { mutableStateOf(preferences.themeMode().name) }
     var accentName by rememberSaveable { mutableStateOf(preferences.accentColor().name) }
     var customAccentRgb by rememberSaveable { mutableIntStateOf(preferences.customAccentRgb()) }
+    var backgroundSeed by rememberSaveable { mutableIntStateOf(preferences.backgroundSeedRgb()) }
+    var backgroundStrength by rememberSaveable { mutableFloatStateOf(preferences.backgroundStrength()) }
+    var backgroundBlurEnabled by rememberSaveable { mutableStateOf(preferences.backgroundBlurEnabled()) }
+    var backgroundBlurStrength by rememberSaveable { mutableFloatStateOf(preferences.backgroundBlurStrength()) }
+    var backgroundScale by rememberSaveable { mutableFloatStateOf(preferences.backgroundScale()) }
+    var backgroundOffsetX by rememberSaveable { mutableFloatStateOf(preferences.backgroundOffsetX()) }
+    var backgroundOffsetY by rememberSaveable { mutableFloatStateOf(preferences.backgroundOffsetY()) }
+    var backgroundVersion by remember { mutableIntStateOf(0) }
+    var rawBackgroundBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var backgroundBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var blurredBackgroundBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var moduleName by rememberSaveable { mutableStateOf(ToolboxModule.HOME.name) }
 
     val language = runCatching { AppLanguage.valueOf(languageName) }
@@ -129,6 +142,25 @@ fun ToolboxApp(
         refreshDeviceInfo()
     }
 
+    LaunchedEffect(backgroundVersion) {
+        val raw = withContext(Dispatchers.IO) {
+            AppBackground.load(context.applicationContext)
+        }
+        rawBackgroundBitmap = raw
+        backgroundBitmap = raw?.asImageBitmap()
+        if (raw == null) {
+            blurredBackgroundBitmap = null
+        }
+    }
+
+    LaunchedEffect(rawBackgroundBitmap, backgroundBlurEnabled, backgroundBlurStrength) {
+        val raw = rawBackgroundBitmap ?: return@LaunchedEffect
+        if (!backgroundBlurEnabled) return@LaunchedEffect
+        blurredBackgroundBitmap = withContext(Dispatchers.IO) {
+            AppBackground.blurForBackdrop(raw, backgroundBlurStrength).asImageBitmap()
+        }
+    }
+
     val module = runCatching { ToolboxModule.valueOf(moduleName) }
         .getOrDefault(ToolboxModule.HOME)
 
@@ -159,6 +191,14 @@ fun ToolboxApp(
         themeMode = themeMode,
         accentColor = accentColor,
         customAccentRgb = customAccentRgb,
+        backgroundImage = backgroundBitmap,
+        blurredBackgroundImage = blurredBackgroundBitmap,
+        backgroundSeedRgb = backgroundSeed,
+        backgroundStrength = if (backgroundBitmap != null) backgroundStrength else 0f,
+        backgroundBlurEnabled = backgroundBlurEnabled,
+        backgroundScale = backgroundScale,
+        backgroundOffsetX = backgroundOffsetX,
+        backgroundOffsetY = backgroundOffsetY,
     ) {
         val moduleTransitionState = remember { SeekableTransitionState(module) }
         val moduleTransition = rememberTransition(moduleTransitionState, label = "moduleTransition")
@@ -314,6 +354,59 @@ fun ToolboxApp(
                         onThemeModeChange = ::updateTheme,
                         onAccentColorChange = ::updateAccent,
                         onCustomAccentChange = ::updateCustomAccent,
+                        backgroundImage = backgroundBitmap,
+                        backgroundStrength = backgroundStrength,
+                        onBackgroundStrengthChange = {
+                            backgroundStrength = it
+                            preferences.saveBackgroundStrength(it)
+                        },
+                        backgroundBlurEnabled = backgroundBlurEnabled,
+                        onBackgroundBlurEnabledChange = {
+                            backgroundBlurEnabled = it
+                            preferences.saveBackgroundBlurEnabled(it)
+                        },
+                        backgroundBlurStrength = backgroundBlurStrength,
+                        onBackgroundBlurStrengthChange = {
+                            backgroundBlurStrength = it
+                            preferences.saveBackgroundBlurStrength(it)
+                        },
+                        backgroundScale = backgroundScale,
+                        backgroundOffsetX = backgroundOffsetX,
+                        backgroundOffsetY = backgroundOffsetY,
+                        onBackgroundTransformChange = { scale, x, y ->
+                            backgroundScale = scale
+                            backgroundOffsetX = x
+                            backgroundOffsetY = y
+                            preferences.saveBackgroundTransform(scale, x, y)
+                        },
+                        onBackgroundChanged = {
+                            backgroundSeed = preferences.backgroundSeedRgb()
+                            backgroundScale = preferences.backgroundScale()
+                            backgroundOffsetX = preferences.backgroundOffsetX()
+                            backgroundOffsetY = preferences.backgroundOffsetY()
+                            backgroundVersion++
+                        },
+                        onSettingsRestored = {
+                            scope.launch {
+                                val appearance = withContext(Dispatchers.IO) {
+                                    Triple(preferences.language(), preferences.themeMode(), preferences.accentColor()) to
+                                        preferences.customAccentRgb()
+                                }
+                                languageName = appearance.first.first.name
+                                themeName = appearance.first.second.name
+                                accentName = appearance.first.third.name
+                                customAccentRgb = appearance.second
+                                backgroundSeed = preferences.backgroundSeedRgb()
+                                backgroundStrength = preferences.backgroundStrength()
+                                backgroundBlurEnabled = preferences.backgroundBlurEnabled()
+                                backgroundBlurStrength = preferences.backgroundBlurStrength()
+                                backgroundScale = preferences.backgroundScale()
+                                backgroundOffsetX = preferences.backgroundOffsetX()
+                                backgroundOffsetY = preferences.backgroundOffsetY()
+                                backgroundVersion++
+                                withContext(Dispatchers.IO) { LedgerWidget.refreshAll(context.applicationContext) }
+                            }
+                        },
                         onBack = { moduleName = ToolboxModule.HOME.name },
                     )
 

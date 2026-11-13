@@ -67,12 +67,28 @@ enum class DeviceSection {
 }
 
 class ToolboxStrings(val language: AppLanguage) {
+    val backupPasswordLabel: String
+        get() = if (chinese) "备份加密密码（非 WebDAV 登录密码）" else "Backup passphrase (not WebDAV login password)"
+    val settingsBackupTitle: String
+        get() = if (chinese) "软件设置备份" else "App settings backup"
+    val settingsBackupHint: String
+        get() = if (chinese) "手动加密备份到列表首个 WebDAV 的 Toolbox/settings/，保留 10 个历史版本。仅包含语言、主题、排序、监控等通用偏好；不包含服务凭据、账本、令牌或系统权限。密码需另外妥善保存。" else "Manually back up encrypted general preferences to Toolbox/settings/ on the first listed WebDAV service; keeps 10 versions. Includes language, theme, ordering and monitor preferences, without service credentials, ledger records, tokens or system permissions. Keep the passphrase separately."
+    fun settingsBackupTarget(name: String): String = if (chinese) "备份服务：$name（列表首个）" else "Backup service: $name (first listed)"
+    val settingsBackupNow: String
+        get() = if (chinese) "立即备份设置" else "Back up settings now"
+    val settingsBackupDone: String
+        get() = if (chinese) "设置备份已保存" else "Settings backup saved"
+    fun settingsRestoreWarning(count: Int): String = if (chinese) {
+        "此版本包含 $count 项通用偏好。确认后先保存加密的恢复前副本，再替换通用设置。外观立即生效，其他设置重新打开对应页面后生效；WebDAV 配置、账本、令牌和权限不受影响。"
+    } else "This version contains $count general preferences. An encrypted checkpoint is saved before replacement. Appearance changes immediately; reopen other screens to load their settings. WebDAV configuration, ledger records, tokens and permissions remain unchanged."
     val backupPasswordTitle: String
         get() = if (chinese) "备份加密密码" else "Backup encryption passphrase"
     val backupPasswordHint: String
-        get() = if (chinese) "至少 8 个字符，用于客户端加密；已有加密备份须输入原密码，忘记后无法恢复。恢复旧明文备份时也需设置密码，以保护恢复前副本。" else "At least 8 characters; encrypts backups on this device. Use the original passphrase for existing encrypted backups. Lost passphrases cannot be recovered. A passphrase is also needed to protect the checkpoint when restoring legacy plaintext."
+        get() = if (chinese) "至少 8 个字符，用于客户端加密；已有加密备份须输入原密码，忘记后无法恢复。更改输入的密码不会重加密旧版本，直接用新密码同步旧备份会失败。恢复旧明文备份时也需设置密码，以保护恢复前副本。" else "At least 8 characters; encrypts backups on this device. Use the original passphrase for existing encrypted backups. Lost passphrases cannot be recovered. Changing this input does not re-encrypt older versions; syncing an existing vault with a new passphrase fails. A passphrase is also needed to protect the checkpoint when restoring legacy plaintext."
     val backupDecryptFailed: String
         get() = if (chinese) "备份密码错误，或文件已损坏、格式不兼容。" else "Incorrect backup passphrase, damaged file, or incompatible format."
+    val backupTimeUnknown: String
+        get() = if (chinese) "时间未知" else "Time unavailable"
     val backupHistoryTitle: String
         get() = if (chinese) "历史备份与恢复" else "Backup history and restore"
     val backupBeforeRestore: String
@@ -429,6 +445,46 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "色值" else "Hex color"
     val accentHexError: String
         get() = if (chinese) "请输入 6 位十六进制色值" else "Enter 6 hex digits"
+    val accentBackground: String
+        get() = if (chinese) "背景" else "Background"
+    val backgroundTitle: String
+        get() = if (chinese) "背景图片" else "Background image"
+    val backgroundHint: String
+        get() = if (chinese) {
+            "选择一张图片铺满应用；卡片保持不透明，文字仍然清晰。"
+        } else {
+            "A picture behind the app. Cards stay solid so text stays readable."
+        }
+    val backgroundPick: String
+        get() = if (chinese) "选择图片" else "Choose image"
+    val backgroundChange: String
+        get() = if (chinese) "更换" else "Change"
+    val backgroundRemove: String
+        get() = if (chinese) "移除" else "Remove"
+    val backgroundStrengthLabel: String
+        get() = if (chinese) "背景强度" else "Background strength"
+    val backgroundBlurLabel: String
+        get() = if (chinese) "卡片高斯模糊" else "Card blur"
+    val backgroundBlurStrengthLabel: String
+        get() = if (chinese) "模糊强度" else "Blur strength"
+    val backgroundPositionTitle: String
+        get() = if (chinese) "调整背景" else "Adjust background"
+    val backgroundAdjustPosition: String
+        get() = if (chinese) "调整位置" else "Adjust position"
+    val backgroundGestureHint: String
+        get() = if (chinese) "单指拖动，双指缩放；保存后生效。" else "Drag to move, pinch to zoom. Save to apply."
+    val backgroundPositionHint: String
+        get() = if (chinese) "点击预览图，进入全屏位置与缩放调整" else "Tap the preview to adjust position and zoom full screen"
+    val backgroundResetTransform: String
+        get() = if (chinese) "重置位置" else "Reset position"
+    val backgroundAccentHint: String
+        get() = if (chinese) {
+            "主题色已切换为「背景」，取色自这张图片。"
+        } else {
+            "Accent switched to \"Background\", sampled from this image."
+        }
+    val backgroundPickFailed: String
+        get() = if (chinese) "无法读取这张图片" else "Couldn't read that image"
 
     val aboutTitle: String
         get() = if (chinese) "轻量 Android Toolbox" else "A lightweight Android Toolbox"
@@ -876,9 +932,9 @@ class ToolboxStrings(val language: AppLanguage) {
 
     val privacyIntro: String
         get() = if (chinese) {
-            "这里列出部分国产系统会藏起来的 Google 和系统设置。只能打开已导出的界面；打不开的会变灰。长按可复制等效的 adb 命令。"
+            "部分系统藏起来的 Google 与系统设置。灰色项未导出，长按可复制 adb 命令。"
         } else {
-            "Google and system settings that some ROMs hide. Only exported screens can be opened; the rest stay grey. Long-press copies an equivalent adb command."
+            "Google and system settings some ROMs hide. Greyed rows aren't exported; long-press to copy an adb command."
         }
     val privacyNotFound: String
         get() = if (chinese) "此设备上未找到" else "Not found on this device"
@@ -991,6 +1047,32 @@ class ToolboxStrings(val language: AppLanguage) {
         } else {
             "Drag a tool to reorder the home grid; changes save immediately."
         }
+    val homeSummaryConfigAction: String
+        get() = if (chinese) "主卡片" else "Card"
+    val homeSummaryConfigTitle: String
+        get() = if (chinese) "自定义首页主卡片" else "Customize summary card"
+    val homeSummaryEnabledLabel: String
+        get() = if (chinese) "显示首页主卡片" else "Show summary card"
+    val homeSummaryCustomTextLabel: String
+        get() = if (chinese) "自定义文字" else "Custom note"
+    val homeSummaryCustomTextHint: String
+        get() = if (chinese) "可选，例如备忘、提示或签名" else "Optional note, reminder, or tagline"
+    val homeSummaryItemsLabel: String
+        get() = if (chinese) "展示信息项" else "Visible items"
+    val homeSummaryItemDeviceInfo: String
+        get() = if (chinese) "设备型号与系统版本" else "Device model & OS version"
+    val homeSummaryItemBattery: String
+        get() = if (chinese) "电池电量" else "Battery"
+    val homeSummaryItemStorage: String
+        get() = if (chinese) "存储空间" else "Storage"
+    val homeSummaryItemAssets: String
+        get() = if (chinese) "总资产" else "Total assets"
+    val homeSummaryItemMonthBalance: String
+        get() = if (chinese) "本月结余" else "Month balance"
+    val homeSummaryEmptyHint: String
+        get() = if (chinese) "未选择任何内容，主卡片将自动隐藏。" else "Nothing selected; the card will stay hidden."
+    val homeSettingsTitle: String
+        get() = if (chinese) "首页" else "Home"
     val doneAction: String
         get() = if (chinese) "完成" else "Done"
 

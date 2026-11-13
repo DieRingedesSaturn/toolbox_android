@@ -62,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -76,6 +77,7 @@ import com.example.toolbox.fx.FxFailure
 import com.example.toolbox.fx.FxRateStore
 import com.example.toolbox.fx.FxRates
 import com.example.toolbox.fx.FxSource
+import com.example.toolbox.totp.TotpStore
 import com.example.toolbox.ledger.CostTrackingMode
 import com.example.toolbox.ledger.DISPOSAL_SOLD
 import com.example.toolbox.ledger.DueRenewal
@@ -225,7 +227,9 @@ internal fun LedgerScreen(
     var selectedMonthName by rememberSaveable {
         mutableStateOf(YearMonth.now().toString())
     }
-    var ledgerPassphrase by remember { mutableStateOf("") }
+    var ledgerPassphrase by remember(context) {
+        mutableStateOf(TotpStore(context).savedDefaultBackupPassphrase().orEmpty())
+    }
     var pendingBackupAction by remember { mutableStateOf<((String) -> Unit)?>(null) }
     var showBackupHistory by remember { mutableStateOf(false) }
     var showWebDavDialog by rememberSaveable { mutableStateOf(false) }
@@ -1387,7 +1391,7 @@ internal fun LedgerScreen(
                                         contentDescription = strings.moreOptions,
                                     )
                                 }
-                                DropdownMenu(
+                                ToolboxDropdownMenu(
                                     expanded = menuExpanded,
                                     onDismissRequest = { menuExpanded = false },
                                 ) {
@@ -1511,7 +1515,12 @@ internal fun LedgerScreen(
                 if (!searching) {
                     PrimaryTabRow(
                         selectedTabIndex = pagerState.currentPage,
-                        containerColor = MaterialTheme.colorScheme.background,
+                        modifier = Modifier.acrylicSurface(
+                            shape = RectangleShape,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        ),
+                        containerColor = Color.Transparent,
+                        divider = {},
                     ) {
                         listOf(
                             strings.ledgerTabOverview,
@@ -1924,7 +1933,11 @@ internal fun LedgerScreen(
     pendingBackupAction?.let { action ->
         BackupPassphraseDialog(strings, ledgerPassphrase,
             onDismiss = { pendingBackupAction = null },
-            onConfirm = { pass -> pendingBackupAction = null; action(pass) })
+            onConfirm = { pass ->
+                pendingBackupAction = null
+                TotpStore(context).saveDefaultBackupPassphrase(pass)
+                action(pass)
+            })
     }
     if (showBackupHistory) {
         BackupHistoryDialog(

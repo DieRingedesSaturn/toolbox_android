@@ -63,8 +63,8 @@ object PrivacyShortcutCatalog {
             id = "phone_number_verification",
             titleEn = "Phone number verification",
             titleZh = "电话号码验证",
-            descriptionEn = "Google's phone-number verification (Constellation). It can check this device's number with the carrier. Open it here to review or turn it off.",
-            descriptionZh = "Google 的电话号码验证（Constellation）。它可以通过运营商核对本机号码。从这里打开后可查看或关闭。",
+            descriptionEn = "Google's phone-number verification (Constellation); it can check this device's number with the carrier.",
+            descriptionZh = "Google 的电话号码验证（Constellation），可通过运营商核对本机号码。",
             candidates = listOf(
                 component(GMS, "$GMS.constellation.ui.ConstellationSettingsActivity"),
                 component(GMS, "$GMS.constellation.ui.ConstellationWebSettingsActivity"),
@@ -76,8 +76,8 @@ object PrivacyShortcutCatalog {
             id = "google_account_sync",
             titleEn = "Google account sync",
             titleZh = "Google 账号同步",
-            descriptionEn = "Sync settings for a Google account, or the system sync screen.",
-            descriptionZh = "某个 Google 账号的同步设置；看不到账号时打开系统同步页。",
+            descriptionEn = "Google account sync, or the system sync screen.",
+            descriptionZh = "Google 账号同步；无账号时打开系统同步页。",
             candidates = listOf(
                 action("android.settings.ACCOUNT_SYNC_SETTINGS", requiresGoogleAccount = true),
                 action("android.settings.SYNC_SETTINGS"),
@@ -89,8 +89,8 @@ object PrivacyShortcutCatalog {
             id = "gms_app_info",
             titleEn = "Google Play services info",
             titleZh = "Google Play 服务信息",
-            descriptionEn = "App info for Google Play services: permissions, notifications, and storage.",
-            descriptionZh = "Google Play 服务的应用信息：权限、通知和存储。",
+            descriptionEn = "Google Play services app info: permissions, notifications, storage.",
+            descriptionZh = "Google Play 服务的应用信息：权限、通知、存储。",
             candidates = listOf(
                 PrivacyShortcutCandidate(
                     action = "android.settings.APPLICATION_DETAILS_SETTINGS",
@@ -198,8 +198,8 @@ object PrivacyShortcutCatalog {
             id = "testing_settings",
             titleEn = "Testing settings",
             titleZh = "测试设置",
-            descriptionEn = "The hidden testing menu. Many devices do not export it; long-press still copies an adb command.",
-            descriptionZh = "隐藏的测试菜单。很多设备不导出它；长按仍可复制 adb 命令。",
+            descriptionEn = "The hidden testing menu. Most devices don't export it.",
+            descriptionZh = "隐藏的测试菜单，多数设备未导出。",
             candidates = listOf(
                 component(SETTINGS, "$SETTINGS.Settings\$TestingSettingsActivity"),
             ),

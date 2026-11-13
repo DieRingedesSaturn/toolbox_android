@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -322,11 +323,14 @@ internal fun LedgerTagsDialog(
         },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
-            Scaffold(
+        val opaqueBg = MaterialTheme.colorScheme.background.copy(alpha = 1f)
+        CompositionLocalProvider(LocalAcrylicBackground provides AcrylicBackgroundState()) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = opaqueBg,
+            ) {
+                Scaffold(
+                    containerColor = opaqueBg,
                 topBar = {
                     TopAppBar(
                         title = {
@@ -434,6 +438,7 @@ internal fun LedgerTagsDialog(
                     }
                 }
             }
+        }
         }
     }
 
@@ -644,7 +649,7 @@ private fun TagManagementRow(
                     contentDescription = strings.moreOptions,
                 )
             }
-            DropdownMenu(
+            ToolboxDropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
             ) {

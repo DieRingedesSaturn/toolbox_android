@@ -1,14 +1,27 @@
 package com.example.toolbox.ledger
 
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WebDavSnapshotsTest {
+
+    @Test
+    fun snapshotTimesSupportOldAndUniqueNamesAndRejectInvalidDates() {
+        val old = "ledger-backup-20240305-080910.json"
+        val newer = "ledger-backup-20240305-080910-123-abcdef12.json"
+        assertEquals(LocalDateTime.of(2024, 3, 5, 8, 9, 10), WebDavHistory.snapshotTime(BackupTool.LEDGER, old))
+        assertEquals(123_000_000, WebDavHistory.snapshotTime(BackupTool.LEDGER, newer)!!.nano)
+        assertNull(WebDavHistory.snapshotTime(BackupTool.LEDGER, "ledger-backup-20240230-080910.json"))
+        assertNull(WebDavHistory.snapshotTime(BackupTool.TOTP, old))
+        assertNull(WebDavHistory.snapshotTime(BackupTool.LEDGER, "../ledger.json"))
+    }
 
     @Test
     fun testSnapshotNameUsesZone() {

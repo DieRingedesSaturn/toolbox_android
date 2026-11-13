@@ -56,7 +56,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -67,6 +67,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -586,7 +587,7 @@ internal fun TotpScreen(
                                     contentDescription = strings.moreOptions,
                                 )
                             }
-                            DropdownMenu(
+                            ToolboxDropdownMenu(
                                 expanded = menuExpanded,
                                 onDismissRequest = { menuExpanded = false },
                             ) {
@@ -698,7 +699,8 @@ internal fun TotpScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(strings.totpScanQrAction, maxLines = 1)
                             }
-                            OutlinedButton(
+                            FilledTonalButton(
+                                shape = MaterialTheme.shapes.small,
                                 onClick = {
                                     editingUuid = null
                                     showEditor = true
@@ -792,7 +794,8 @@ internal fun TotpScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(strings.totpScanQrAction)
                     }
-                    OutlinedButton(
+                    FilledTonalButton(
+                                shape = MaterialTheme.shapes.small,
                         onClick = {
                             showAddMethodDialog = false
                             editingUuid = null
@@ -980,7 +983,8 @@ internal fun TotpScreen(
                     TextButton(onClick = { pendingImportEntries = null }) {
                         Text(strings.cancelAction)
                     }
-                    OutlinedButton(
+                    FilledTonalButton(
+                                shape = MaterialTheme.shapes.small,
                         onClick = {
                             val incoming = imported
                             pendingImportEntries = null
@@ -1096,7 +1100,8 @@ private fun TotpQrScannerDialog(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
-                OutlinedButton(
+                FilledTonalButton(
+                                shape = MaterialTheme.shapes.small,
                     onClick = { pickImageLauncher.launch("image/*") },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -1144,14 +1149,11 @@ private fun TotpTokenCard(
     val expiringSoon = remainingSec <= 5
     var cardMenuExpanded by remember { mutableStateOf(false) }
 
-    Surface(
+    ToolboxCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(MaterialTheme.shapes.medium)
             .clickable { onToggleReveal() },
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp,
     ) {
         Column(
             modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
@@ -1250,7 +1252,7 @@ private fun TotpTokenCard(
                             modifier = Modifier.size(18.dp),
                         )
                     }
-                    DropdownMenu(
+                    ToolboxDropdownMenu(
                         expanded = cardMenuExpanded,
                         onDismissRequest = { cardMenuExpanded = false },
                     ) {
@@ -1382,12 +1384,14 @@ private fun TotpEntryEditor(
             decorFitsSystemWindows = false,
         ),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
-            Scaffold(
-                containerColor = MaterialTheme.colorScheme.background,
+        val opaqueBg = MaterialTheme.colorScheme.background.copy(alpha = 1f)
+        CompositionLocalProvider(LocalAcrylicBackground provides AcrylicBackgroundState()) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = opaqueBg,
+            ) {
+                Scaffold(
+                    containerColor = opaqueBg,
                 topBar = {
                     ToolboxTopBar(
                         title = if (initial == null) {
@@ -1447,7 +1451,8 @@ private fun TotpEntryEditor(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    OutlinedButton(
+                    FilledTonalButton(
+                                shape = MaterialTheme.shapes.small,
                         onClick = {
                             val clip = context.getSystemService(Context.CLIPBOARD_SERVICE)
                                 as? ClipboardManager
@@ -1609,6 +1614,7 @@ private fun TotpEntryEditor(
                 }
                 }
             }
+        }
         }
     }
 }

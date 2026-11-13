@@ -21,7 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -30,6 +30,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -111,11 +112,14 @@ internal fun LedgerWebDavDialog(
             decorFitsSystemWindows = false,
         ),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
-            Scaffold(
+        val opaqueBg = MaterialTheme.colorScheme.background.copy(alpha = 1f)
+        CompositionLocalProvider(LocalAcrylicBackground provides AcrylicBackgroundState()) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = opaqueBg,
+            ) {
+                Scaffold(
+                    containerColor = opaqueBg,
                 modifier = Modifier.imePadding(),
                 topBar = {
                     TopAppBar(
@@ -235,11 +239,12 @@ internal fun LedgerWebDavDialog(
                             Text(strings.saveAction)
                         }
                         Spacer(Modifier.weight(1f))
-                        OutlinedButton(
+                        FilledTonalButton(
                             onClick = {
                                 currentConfig()?.let(onTestConnection)
                             },
                             enabled = busyAction == null,
+                            shape = MaterialTheme.shapes.small,
                         ) {
                             if (busyAction == WebDavBusyAction.TEST) {
                                 CircularProgressIndicator(
@@ -323,6 +328,7 @@ internal fun LedgerWebDavDialog(
                     }
                 }
             }
+        }
         }
     }
 

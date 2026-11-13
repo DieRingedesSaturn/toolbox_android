@@ -154,7 +154,7 @@ fun AstronomyScreen(
         isExporting = true
 
         val palette = ExportThemePalette(
-            backgroundColor = colorScheme.background.toArgb(),
+            backgroundColor = colorScheme.background.copy(alpha = 1f).toArgb(),
             cardBackgroundColor = colorScheme.surfaceContainer.toArgb(),
             cardInnerBackgroundColor = colorScheme.surfaceVariant.toArgb(),
             textPrimaryColor = colorScheme.onSurface.toArgb(),
@@ -313,12 +313,8 @@ private fun MoonPhaseHeroCard(
     strings: ToolboxStrings,
     moonPhase: MoonPhaseInfo,
 ) {
-    Card(
+    ToolboxCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Row(
             modifier = Modifier
@@ -447,12 +443,8 @@ private fun NightTimelineShowcaseCard(
     val dawnStartFrac = ((timeline.dawnAstronomicalMillis - windowStart).toFloat() / totalDuration).coerceIn(0f, 1f)
     val nowMillis = System.currentTimeMillis()
 
-    Card(
+    ToolboxCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -815,12 +807,8 @@ private fun CelestialBodyCard(
     val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.US) }
     val baseColor = Color(body.body.colorRgb)
 
-    Card(
+    ToolboxCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(
             modifier = Modifier.padding(14.dp),

@@ -119,6 +119,10 @@ app/src/main/java/com/example/toolbox/
 │   ├── WindowSize.kt
 │   ├── AppStrings.kt
 │   ├── AppPreferences.kt
+│   ├── AppBackground.kt
+│   ├── BackgroundImageEditor.kt
+│   ├── AppSettingsBackup.kt
+│   ├── SettingsBackupSection.kt
 │   ├── HomeScreen.kt
 │   ├── MonitorScreen.kt
 │   ├── DeviceScreen.kt

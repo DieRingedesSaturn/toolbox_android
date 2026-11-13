@@ -32,8 +32,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
@@ -56,6 +56,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import com.example.toolbox.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -241,11 +243,8 @@ fun AppUsageScreen(
                     }
                 } else if (filteredItems.isEmpty()) {
                     item {
-                        Card(
+                        ToolboxCard(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                            ),
                         ) {
                             Text(
                                 text = if (loadFailed) strings.notAvailable else strings.noUsageData,
@@ -281,11 +280,8 @@ private fun PermissionGuideView(
         modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
-        Card(
+        ToolboxCard(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            ),
         ) {
             Column(
                 modifier = Modifier.padding(14.dp),
@@ -321,9 +317,9 @@ private fun TimeRangeSegmentedBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+            .acrylicSurface(
                 shape = RoundedCornerShape(12.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
             )
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -335,7 +331,7 @@ private fun TimeRangeSegmentedBar(
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
                     .background(
-                        if (isSelected) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
+                        if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                     )
                     .clickable { onSelectRange(range) }
                     .padding(vertical = 8.dp),
@@ -345,7 +341,11 @@ private fun TimeRangeSegmentedBar(
                     text = strings.usageTimeRange(range),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
         }
@@ -357,12 +357,8 @@ private fun UsageOverviewCard(
     strings: ToolboxStrings,
     report: UsageReport,
 ) {
-    Card(
+    ToolboxCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -540,19 +536,25 @@ private fun CategoryFilterRow(
             }
             val countSuffix = if (count != null) " $count" else ""
 
-            FilterChip(
+            ToolboxFilterChip(
                 selected = isSelected,
                 onClick = { onSelectCategory(category) },
                 label = {
                     Text(
-                        text = "${category.emoji} ${strings.appCategory(category)}$countSuffix",
+                        text = "${strings.appCategory(category)}$countSuffix",
                         fontSize = 12.sp,
                     )
                 },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color(category.colorRgb).copy(alpha = 0.2f),
-                    selectedLabelColor = MaterialTheme.colorScheme.onSurface,
-                ),
+                leadingIcon = {
+                    Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+                        if (isSelected) {
+                            Icon(painterResource(R.drawable.ic_check), contentDescription = null, modifier = Modifier.size(18.dp))
+                        } else {
+                            Text(category.emoji, fontSize = 14.sp)
+                        }
+                    }
+                },
+                border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
             )
         }
     }
@@ -567,7 +569,14 @@ private fun SortModeTabs(
 ) {
     PrimaryTabRow(
         selectedTabIndex = sortMode.ordinal,
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.medium)
+            .acrylicSurface(
+                shape = MaterialTheme.shapes.medium,
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            ),
         containerColor = Color.Transparent,
+        divider = {},
     ) {
         UsageSortMode.entries.forEach { mode ->
             Tab(
@@ -625,9 +634,10 @@ private fun AppUsageListItem(
         (it.toFloat() / maxMetricValue.toFloat()).coerceIn(0f, 1f)
     }
 
-    Card(
+    ToolboxCard(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
             .clickable {
                 val timeFmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
                 val lastUsed = if (item.lastTimeUsedMillis > 0) timeFmt.format(Date(item.lastTimeUsedMillis)) else "--"
@@ -643,10 +653,6 @@ private fun AppUsageListItem(
                 )
                 copyToClipboard(context, item.label, copyText, strings.copied(item.label))
             },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(
             modifier = Modifier.padding(12.dp),

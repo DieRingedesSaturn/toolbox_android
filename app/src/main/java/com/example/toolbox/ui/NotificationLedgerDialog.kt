@@ -30,7 +30,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
@@ -40,6 +40,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
@@ -186,8 +187,14 @@ internal fun NotificationLedgerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(modifier = Modifier.fillMaxSize().imePadding()) {
-            Scaffold(
+        val opaqueBg = MaterialTheme.colorScheme.background.copy(alpha = 1f)
+        CompositionLocalProvider(LocalAcrylicBackground provides AcrylicBackgroundState()) {
+            Surface(
+                modifier = Modifier.fillMaxSize().imePadding(),
+                color = opaqueBg,
+            ) {
+                Scaffold(
+                    containerColor = opaqueBg,
                 topBar = {
                     ToolboxTopBar(
                         title = strings.notificationLedgerTitle,
@@ -323,10 +330,11 @@ internal fun NotificationLedgerDialog(
                                     val payment = candidate.payment
                                     if (payment != null) {
                                         Column {
-                                            OutlinedButton(
+                                            FilledTonalButton(
                                                 onClick = {
                                                     onSelectAmount(candidate, payment.amountCents)
                                                 },
+                                                shape = MaterialTheme.shapes.small,
                                             ) {
                                                 Text(
                                                     "${directionLabel(strings, payment.direction)} · " +
@@ -353,8 +361,9 @@ internal fun NotificationLedgerDialog(
                                         candidate.amountsCents
                                             .filter { it != payment?.amountCents }
                                             .forEach { amount ->
-                                                OutlinedButton(
+                                                FilledTonalButton(
                                                     onClick = { onSelectAmount(candidate, amount) },
+                                                    shape = MaterialTheme.shapes.small,
                                                 ) {
                                                     Text(
                                                         String.format(
@@ -549,6 +558,7 @@ internal fun NotificationLedgerDialog(
                     }
                 }
             }
+        }
         }
     }
     val editingDefaults = sourceDefaults

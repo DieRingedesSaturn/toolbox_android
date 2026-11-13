@@ -188,147 +188,153 @@ internal fun FxScreen(
             }
 
             item {
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(strings.entryAmountLabel) },
-                    prefix = { Text(LedgerCalculator.currencySymbol(sourceCurrency)) },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                    ),
-                    singleLine = true,
-                )
-            }
-
-            item {
-                Text(
-                    text = strings.fxFromLabel,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(featuredCodes) { code ->
-                        FilterChip(
-                            selected = sourceCurrency == code,
-                            onClick = { sourceCurrency = code },
-                            label = { Text(code) },
+                ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = amountText,
+                            onValueChange = { amountText = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(strings.entryAmountLabel) },
+                            prefix = { Text(LedgerCalculator.currencySymbol(sourceCurrency)) },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Decimal,
+                            ),
+                            singleLine = true,
                         )
-                    }
-                    item {
-                        FilterChip(
-                            selected = sourceCurrency !in featuredCodes,
-                            onClick = {
-                                pickerQuery = ""
-                                showCurrencyPicker = true
-                            },
-                            label = {
-                                Text(
-                                    if (sourceCurrency !in featuredCodes) {
-                                        sourceCurrency
-                                    } else {
-                                        strings.fxMoreChip
+                        Text(
+                            text = strings.fxFromLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(featuredCodes) { code ->
+                                ToolboxFilterChip(
+                                    selected = sourceCurrency == code,
+                                    onClick = { sourceCurrency = code },
+                                    label = { Text(code) },
+                                )
+                            }
+                            item {
+                                ToolboxFilterChip(
+                                    selected = sourceCurrency !in featuredCodes,
+                                    onClick = {
+                                        pickerQuery = ""
+                                        showCurrencyPicker = true
+                                    },
+                                    label = {
+                                        Text(
+                                            if (sourceCurrency !in featuredCodes) {
+                                                sourceCurrency
+                                            } else {
+                                                strings.fxMoreChip
+                                            },
+                                        )
                                     },
                                 )
-                            },
-                        )
+                            }
+                        }
                     }
                 }
             }
 
             val currentRates = rates
+            val amount = amountText.replace(',', '.').toDoubleOrNull()
             if (currentRates != null) {
                 item {
-                    OutlinedTextField(
-                        value = currencyQuery,
-                        onValueChange = { currencyQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text(strings.fxSearchHint) },
-                        leadingIcon = {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_search),
-                                contentDescription = null,
-                            )
-                        },
-                        trailingIcon = {
-                            if (currencyQuery.isNotEmpty()) {
-                                IconButton(onClick = { currencyQuery = "" }) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_close),
-                                        contentDescription = strings.cancelAction,
-                                    )
-                                }
-                            }
-                        },
-                        singleLine = true,
-                    )
-                }
-            }
-            val amount = amountText.replace(',', '.').toDoubleOrNull()
-            if (currentRates != null && amount != null) {
-                item {
                     InfoCard(title = strings.moduleTitle(ToolboxModule.FX)) {
-                        val currencyKeys = remember(currentRates) {
-                            CurrencySearch.keys(currentRates.currencies)
-                        }
-                        val ledgerCodes = featuredCodes
-                            .filter { it != sourceCurrency }
-                            .filter { it in currentRates.eurRates }
-                        val otherCodes = currentRates.currencies
-                            .filter { it != sourceCurrency }
-                            .filter { it !in featuredCodes }
-                        val searching = currencyQuery.isNotBlank()
-                        val shown = if (searching) {
-                            CurrencySearch.filter(
-                                ledgerCodes + otherCodes,
-                                currencyQuery,
-                                currencyKeys,
-                            )
-                        } else if (showAll) {
-                            ledgerCodes + otherCodes
-                        } else {
-                            ledgerCodes
-                        }
-                        if (searching && shown.isEmpty()) {
-                            Text(
-                                text = strings.fxSearchEmpty,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        shown.forEachIndexed { index, code ->
-                            if (index > 0) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(vertical = 4.dp),
-                                    color = MaterialTheme.colorScheme
-                                        .outlineVariant.copy(alpha = 0.5f),
+                        OutlinedTextField(
+                            value = currencyQuery,
+                            onValueChange = { currencyQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 4.dp),
+                            placeholder = { Text(strings.fxSearchHint) },
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_search),
+                                    contentDescription = null,
+                                )
+                            },
+                            trailingIcon = {
+                                if (currencyQuery.isNotEmpty()) {
+                                    IconButton(onClick = { currencyQuery = "" }) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_close),
+                                            contentDescription = strings.cancelAction,
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                        )
+                        if (amount != null) {
+                            val currencyKeys = remember(currentRates) {
+                                CurrencySearch.keys(currentRates.currencies)
+                            }
+                            val ledgerCodes = featuredCodes
+                                .filter { it != sourceCurrency }
+                                .filter { it in currentRates.eurRates }
+                            val otherCodes = currentRates.currencies
+                                .filter { it != sourceCurrency }
+                                .filter { it !in featuredCodes }
+                            val searching = currencyQuery.isNotBlank()
+                            val shown = if (searching) {
+                                CurrencySearch.filter(
+                                    ledgerCodes + otherCodes,
+                                    currencyQuery,
+                                    currencyKeys,
+                                )
+                            } else if (showAll) {
+                                ledgerCodes + otherCodes
+                            } else {
+                                ledgerCodes
+                            }
+                            if (searching && shown.isEmpty()) {
+                                Text(
+                                    text = strings.fxSearchEmpty,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            val converted = currentRates
-                                .convert(amount, sourceCurrency, code)
-                            InfoRow(
-                                label = "$code · " + currencyDisplayName(
-                                    code,
-                                    displayLocale,
-                                ),
-                                value = converted?.let {
-                                    formatFxAmount(it, code)
-                                } ?: strings.unknown,
-                                onCopy = {
-                                    copyToClipboard(
-                                        context = context,
-                                        label = code,
-                                        value = it,
+                            shown.forEachIndexed { index, code ->
+                                if (index > 0) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(vertical = 4.dp),
+                                        color = MaterialTheme.colorScheme
+                                            .outlineVariant.copy(alpha = 0.5f),
                                     )
-                                },
-                            )
-                        }
-                        if (!searching && !showAll && otherCodes.isNotEmpty()) {
-                            TextButton(
-                                onClick = { showAll = true },
-                                modifier = Modifier.padding(top = 4.dp),
-                            ) {
-                                Text(strings.fxShowAll(otherCodes.size))
+                                }
+                                val converted = currentRates
+                                    .convert(amount, sourceCurrency, code)
+                                InfoRow(
+                                    label = "$code · " + currencyDisplayName(
+                                        code,
+                                        displayLocale,
+                                    ),
+                                    value = converted?.let {
+                                        formatFxAmount(it, code)
+                                    } ?: strings.unknown,
+                                    onCopy = {
+                                        copyToClipboard(
+                                            context = context,
+                                            label = code,
+                                            value = it,
+                                        )
+                                    },
+                                )
+                            }
+                            if (!searching && !showAll && otherCodes.isNotEmpty()) {
+                                TextButton(
+                                    onClick = { showAll = true },
+                                    modifier = Modifier.padding(top = 4.dp),
+                                ) {
+                                    Text(strings.fxShowAll(otherCodes.size))
+                                }
                             }
                         }
                     }
@@ -450,11 +456,8 @@ private fun FxStatusCard(
     fetching: Boolean,
 ) {
     val context = LocalContext.current
-    Card(
+    ToolboxCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
     ) {
         Column(
             modifier = Modifier
