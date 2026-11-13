@@ -246,7 +246,7 @@ internal fun FxScreen(
             val amount = amountText.replace(',', '.').toDoubleOrNull()
             if (currentRates != null) {
                 item {
-                    InfoCard(title = strings.moduleTitle(ToolboxModule.FX)) {
+                    InfoCard(title = strings.fxReferenceRates) {
                         OutlinedTextField(
                             value = currencyQuery,
                             onValueChange = { currencyQuery = it },

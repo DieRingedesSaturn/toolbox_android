@@ -494,8 +494,8 @@ internal fun LedgerScreen(
         ).groupBy { it.subscription }
     }
     val currentMonth = remember(entries) { YearMonth.now() }
-    val overviewMonthSummary = remember(entries, currentMonth) {
-        LedgerCalculator.monthSummary(entries, currentMonth)
+    val overviewMonthSummary = remember(allEntries, currentMonth) {
+        LedgerCalculator.monthSummary(allEntries, currentMonth)
     }
     val selectedMonth = runCatching { YearMonth.parse(selectedMonthName) }
         .getOrElse { YearMonth.now() }
@@ -1312,6 +1312,10 @@ internal fun LedgerScreen(
             Column {
                 if (searching) {
                     TopAppBar(
+                        modifier = Modifier.acrylicSurface(
+                            shape = RectangleShape,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        ),
                         title = {
                             TextField(
                                 value = searchQuery.orEmpty(),
@@ -1360,8 +1364,8 @@ internal fun LedgerScreen(
                         },
                         scrollBehavior = scrollBehavior,
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.background,
-                            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = Color.Transparent,
                         ),
                     )
                 } else {
@@ -1639,6 +1643,7 @@ internal fun LedgerScreen(
                         1 -> LedgerTransactionsTab(
                             strings = strings,
                             entries = filteredEntries,
+                            referenceEntries = allEntries,
                             tags = tags,
                             accounts = accounts.filter { it.deletedAtMillis == null },
                             selectedMonth = selectedMonth,
@@ -1700,7 +1705,7 @@ internal fun LedgerScreen(
                             tags = tags,
                             pendingRenewals = pendingRenewals,
                             renewalBusy = renewalBusy,
-                            isFiltered = filterSelected.isNotEmpty(),
+                            filterSelectedCount = filterSelected.size,
                             onOpenFilter = { showFilterDialog = true },
                             onClearFilter = { filterTagCsv = "" },
                             onManageTags = {

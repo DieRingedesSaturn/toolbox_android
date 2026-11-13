@@ -1,6 +1,32 @@
 package com.example.toolbox.ui
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
 import kotlin.math.abs
+
+internal data class CategoryLabelColors(val container: Color, val content: Color)
+
+/** Paint the evaluated container opaquely so user wallpaper cannot invalidate the text contrast. */
+internal fun categoryLabelColors(
+    category: Color,
+    surface: Color,
+    preferredContent: Color,
+): CategoryLabelColors {
+    val container = category.copy(alpha = 0.15f).compositeOver(surface.copy(alpha = 1f))
+    fun contrast(content: Color): Double {
+        val a = content.luminance().toDouble()
+        val b = container.luminance().toDouble()
+        return (maxOf(a, b) + 0.05) / (minOf(a, b) + 0.05)
+    }
+    val preferred = preferredContent.copy(alpha = 1f)
+    val content = when {
+        contrast(preferred) >= 4.5 -> preferred
+        contrast(Color.Black) >= contrast(Color.White) -> Color.Black
+        else -> Color.White
+    }
+    return CategoryLabelColors(container, content)
+}
 
 /** Default seed for the custom accent theme (the old "Blue" preset). */
 const val DEFAULT_CUSTOM_ACCENT_RGB = 0x415F91

@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.NameNotFoundException
-import android.net.Uri
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -108,23 +107,41 @@ fun launchPrivacyShortcut(context: Context, row: PrivacyShortcutRow): Result<Uni
     }
 }
 
-fun requestPrivacyPinShortcut(context: Context, row: PrivacyShortcutRow, label: String): Boolean {
-    val candidate = row.selection.candidate ?: return false
-    val activity = row.selection.activity ?: return false
-    if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context)) return false
-    val intent = privacyLaunchIntent(
-        candidate = candidate,
-        activity = activity,
-        googleAccount = if (candidate.requiresGoogleAccount) firstGoogleAccount(context) else null,
-    ).apply {
-        if (action.isNullOrBlank()) action = Intent.ACTION_VIEW
+fun requestPrivacyPinShortcut(
+    context: Context,
+    row: PrivacyShortcutRow,
+    label: String,
+): PrivacyPinResult {
+    val candidate = row.selection.candidate ?: return PrivacyPinResult.FAILED
+    val activity = row.selection.activity ?: return PrivacyPinResult.FAILED
+    return try {
+        if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
+            return PrivacyPinResult.UNSUPPORTED
+        }
+        val intent = privacyLaunchIntent(
+            candidate = candidate,
+            activity = activity,
+            googleAccount = if (candidate.requiresGoogleAccount) firstGoogleAccount(context) else null,
+        ).apply {
+            if (action.isNullOrBlank()) action = Intent.ACTION_VIEW
+        }
+        val shortcut = ShortcutInfoCompat.Builder(context, "privacy-${row.shortcut.id}")
+            .setShortLabel(label)
+            .setIcon(IconCompat.createWithResource(context, R.drawable.ic_module_privacy))
+            .setIntent(intent)
+            .build()
+        if (ShortcutManagerCompat.requestPinShortcut(context, shortcut, null)) {
+            PrivacyPinResult.REQUESTED
+        } else {
+            PrivacyPinResult.UNSUPPORTED
+        }
+    } catch (_: SecurityException) {
+        PrivacyPinResult.PERMISSION_DENIED
+    } catch (_: IllegalStateException) {
+        PrivacyPinResult.UNSUPPORTED
+    } catch (_: RuntimeException) {
+        PrivacyPinResult.FAILED
     }
-    val shortcut = ShortcutInfoCompat.Builder(context, "privacy-${row.shortcut.id}")
-        .setShortLabel(label)
-        .setIcon(IconCompat.createWithResource(context, R.drawable.ic_module_privacy))
-        .setIntent(intent)
-        .build()
-    return ShortcutManagerCompat.requestPinShortcut(context, shortcut, null)
 }
 
 internal fun privacyLaunchIntent(
@@ -152,7 +169,7 @@ internal fun firstGoogleAccount(context: Context): Account? = try {
 private fun candidateIntent(candidate: PrivacyShortcutCandidate): Intent = Intent(candidate.action).apply {
     addCategory(Intent.CATEGORY_DEFAULT)
     if (!candidate.dataUri.isNullOrBlank()) {
-        data = Uri.parse(candidate.dataUri)
+        data = candidate.dataUri.toUri()
     }
 }
 

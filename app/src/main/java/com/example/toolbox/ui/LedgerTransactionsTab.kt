@@ -16,16 +16,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -268,16 +269,30 @@ internal fun LedgerTransactionsTab(
     onBulkRemoveTag: () -> Unit = {},
     onBulkCopy: () -> Unit = {},
     onManageTags: () -> Unit = {},
+    referenceEntries: List<LedgerEntry> = entries,
 ) {
     val selecting = selectedUuids.isNotEmpty()
     val zone = ZoneId.systemDefault()
-    val monthSummary = remember(entries, selectedMonth) {
-        LedgerCalculator.monthSummary(entries, selectedMonth, zone)
+    val monthSummary = remember(entries, selectedMonth, referenceEntries) {
+        LedgerCalculator.monthSummary(entries, selectedMonth, zone, referenceEntries)
     }
     val dayGroups = remember(entries, selectedMonth) {
         LedgerCalculator.groupByDay(entries, selectedMonth, zone)
     }
     val currentMonth = YearMonth.now(zone)
+    var showMonthPicker by rememberSaveable { mutableStateOf(false) }
+    if (showMonthPicker) {
+        LedgerMonthPickerDialog(
+            initial = selectedMonth,
+            latest = currentMonth,
+            strings = strings,
+            onConfirm = {
+                onMonthChange(it)
+                showMonthPicker = false
+            },
+            onDismiss = { showMonthPicker = false },
+        )
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -318,52 +333,13 @@ internal fun LedgerTransactionsTab(
                     }
                 }
             } else {
-                ToolboxCard(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        ToolboxFilterChip(
-                            selected = filterSelected.isNotEmpty(),
-                            onClick = onOpenFilter,
-                            label = { Text(strings.tagFilterAction) },
-                        )
-                        val selectedTags = filterSelected.mapNotNull { uuid ->
-                            tags.firstOrNull { it.uuid == uuid }
-                        }
-                        selectedTags.take(3).forEach { tag ->
-                            Spacer(modifier = Modifier.padding(horizontal = 3.dp))
-                            ToolboxFilterChip(
-                                selected = true,
-                                onClick = onOpenFilter,
-                                label = {
-                                    Text(
-                                        (if (tag.emoji.isNotBlank()) "${tag.emoji} " else "") +
-                                            tag.name,
-                                    )
-                                },
-                            )
-                        }
-                        if (selectedTags.size > 3) {
-                            Text(
-                                text = " +${selectedTags.size - 3}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
-                        if (filterSelected.isNotEmpty()) {
-                            TextButton(onClick = onClearFilter) {
-                                Text(strings.clearFilter)
-                            }
-                        }
-                        TextButton(onClick = onManageTags) {
-                            Text(strings.manageTagsChip)
-                        }
-                    }
-                }
+                LedgerTagFilterBar(
+                    strings = strings,
+                    selectedCount = filterSelected.size,
+                    onOpenFilter = onOpenFilter,
+                    onClearFilter = onClearFilter,
+                    onManageTags = onManageTags,
+                )
             }
         }
 
@@ -385,13 +361,17 @@ internal fun LedgerTransactionsTab(
                                 contentDescription = strings.prevMonth,
                             )
                         }
-                        Text(
-                            text = strings.formatLedgerMonth(selectedMonth),
+                        TextButton(
+                            onClick = { showMonthPicker = true },
                             modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                        )
+                        ) {
+                            Text(
+                                text = strings.formatLedgerMonth(selectedMonth),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
                         IconButton(
                             onClick = { onMonthChange(selectedMonth.plusMonths(1)) },
                             enabled = selectedMonth < currentMonth,
@@ -403,14 +383,25 @@ internal fun LedgerTransactionsTab(
                         }
                     }
                     Text(
-                        text = "${strings.monthExpenseLabel} ${LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0)}" +
+                        text = "${strings.monthlyRegularExpenseLabel} ${LedgerCalculator.formatCurrency(monthSummary.regularExpenseCents / 100.0)}" +
                             " · ${strings.monthIncomeLabel} ${LedgerCalculator.formatCurrency(monthSummary.incomeCents / 100.0)}" +
-                            " · ${strings.monthNetLabel} ${LedgerCalculator.formatCurrency(monthSummary.netCents / 100.0)}",
+                            " · ${strings.monthNetLabel} ${LedgerCalculator.formatCurrency(monthSummary.regularNetCents / 100.0)}",
                         modifier = Modifier.fillMaxWidth(),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
+                    if (monthSummary.expenseCents != monthSummary.regularExpenseCents) {
+                        Text(
+                            text = strings.actualMonthExpenseLine(
+                                LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0),
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
             }
         }
@@ -546,13 +537,6 @@ internal fun LedgerSearchResults(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item {
-            Text(
-                text = strings.searchResultCount(results.size),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         if (results.isEmpty()) {
             item {
                 ToolboxCard(
@@ -567,6 +551,16 @@ internal fun LedgerSearchResults(
                 }
             }
         } else {
+            item(key = "result-count") {
+                ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = strings.searchResultCount(results.size),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             groups.forEach { (date, dayEntries) ->
                 item(key = "scard-$date") {
                     ToolboxCard(modifier = Modifier.fillMaxWidth()) {

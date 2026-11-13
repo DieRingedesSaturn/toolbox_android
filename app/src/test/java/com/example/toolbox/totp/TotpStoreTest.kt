@@ -1,9 +1,12 @@
 package com.example.toolbox.totp
 
 import android.util.AtomicFile
+import androidx.core.content.edit
 import java.io.File
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -21,6 +24,7 @@ class TotpStoreTest {
     @Before
     fun setUp() {
         val context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("totp_prefs", 0).edit(commit = true) { clear() }
         context.noBackupFilesDir.mkdirs()
         vaultFile = File(context.noBackupFilesDir, TotpStore.LOCAL_FILE_NAME)
         vaultFile.delete()
@@ -115,6 +119,43 @@ class TotpStoreTest {
         assertEquals(9001L, store.queryAllForSync().single { it.issuer == "omitted" }.deletedAtMillis)
         store.upsert(store.queryVisible().single().copy(issuer = "edited", updatedAtMillis = 600L))
         assertEquals(9002L, store.queryVisible().single().updatedAtMillis)
+    }
+
+    @Test
+    fun missingPassphraseAndLegacyFallbackRemainDistinctFromFailure() {
+        assertNull(store.readSavedDefaultBackupPassphrase().getOrThrow())
+        store.savePassphrase("legacy-test-passphrase")
+        assertEquals("legacy-test-passphrase", store.readSavedDefaultBackupPassphrase().getOrThrow())
+        store.saveDefaultBackupPassphrase("default-test-passphrase")
+        assertEquals("default-test-passphrase", store.readSavedDefaultBackupPassphrase().getOrThrow())
+    }
+
+    @Test
+    fun failedStrictReadPreservesCiphertextAndCanBeRetried() {
+        store.saveDefaultBackupPassphrase("default-test-passphrase")
+        val prefs = RuntimeEnvironment.getApplication().getSharedPreferences("totp_prefs", 0)
+        val before = prefs.all.toMap()
+        cipher.failDecrypt = true
+        assertThrows(TotpPassphraseReadException::class.java) {
+            store.readSavedDefaultBackupPassphrase().getOrThrow()
+        }
+        assertEquals(before, prefs.all)
+        // Existing nullable callers retain their previous best-effort behavior.
+        assertNull(store.savedDefaultBackupPassphrase())
+        cipher.failDecrypt = false
+        assertEquals("default-test-passphrase", store.readSavedDefaultBackupPassphrase().getOrThrow())
+    }
+
+    @Test
+    fun unreadableDefaultDoesNotSilentlyFallBackToAnotherPasswordInStrictMode() {
+        store.savePassphrase("legacy-test-passphrase")
+        val prefs = RuntimeEnvironment.getApplication().getSharedPreferences("totp_prefs", 0)
+        prefs.edit(commit = true) { putString("default_backup_passphrase_enc", "!") }
+        assertThrows(TotpPassphraseReadException::class.java) {
+            store.readSavedDefaultBackupPassphrase().getOrThrow()
+        }
+        assertEquals("legacy-test-passphrase", store.savedDefaultBackupPassphrase())
+        assertEquals("!", prefs.getString("default_backup_passphrase_enc", null))
     }
 
     private fun assertFails(block: () -> Unit) {

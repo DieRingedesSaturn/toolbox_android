@@ -32,7 +32,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
@@ -554,7 +553,6 @@ private fun CategoryFilterRow(
                         }
                     }
                 },
-                border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
             )
         }
     }
@@ -668,7 +666,7 @@ private fun AppUsageListItem(
                 if (bitmap != null) {
                     Image(
                         bitmap = bitmap,
-                        contentDescription = item.label,
+                        contentDescription = null,
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(8.dp)),
@@ -704,20 +702,38 @@ private fun AppUsageListItem(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
                         )
+                        val categoryColors = categoryLabelColors(
+                            category = Color(item.category.colorRgb),
+                            surface = MaterialTheme.colorScheme.surfaceContainer,
+                            preferredContent = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         Box(
                             modifier = Modifier
                                 .background(
-                                    color = Color(item.category.colorRgb).copy(alpha = 0.15f),
+                                    color = categoryColors.container,
                                     shape = RoundedCornerShape(4.dp),
                                 )
-                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                                .padding(horizontal = 5.dp, vertical = 2.dp),
                         ) {
-                            Text(
-                                text = "${item.category.emoji} ${strings.appCategory(item.category)}",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(item.category.colorRgb),
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(
+                                            color = Color(item.category.colorRgb),
+                                            shape = RoundedCornerShape(50),
+                                        ),
+                                )
+                                Text(
+                                    text = "${item.category.emoji} ${strings.appCategory(item.category)}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = categoryColors.content,
+                                )
+                            }
                         }
                     }
 

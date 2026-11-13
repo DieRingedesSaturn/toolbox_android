@@ -55,4 +55,19 @@ class TotpGeneratorTest {
         assertEquals("GH", gh.first)
         assertTrue(cf.second != gh.second)
     }
+
+    @Test
+    fun badgeForegroundUsesTheHigherContrastChoice() {
+        // Bright orange and pale yellow need black letters.
+        assertEquals(0xFF000000.toInt(), TotpGenerator.badgeForegroundRgb(0xFFFF9900.toInt()))
+        assertEquals(0xFF000000.toInt(), TotpGenerator.badgeForegroundRgb(0xFFFFE066.toInt()))
+        // Dark navy keeps white letters.
+        assertEquals(0xFFFFFFFF.toInt(), TotpGenerator.badgeForegroundRgb(0xFF1B2838.toInt()))
+        assertTrue(
+            TotpGenerator.contrastRatio(
+                TotpGenerator.badgeForegroundRgb(0xFF4285F4.toInt()),
+                0xFF4285F4.toInt(),
+            ) >= 3.0,
+        )
+    }
 }

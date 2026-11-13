@@ -11,7 +11,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -270,7 +269,7 @@ fun LocationScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = readableContentPadding(maxWidth = 1100.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { MockLocationCard(strings) }
@@ -573,7 +572,13 @@ private fun GnssSkyViewCard(
                         modifier = Modifier
                             .size(10.dp)
                             .clip(CircleShape)
-                            .background(if (status != null && status.usedInFixCount > 0) Color(0xFF50B83C) else Color(0xFFF5A623)),
+                            .background(
+                                if (status != null && status.usedInFixCount > 0) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            ),
                     )
                     Text(
                         text = when {
@@ -582,7 +587,11 @@ private fun GnssSkyViewCard(
                             else -> strings.gnssFixStatusSearching
                         },
                         style = MaterialTheme.typography.titleSmall,
-                        color = if (status != null && status.usedInFixCount > 0) MaterialTheme.colorScheme.primary else Color(0xFFF5A623),
+                        color = if (status != null && status.usedInFixCount > 0) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
                 FilledTonalButton(
@@ -607,7 +616,11 @@ private fun GnssSkyViewCard(
                         label = {
                             Text(
                                 "${strings.gnssUsedInFix}: ${status.usedInFixCount}",
-                                color = if (status.usedInFixCount > 0) Color(0xFF50B83C) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (status.usedInFixCount > 0) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                             )
                         },
                     )

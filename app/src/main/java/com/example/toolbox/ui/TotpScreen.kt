@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -829,7 +830,16 @@ internal fun TotpScreen(
         )
     }
 
-    if (showEditor) {
+    // After process restoration the editor state is saved but the token list
+    // reloads from the encrypted store; wait for the entry before editing it.
+    LaunchedEffect(loaded, showEditor, editingUuid, editingEntry) {
+        if (loaded && showEditor && editingUuid != null && editingEntry == null) {
+            showEditor = false
+            editingUuid = null
+        }
+    }
+
+    if (showEditor && loaded && (editingUuid == null || editingEntry != null)) {
         TotpEntryEditor(
             strings = strings,
             initial = editingEntry,
@@ -1173,7 +1183,7 @@ private fun TotpTokenCard(
                 ) {
                     Text(
                         text = badge.first,
-                        color = Color.White,
+                        color = Color(TotpGenerator.badgeForegroundRgb(badge.second)),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                     )
@@ -1232,7 +1242,6 @@ private fun TotpTokenCard(
                 }
                 IconButton(
                     onClick = { onCopyCode(rawCode) },
-                    modifier = Modifier.size(32.dp),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_copy),
@@ -1244,7 +1253,6 @@ private fun TotpTokenCard(
                 Box {
                     IconButton(
                         onClick = { cardMenuExpanded = true },
-                        modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_more_vert),
@@ -1315,12 +1323,15 @@ private fun TotpEntryEditor(
     onSave: (TotpEntry) -> Unit,
 ) {
     val context = LocalContext.current
-    var uriInput by rememberSaveable { mutableStateOf("") }
+    // A secret or otpauth URI must never enter the saved-instance Bundle.
+    // An existing token is re-read from the encrypted store when the editor
+    // is restored; a new, unsaved secret is simply dropped.
+    var uriInput by remember { mutableStateOf("") }
     var issuer by rememberSaveable { mutableStateOf(initial?.issuer.orEmpty()) }
     var accountName by rememberSaveable { mutableStateOf(initial?.accountName.orEmpty()) }
-    var secret by rememberSaveable { mutableStateOf(initial?.secret.orEmpty()) }
-    var showSecret by rememberSaveable { mutableStateOf(false) }
-    var showUri by rememberSaveable { mutableStateOf(false) }
+    var secret by remember { mutableStateOf(initial?.secret.orEmpty()) }
+    var showSecret by remember { mutableStateOf(false) }
+    var showUri by remember { mutableStateOf(false) }
     var algorithmName by rememberSaveable {
         mutableStateOf((initial?.algorithm ?: TotpAlgorithm.SHA1).name)
     }
@@ -1413,8 +1424,12 @@ private fun TotpEntryEditor(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
+                        .imePadding()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(
+                            horizontal = readableHorizontalPadding(),
+                            vertical = 12.dp,
+                        ),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                 if (initial == null) {
@@ -1444,7 +1459,11 @@ private fun TotpEntryEditor(
                                                 R.drawable.ic_visibility
                                             },
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = if (showUri) {
+                                            strings.totpHideUri
+                                        } else {
+                                            strings.totpShowUri
+                                        },
                                     )
                                 }
                             }

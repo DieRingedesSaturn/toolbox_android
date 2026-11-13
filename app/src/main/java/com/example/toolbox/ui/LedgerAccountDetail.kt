@@ -124,7 +124,7 @@ internal fun LedgerAccountDetail(
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { showReconcile = true }) {
                     Text(strings.reconcileAction)
                 }

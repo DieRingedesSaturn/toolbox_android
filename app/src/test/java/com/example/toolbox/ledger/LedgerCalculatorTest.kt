@@ -1032,4 +1032,49 @@ class LedgerCalculatorTest {
         assertNull(LedgerCalculator.parseMoneyToCents(""))
         assertNull(LedgerCalculator.parseMoneyToCents("not money"))
     }
+
+    @Test
+    fun dayTotalsCountsOnlyThatDateAndSkipsAdjustments() {
+        val zone = ZoneId.of("UTC")
+        val today = LocalDate.of(2026, 11, 13)
+        val todayMillis = today.atStartOfDay(zone).toInstant().toEpochMilli()
+        val yesterdayMillis = today.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val spend = LedgerEntry(
+            uuid = "today-out",
+            title = "Lunch",
+            amountCents = 3_200L,
+            type = LedgerEntryType.EXPENSE,
+            occurredAtMillis = todayMillis + 3_600_000L,
+        )
+        val income = LedgerEntry(
+            uuid = "today-in",
+            title = "Refund",
+            amountCents = 1_000L,
+            type = LedgerEntryType.INCOME,
+            occurredAtMillis = todayMillis + 7_200_000L,
+        )
+        val yesterday = LedgerEntry(
+            uuid = "yesterday-out",
+            title = "Dinner",
+            amountCents = 8_800L,
+            type = LedgerEntryType.EXPENSE,
+            occurredAtMillis = yesterdayMillis,
+        )
+        val adjustment = LedgerEntry(
+            uuid = "adjust",
+            title = "Reconcile",
+            amountCents = 50_000L,
+            type = LedgerEntryType.ADJUSTMENT,
+            occurredAtMillis = todayMillis,
+        )
+        val deleted = spend.copy(uuid = "deleted", deletedAtMillis = todayMillis)
+
+        val (expense, incomeCents) = LedgerCalculator.dayTotals(
+            listOf(spend, income, yesterday, adjustment, deleted),
+            today,
+            zone,
+        )
+        assertEquals(3_200L, expense)
+        assertEquals(1_000L, incomeCents)
+    }
 }

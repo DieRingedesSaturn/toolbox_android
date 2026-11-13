@@ -24,6 +24,10 @@ class TotpLocalVaultException(
     cause: Throwable? = null,
 ) : Exception(message, cause)
 
+/** A saved ciphertext exists, but cannot be read; callers must not treat this as an absent password. */
+class TotpPassphraseReadException(cause: Throwable? = null) :
+    Exception("Couldn't read the saved backup passphrase", cause)
+
 internal interface TotpLocalCipher {
     fun encrypt(plainText: String): ByteArray
     fun decrypt(raw: ByteArray): String?
@@ -132,19 +136,36 @@ class TotpStore internal constructor(
 
     /** Shared backup passphrase for general settings and ledger; TOTP may override its own. */
     fun savedDefaultBackupPassphrase(): String? =
-        decryptStored(KEY_DEFAULT_BACKUP_PASSPHRASE_ENC) ?: decryptStored(KEY_VAULT_PASSPHRASE_ENC)
+        decryptStored(KEY_DEFAULT_BACKUP_PASSPHRASE_ENC)
+            ?: decryptStored(KEY_VAULT_PASSPHRASE_ENC)
+
+    /**
+     * Same lookup as [savedDefaultBackupPassphrase]. Failure means ciphertext
+     * exists but cannot be read; callers must not treat that as an absent password.
+     */
+    fun readSavedDefaultBackupPassphrase(): Result<String?> = runCatching {
+        decryptStored(KEY_DEFAULT_BACKUP_PASSPHRASE_ENC, strict = true)
+            ?: decryptStored(KEY_VAULT_PASSPHRASE_ENC, strict = true)
+    }
 
     fun saveDefaultBackupPassphrase(passphrase: String?) {
         encryptAndStore(KEY_DEFAULT_BACKUP_PASSPHRASE_ENC, passphrase)
     }
 
-    private fun decryptStored(key: String): String? =
-        prefs.getString(key, null)?.let { encoded ->
-            runCatching {
-                val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-                cipher.decrypt(bytes)
-            }.getOrNull()
+    private fun decryptStored(key: String, strict: Boolean = false): String? {
+        return try {
+            val encoded = prefs.getString(key, null) ?: return null
+            val decoded = cipher.decrypt(Base64.decode(encoded, Base64.NO_WRAP))
+            if (strict && decoded.isNullOrEmpty()) throw TotpPassphraseReadException()
+            decoded
+        } catch (failure: Exception) {
+            if (strict) {
+                if (failure is TotpPassphraseReadException) throw failure
+                throw TotpPassphraseReadException(failure)
+            }
+            null
         }
+    }
 
     private fun encryptAndStore(key: String, passphrase: String?) {
         prefs.edit {

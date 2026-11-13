@@ -24,6 +24,14 @@ enum class PrivacyShortcutUnavailable {
     NOT_EXPORTED,
 }
 
+/** Outcome of asking the launcher to pin a shortcut. */
+enum class PrivacyPinResult {
+    REQUESTED,
+    UNSUPPORTED,
+    PERMISSION_DENIED,
+    FAILED,
+}
+
 data class PrivacyShortcutSelection(
     val candidate: PrivacyShortcutCandidate?,
     val activity: ResolvedActivity?,

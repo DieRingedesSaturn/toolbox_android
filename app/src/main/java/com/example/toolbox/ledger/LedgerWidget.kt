@@ -57,7 +57,7 @@ object LedgerWidget {
 
         val strings = ToolboxStrings(AppPreferences(appContext).language())
         val entries = runCatching {
-            LedgerStore(appContext).use { it.queryVisibleEntries() }
+            LedgerStore(appContext).use { it.queryAllEntriesForSync() }
         }.getOrNull() ?: return
         val now = System.currentTimeMillis()
         val summary = LedgerCalculator.summarize(entries, now)
@@ -76,11 +76,11 @@ object LedgerWidget {
             setTextViewText(R.id.widget_ledger_caption, strings.dailyCostCaption)
             setTextViewText(
                 R.id.widget_ledger_month_expense,
-                "${strings.monthExpenseLabel} ${LedgerCalculator.formatCurrency(month.expenseCents / 100.0)}",
+                "${strings.monthlyRegularExpenseLabel} ${LedgerCalculator.formatCurrency(month.regularExpenseCents / 100.0)}",
             )
             setTextViewText(
                 R.id.widget_ledger_month_net,
-                "${strings.monthNetLabel} ${LedgerCalculator.formatCurrency(month.netCents / 100.0)}",
+                "${strings.monthNetLabel} ${LedgerCalculator.formatCurrency(month.regularNetCents / 100.0)}",
             )
             setOnClickPendingIntent(
                 android.R.id.background,

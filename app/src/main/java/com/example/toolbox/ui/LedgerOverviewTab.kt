@@ -209,11 +209,11 @@ private fun MonthSummaryCard(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            val expenseText = LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0)
+            val expenseText = LedgerCalculator.formatCurrency(monthSummary.regularExpenseCents / 100.0)
             val tabularHeadline = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum")
             val tabularTitle = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum")
             Text(
-                text = strings.monthExpenseLabel,
+                text = strings.monthlyRegularExpenseLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -225,13 +225,32 @@ private fun MonthSummaryCard(
                 modifier = Modifier.clickable {
                     copyToClipboard(
                         context = context,
-                        label = strings.monthExpenseLabel,
+                        label = strings.monthlyRegularExpenseLabel,
                         value = expenseText,
-                        copiedMessage = strings.copied(strings.monthExpenseLabel),
+                        copiedMessage = strings.copied(strings.monthlyRegularExpenseLabel),
                     )
                 },
             )
             val monthlyBudget = budgets.monthlyCents
+            if (monthlyBudget != null || monthSummary.expenseCents != monthSummary.regularExpenseCents) {
+                val actualExpenseText = LedgerCalculator.formatCurrency(monthSummary.expenseCents / 100.0)
+                Text(
+                    text = strings.actualMonthExpenseLine(
+                        actualExpenseText,
+                        forBudget = monthlyBudget != null,
+                    ),
+                    modifier = Modifier.clickable {
+                        copyToClipboard(
+                            context = context,
+                            label = strings.actualMonthExpenseLabel,
+                            value = actualExpenseText,
+                            copiedMessage = strings.copied(strings.actualMonthExpenseLabel),
+                        )
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (monthlyBudget != null) {
                 val progress = BudgetProgress(monthlyBudget, monthSummary.expenseCents)
                 val budgetText = LedgerCalculator.formatCurrency(monthlyBudget / 100.0)
@@ -299,8 +318,8 @@ private fun MonthSummaryCard(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                val netText = (if (monthSummary.netCents > 0) "+" else "") +
-                    LedgerCalculator.formatCurrency(monthSummary.netCents / 100.0)
+                val netText = (if (monthSummary.regularNetCents > 0) "+" else "") +
+                    LedgerCalculator.formatCurrency(monthSummary.regularNetCents / 100.0)
                 Column(
                     horizontalAlignment = Alignment.End,
                     modifier = Modifier.clickable {
@@ -321,7 +340,7 @@ private fun MonthSummaryCard(
                         text = netText,
                         style = tabularTitle,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (monthSummary.netCents >= 0) {
+                        color = if (monthSummary.regularNetCents >= 0) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.error
@@ -329,6 +348,11 @@ private fun MonthSummaryCard(
                     )
                 }
             }
+            Text(
+                text = strings.monthlyRegularSpendingRule,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

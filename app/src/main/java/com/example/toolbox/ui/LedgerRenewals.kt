@@ -1,21 +1,27 @@
 package com.example.toolbox.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
@@ -27,13 +33,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import com.example.toolbox.R
 import com.example.toolbox.fx.FxFailure
 import com.example.toolbox.fx.FxRates
 import com.example.toolbox.fx.FxSource
@@ -229,6 +242,7 @@ internal fun RenewalRateIssueDialog(
 }
 
 /** Multi-select tag filter for the Transactions/Costs tabs. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun TagFilterDialog(
     strings: ToolboxStrings,
@@ -240,12 +254,27 @@ internal fun TagFilterDialog(
 ) {
     var picked by remember { mutableStateOf(selected) }
     var pickedMode by remember { mutableStateOf(mode) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val liveTags = tags.filter { it.deletedAtMillis == null }
+    val visibleTags = liveTags.filter {
+        it.name.contains(query.trim(), ignoreCase = true) || it.emoji.contains(query.trim())
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .widthIn(max = 560.dp)
+            .fillMaxWidth()
+            .acrylicSurface(
+                shape = MaterialTheme.shapes.extraLarge,
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            ),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        containerColor = Color.Transparent,
+        tonalElevation = 0.dp,
         title = { Text(strings.tagFilterAction) },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -262,20 +291,53 @@ internal fun TagFilterDialog(
                         }
                     }
                 }
-                tags.filter { it.deletedAtMillis == null }.forEach { tag ->
-                    FilterChip(
-                        selected = tag.uuid in picked,
-                        onClick = {
-                            picked = picked.toMutableSet().also {
-                                if (!it.add(tag.uuid)) it.remove(tag.uuid)
-                            }
-                        },
-                        label = {
-                            Text(
-                                (if (tag.emoji.isNotBlank()) "${tag.emoji} " else "") + tag.name,
-                            )
-                        },
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text(strings.searchTagsHint) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (visibleTags.isEmpty()) {
+                    Text(
+                        text = if (liveTags.isEmpty()) strings.tagsEmptyHint else strings.noMatchingTags,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    visibleTags.forEach { tag ->
+                        ToolboxFilterChip(
+                            selected = tag.uuid in picked,
+                            onClick = {
+                                picked = if (tag.uuid in picked) picked - tag.uuid else picked + tag.uuid
+                            },
+                            leadingIcon = {
+                                // Reserve the same slot in both states so selection never changes chip width.
+                                Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+                                    if (tag.uuid in picked) {
+                                        Icon(painterResource(R.drawable.ic_check), contentDescription = null)
+                                    } else {
+                                        Box(Modifier.size(10.dp).clip(CircleShape).background(Color(tag.colorArgb)))
+                                    }
+                                }
+                            },
+                            label = {
+                                Text(
+                                    text = (if (tag.emoji.isNotBlank()) "${tag.emoji} " else "") + tag.name,
+                                    modifier = Modifier.widthIn(max = 220.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                        )
+                    }
                 }
             }
         },
@@ -288,4 +350,43 @@ internal fun TagFilterDialog(
             TextButton(onClick = onDismiss) { Text(strings.cancelAction) }
         },
     )
+}
+
+/** A single compact action row; individual selections are reviewed in the filter dialog. */
+@Composable
+internal fun LedgerTagFilterBar(
+    strings: ToolboxStrings,
+    selectedCount: Int,
+    onOpenFilter: () -> Unit,
+    onClearFilter: () -> Unit,
+    onManageTags: () -> Unit,
+) {
+    ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ToolboxFilterChip(
+                selected = selectedCount > 0,
+                onClick = onOpenFilter,
+                modifier = Modifier.weight(1f, fill = false),
+                label = {
+                    Text(
+                        text = strings.tagFilterCount(selectedCount),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            if (selectedCount > 0) {
+                IconButton(onClick = onClearFilter) {
+                    Icon(painterResource(R.drawable.ic_close), contentDescription = strings.clearFilter)
+                }
+            }
+            TextButton(onClick = onManageTags) {
+                Text(strings.manageTagsChip, maxLines = 1)
+            }
+        }
+    }
 }

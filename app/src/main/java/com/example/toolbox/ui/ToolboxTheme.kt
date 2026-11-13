@@ -179,7 +179,9 @@ fun ToolboxTheme(
 
     var rootSize by remember { mutableStateOf(IntSize.Zero) }
     val acrylicState = AcrylicBackgroundState(
-        blurredBitmap = if (backgroundBlurEnabled) blurredBackgroundImage ?: backgroundImage else null,
+        // Never substitute the sharp image: acrylicSurface falls back to a
+        // translucent colour until the blurred bitmap for this image is ready.
+        blurredBitmap = if (backgroundBlurEnabled) blurredBackgroundImage else null,
         rootSize = rootSize,
         overlayColor = finalScheme.background,
         darkTheme = darkTheme,
@@ -246,7 +248,7 @@ fun AccentColor.swatch(
 }
 
 /** Custom accent scheme derived from a seed, shared by CUSTOM and BACKGROUND. */
-private fun seededColorScheme(seedRgb: Int, darkTheme: Boolean) = accentPalette(seedRgb, darkTheme).let { palette ->
+internal fun seededColorScheme(seedRgb: Int, darkTheme: Boolean) = accentPalette(seedRgb, darkTheme).let { palette ->
     if (darkTheme) {
         darkColorScheme(
             primary = Color(palette.primary),
@@ -261,7 +263,7 @@ private fun seededColorScheme(seedRgb: Int, darkTheme: Boolean) = accentPalette(
             onTertiary = Color(palette.onTertiary),
             tertiaryContainer = Color(palette.tertiaryContainer),
             onTertiaryContainer = Color(palette.onTertiaryContainer),
-            outline = Color(0xFF49454F),
+            outline = Color(0xFF938F99),
             outlineVariant = Color(0xFF3B3740),
         )
     } else {
@@ -278,13 +280,13 @@ private fun seededColorScheme(seedRgb: Int, darkTheme: Boolean) = accentPalette(
             onTertiary = Color(palette.onTertiary),
             tertiaryContainer = Color(palette.tertiaryContainer),
             onTertiaryContainer = Color(palette.onTertiaryContainer),
-            outline = Color(0xFFCAC4D0),
+            outline = Color(0xFF79747E),
             outlineVariant = Color(0xFFE7E0EC),
         )
     }
 }
 
-private fun sageLightColorScheme() = lightColorScheme(
+internal fun sageLightColorScheme() = lightColorScheme(
     primary = Color(0xFF345C70),
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFBBD8E4),
@@ -302,17 +304,17 @@ private fun sageLightColorScheme() = lightColorScheme(
     surface = Color(0xFFCBD4BC),
     onSurface = Color(0xFF46514A),
     surfaceVariant = Color(0xFFC3CFB6),
-    onSurfaceVariant = Color(0xFF566259),
+    onSurfaceVariant = Color(0xFF4C584F),
     surfaceContainerLowest = Color(0xFFEEE7D5),
     surfaceContainerLow = Color(0xFFE1DFCF),
     surfaceContainer = Color(0xFFC9D3B9),
     surfaceContainerHigh = Color(0xFFBFCBB0),
     surfaceContainerHighest = Color(0xFFB5C3A6),
-    outline = Color(0xFFB8C6AC),
+    outline = Color(0xFF647465),
     outlineVariant = Color(0xFFC3CFB6),
 )
 
-private fun sageDarkColorScheme() = darkColorScheme(
+internal fun sageDarkColorScheme() = darkColorScheme(
     primary = Color(0xFF82B8CE),
     onPrimary = Color(0xFF0A2A35),
     primaryContainer = Color(0xFF2C4E5B),
@@ -336,11 +338,11 @@ private fun sageDarkColorScheme() = darkColorScheme(
     surfaceContainer = Color(0xFF2B352E),
     surfaceContainerHigh = Color(0xFF354239),
     surfaceContainerHighest = Color(0xFF405046),
-    outline = Color(0xFF46564B),
+    outline = Color(0xFF82958A),
     outlineVariant = Color(0xFF354239),
 )
 
-private fun everforestDarkColorScheme() = darkColorScheme(
+internal fun everforestDarkColorScheme() = darkColorScheme(
     primary = Color(0xFFA7C080),
     onPrimary = Color(0xFF232A2E),
     primaryContainer = Color(0xFF37423D),
@@ -364,11 +366,11 @@ private fun everforestDarkColorScheme() = darkColorScheme(
     surfaceContainer = Color(0xFF343F44),
     surfaceContainerHigh = Color(0xFF3D484D),
     surfaceContainerHighest = Color(0xFF475258),
-    outline = Color(0xFF4F585E),
+    outline = Color(0xFF859289),
     outlineVariant = Color(0xFF3D484D),
 )
 
-private fun everforestLightColorScheme() = lightColorScheme(
+internal fun everforestLightColorScheme() = lightColorScheme(
     primary = Color(0xFF3A7D44),
     onPrimary = Color(0xFFFDF6E3),
     primaryContainer = Color(0xFFD3DEC8),
@@ -384,12 +386,12 @@ private fun everforestLightColorScheme() = lightColorScheme(
     surface = Color(0xFFF4F0D9),
     onSurface = Color(0xFF3C474D),
     surfaceVariant = Color(0xFFEFEBD4),
-    onSurfaceVariant = Color(0xFF708089),
+    onSurfaceVariant = Color(0xFF5A6972),
     surfaceContainerLowest = Color(0xFFF8F1DC),
     surfaceContainerLow = Color(0xFFF4ECD6),
     surfaceContainer = Color(0xFFEFEBD4),
     surfaceContainerHigh = Color(0xFFE6E2CC),
     surfaceContainerHighest = Color(0xFFDFDBC5),
-    outline = Color(0xFFDFDBC5),
+    outline = Color(0xFF7A877D),
     outlineVariant = Color(0xFFEFEBD4),
 )

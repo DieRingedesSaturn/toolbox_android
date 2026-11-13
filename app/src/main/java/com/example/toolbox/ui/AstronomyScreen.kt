@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -234,7 +233,7 @@ fun AstronomyScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = readableContentPadding(maxWidth = 1100.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (isUsingMockLocation) {
@@ -868,7 +867,7 @@ private fun CelestialBodyCard(
                     modifier = Modifier
                         .background(
                             color = if (body.isVisibleTonight) {
-                                Color(0xFF2E7D32).copy(alpha = 0.2f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
                             } else {
                                 MaterialTheme.colorScheme.surfaceVariant
                             },
@@ -885,7 +884,11 @@ private fun CelestialBodyCard(
                         },
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (body.isVisibleTonight) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (body.isVisibleTonight) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
             }

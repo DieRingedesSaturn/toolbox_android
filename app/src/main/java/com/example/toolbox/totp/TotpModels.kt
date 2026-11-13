@@ -9,6 +9,7 @@ import java.util.UUID
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.abs
+import kotlin.math.pow
 
 enum class TotpAlgorithm(val wireName: String, val uriName: String, val macAlgorithm: String) {
     SHA1("SHA-1", "SHA1", "HmacSHA1"),
@@ -256,6 +257,34 @@ object TotpGenerator {
         0xFF5C6BC0.toInt(),
         0xFF6D4C41.toInt(),
     )
+
+    private const val BADGE_WHITE = 0xFFFFFFFF.toInt()
+    private const val BADGE_BLACK = 0xFF000000.toInt()
+
+    /**
+     * Picks black or white badge text using real WCAG contrast, so orange or
+     * sky-blue brand colours never end up with unreadable white letters.
+     */
+    fun badgeForegroundRgb(backgroundRgb: Int): Int =
+        if (contrastRatio(backgroundRgb, BADGE_WHITE) >= contrastRatio(backgroundRgb, BADGE_BLACK)) {
+            BADGE_WHITE
+        } else {
+            BADGE_BLACK
+        }
+
+    internal fun contrastRatio(first: Int, second: Int): Double {
+        val a = relativeLuminance(first)
+        val b = relativeLuminance(second)
+        return (maxOf(a, b) + 0.05) / (minOf(a, b) + 0.05)
+    }
+
+    private fun relativeLuminance(rgb: Int): Double {
+        fun channel(shift: Int): Double {
+            val value = ((rgb ushr shift) and 0xFF) / 255.0
+            return if (value <= 0.04045) value / 12.92 else ((value + 0.055) / 1.055).pow(2.4)
+        }
+        return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+    }
 
     /** Returns (monogram, rgbColorInt) for visually distinguishing services like Cloudflare, GitHub, etc. */
     fun serviceBadge(issuer: String, accountName: String): Pair<String, Int> {
