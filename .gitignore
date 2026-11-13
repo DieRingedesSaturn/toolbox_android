@@ -16,3 +16,6 @@ keystore.properties
 # Local reference repositories (not part of the product source)
 tmp/
 .alma-snapshots
+
+# Local notes
+todo.md
