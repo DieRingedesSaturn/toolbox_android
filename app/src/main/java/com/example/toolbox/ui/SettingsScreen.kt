@@ -1,8 +1,18 @@
 package com.example.toolbox.ui
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,8 +29,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -39,7 +51,6 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -54,6 +65,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,7 +90,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -93,6 +104,7 @@ import com.example.toolbox.ledger.WebDavServiceProfile
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -110,6 +122,7 @@ fun SettingsScreen(
     onCustomAccentChange: (Int) -> Unit,
     backgroundImage: ImageBitmap?,
     backgroundStrength: Float,
+    onBackgroundStrengthPreview: (Float) -> Unit,
     onBackgroundStrengthChange: (Float) -> Unit,
     backgroundBlurEnabled: Boolean,
     onBackgroundBlurEnabledChange: (Boolean) -> Unit,
@@ -122,34 +135,111 @@ fun SettingsScreen(
     onBackgroundChanged: () -> Unit,
     onSettingsRestored: () -> Unit,
     onBack: () -> Unit,
+    isActive: Boolean = true,
+    onSubmenuChange: (Boolean) -> Unit = {},
+    onHomePrefsChange: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
     var summaryEnabled by remember { mutableStateOf(preferences.homeSummaryEnabled()) }
     var summaryItems by remember { mutableStateOf(preferences.homeSummaryItems()) }
     var summaryCustomText by remember { mutableStateOf(preferences.homeSummaryCustomText()) }
-    var moduleOrder by remember { mutableStateOf(preferences.homeModuleOrder()) }
+    var gridLayoutRaw by remember { mutableStateOf(preferences.homeGridLayout()) }
     var showSummaryConfigDialog by rememberSaveable { mutableStateOf(false) }
-    var showModuleOrderDialog by rememberSaveable { mutableStateOf(false) }
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            ToolboxTopBar(
-                title = strings.settings,
-                onBack = onBack,
-                backLabel = strings.back,
-                scrollBehavior = scrollBehavior,
-            )
+    var showResetGridDialog by rememberSaveable { mutableStateOf(false) }
+    val gridLayout = remember(gridLayoutRaw, summaryEnabled) {
+        HomeGridLayout.parse(
+            gridLayoutRaw,
+            preferences.homeModuleOrder(),
+            2,
+            summaryExpected = summaryEnabled,
+        )
+    }
+
+    fun saveGridLayout(next: HomeGridLayout) {
+        val raw = next.format()
+        gridLayoutRaw = raw
+        preferences.saveHomeGridLayout(raw)
+        preferences.saveHomeModuleOrder(next.readingOrder())
+        onHomePrefsChange()
+    }
+    var categoryName by rememberSaveable { mutableStateOf<String?>(null) }
+    val category = categoryName?.let { name ->
+        SettingsCategory.entries.firstOrNull { it.name == name }
+    }
+    LaunchedEffect(categoryName) {
+        onSubmenuChange(categoryName != null)
+    }
+    BackHandler(enabled = isActive) {
+        if (categoryName != null) categoryName = null else onBack()
+    }
+    AnimatedContent(
+        targetState = category,
+        modifier = Modifier.fillMaxSize(),
+        transitionSpec = {
+            val slide = tween<IntOffset>(280, easing = FastOutSlowInEasing)
+            val enterFade = tween<Float>(180)
+            val exitFade = tween<Float>(150)
+            val forward = initialState == null && targetState != null
+            val backward = initialState != null && targetState == null
+            when {
+                forward -> (slideInHorizontally(slide) { it } + fadeIn(enterFade))
+                    .togetherWith(
+                        slideOutHorizontally(slide) { -it / 5 } + fadeOut(exitFade),
+                    )
+                backward -> (slideInHorizontally(slide) { -it / 5 } + fadeIn(enterFade))
+                    .togetherWith(
+                        slideOutHorizontally(slide) { it } + fadeOut(exitFade),
+                    )
+                else -> fadeIn(enterFade).togetherWith(fadeOut(exitFade))
+            }.apply {
+                targetContentZIndex = if (targetState != null) 1f else 0f
+            }
         },
-    ) { padding ->
-        LazyColumn(
+        label = "settingsCategory",
+    ) { target ->
+        val pageTitle = when (target) {
+            null -> strings.settings
+            SettingsCategory.APPEARANCE -> strings.settingsAppearanceTitle
+            SettingsCategory.HOME -> strings.homeSettingsTitle
+            SettingsCategory.BACKUP -> strings.webDavSettingsCardTitle
+            SettingsCategory.ABOUT -> strings.about
+        }
+        val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+        Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                ToolboxTopBar(
+                    title = pageTitle,
+                    onBack = if (target != null) {
+                        { categoryName = null }
+                    } else {
+                        null
+                    },
+                    backLabel = strings.back,
+                    scrollBehavior = scrollBehavior,
+                )
+            },
+        ) { padding ->
+            when (target) {
+            null -> SettingsHub(
+                strings = strings,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                onOpen = { categoryName = it.name },
+            )
+            SettingsCategory.APPEARANCE -> LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = readableContentPadding(
+                    extraBottom = HomePagerIndicatorClearance,
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             item {
                 SettingsCard(title = strings.languageTitle) {
                     ChoiceStrip(
@@ -234,6 +324,7 @@ fun SettingsScreen(
                         strings = strings,
                         backgroundImage = backgroundImage,
                         backgroundStrength = backgroundStrength,
+                        onBackgroundStrengthPreview = onBackgroundStrengthPreview,
                         onBackgroundStrengthChange = onBackgroundStrengthChange,
                         backgroundBlurEnabled = backgroundBlurEnabled,
                         onBackgroundBlurEnabledChange = onBackgroundBlurEnabledChange,
@@ -248,29 +339,82 @@ fun SettingsScreen(
                     )
                 }
             }
+            }
+            SettingsCategory.HOME -> LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = readableContentPadding(
+                    extraBottom = HomePagerIndicatorClearance,
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             item {
                 SettingsCard(title = strings.homeSettingsTitle) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         FilledTonalButton(
                             onClick = { showSummaryConfigDialog = true },
                             modifier = Modifier.weight(1f),
                             shape = MaterialTheme.shapes.small,
                         ) {
-                            Text(strings.homeSummaryConfigTitle)
+                            Text(
+                                text = strings.homeSummaryConfigAction,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                         FilledTonalButton(
-                            onClick = { showModuleOrderDialog = true },
+                            onClick = { showResetGridDialog = true },
                             modifier = Modifier.weight(1f),
                             shape = MaterialTheme.shapes.small,
                         ) {
-                            Text(strings.homeModulesOrderTitle)
+                            Text(
+                                text = strings.homeGridReset,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
+                    BlankRowStepper(
+                        label = strings.homeGridTopBlank,
+                        value = gridLayout.topBlankRows,
+                        onDecrease = {
+                            saveGridLayout(gridLayout.withTopBlankRows(gridLayout.topBlankRows - 1))
+                        },
+                        onIncrease = {
+                            saveGridLayout(gridLayout.withTopBlankRows(gridLayout.topBlankRows + 1))
+                        },
+                    )
+                    BlankRowStepper(
+                        label = strings.homeGridBottomBlank,
+                        value = gridLayout.bottomBlankRows,
+                        onDecrease = {
+                            saveGridLayout(
+                                gridLayout.withBottomBlankRows(gridLayout.bottomBlankRows - 1),
+                            )
+                        },
+                        onIncrease = {
+                            saveGridLayout(
+                                gridLayout.withBottomBlankRows(gridLayout.bottomBlankRows + 1),
+                            )
+                        },
+                    )
                 }
             }
+            }
+            SettingsCategory.BACKUP -> LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = readableContentPadding(
+                    extraBottom = HomePagerIndicatorClearance,
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             item {
                 SettingsCard(title = strings.webDavSettingsCardTitle) {
                     WebDavBackupSettingsSection(
@@ -279,20 +423,20 @@ fun SettingsScreen(
                             summaryEnabled = preferences.homeSummaryEnabled()
                             summaryItems = preferences.homeSummaryItems()
                             summaryCustomText = preferences.homeSummaryCustomText()
-                            moduleOrder = preferences.homeModuleOrder()
+                            gridLayoutRaw = preferences.homeGridLayout()
+                            onHomePrefsChange()
                             onSettingsRestored()
                         },
                     )
                 }
             }
-            item {
-                SettingsCard(title = strings.mockLocationTitle) {
-                    Text(
-                        text = strings.mockLocationSettingsHint,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            }
+            SettingsCategory.ABOUT -> AboutSettingsContent(
+                strings = strings,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            )
             }
         }
     }
@@ -303,42 +447,139 @@ fun SettingsScreen(
             enabled = summaryEnabled,
             items = summaryItems,
             customText = summaryCustomText,
-            onEnabledChange = {
-                summaryEnabled = it
-                preferences.saveHomeSummaryEnabled(it)
+            onEnabledChange = { enabled ->
+                summaryEnabled = enabled
+                preferences.saveHomeSummaryEnabled(enabled)
+                val adjusted = when {
+                    enabled && gridLayout.summaryRow == null -> gridLayout.withSummaryRow(0)
+                    !enabled && gridLayout.summaryRow != null -> gridLayout.withoutSummary()
+                    else -> gridLayout
+                }
+                saveGridLayout(adjusted)
             },
             onItemsChange = {
                 summaryItems = it
                 preferences.saveHomeSummaryItems(it)
+                onHomePrefsChange()
             },
             onCustomTextChange = {
                 val trimmed = it.take(200)
                 summaryCustomText = trimmed
                 preferences.saveHomeSummaryCustomText(trimmed)
+                onHomePrefsChange()
             },
             onDismiss = { showSummaryConfigDialog = false },
         )
     }
 
-    if (showModuleOrderDialog) {
-        HomeModuleOrderDialog(
-            strings = strings,
-            order = moduleOrder,
-            onMove = { index, offset ->
-                val target = (index + offset).coerceIn(0, moduleOrder.lastIndex)
-                if (target != index) {
-                    val mutable = moduleOrder.toMutableList()
-                    val moved = mutable.removeAt(index)
-                    mutable.add(target, moved)
-                    moduleOrder = mutable
-                    preferences.saveHomeModuleOrder(mutable)
+    if (showResetGridDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetGridDialog = false },
+            title = { Text(strings.homeGridReset) },
+            text = { Text(strings.homeGridResetMessage) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showResetGridDialog = false
+                        preferences.clearHomeGridLayout()
+                        preferences.saveHomeModuleOrder(HomeModuleOrder.DEFAULT)
+                        gridLayoutRaw = null
+                        onHomePrefsChange()
+                    },
+                ) {
+                    Text(strings.homeGridReset)
                 }
             },
-            onReset = {
-                moduleOrder = HomeModuleOrder.DEFAULT
-                preferences.saveHomeModuleOrder(HomeModuleOrder.DEFAULT)
+            dismissButton = {
+                TextButton(onClick = { showResetGridDialog = false }) {
+                    Text(strings.cancelAction)
+                }
             },
-            onDismiss = { showModuleOrderDialog = false },
+        )
+    }
+}
+
+private enum class SettingsCategory {
+    APPEARANCE,
+    HOME,
+    BACKUP,
+    ABOUT,
+}
+
+@Composable
+private fun SettingsHub(
+    strings: ToolboxStrings,
+    onOpen: (SettingsCategory) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = readableContentPadding(
+            extraBottom = HomePagerIndicatorClearance,
+        ),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    SettingsCategory.entries.forEachIndexed { index, category ->
+                        if (index > 0) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            )
+                        }
+                        val (title, summary) = when (category) {
+                            SettingsCategory.APPEARANCE ->
+                                strings.settingsAppearanceTitle to strings.settingsAppearanceSummary
+                            SettingsCategory.HOME ->
+                                strings.homeSettingsTitle to strings.settingsHomeSummary
+                            SettingsCategory.BACKUP ->
+                                strings.webDavSettingsCardTitle to strings.settingsBackupSummary
+                            SettingsCategory.ABOUT ->
+                                strings.about to strings.settingsAboutSummary
+                        }
+                        SettingsCategoryRow(
+                            title = title,
+                            summary = summary,
+                            onClick = { onOpen(category) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsCategoryRow(
+    title: String,
+    summary: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            painter = painterResource(R.drawable.ic_chevron_right),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -370,6 +611,7 @@ private fun BackgroundSettingsSection(
     strings: ToolboxStrings,
     backgroundImage: ImageBitmap?,
     backgroundStrength: Float,
+    onBackgroundStrengthPreview: (Float) -> Unit,
     onBackgroundStrengthChange: (Float) -> Unit,
     backgroundBlurEnabled: Boolean,
     onBackgroundBlurEnabledChange: (Boolean) -> Unit,
@@ -387,6 +629,11 @@ private fun BackgroundSettingsSection(
     val preferences = remember(context) { AppPreferences(context) }
     var version by remember { mutableIntStateOf(0) }
     var preview by remember { mutableStateOf<ImageBitmap?>(null) }
+    // Sliders keep a local draft and persist once the finger is lifted.
+    var strengthDraft by remember(backgroundStrength) { mutableFloatStateOf(backgroundStrength) }
+    var blurStrengthDraft by remember(backgroundBlurStrength) {
+        mutableFloatStateOf(backgroundBlurStrength)
+    }
     LaunchedEffect(version) {
         preview = withContext(Dispatchers.IO) {
             if (AppBackground.exists(context)) {
@@ -518,14 +765,18 @@ private fun BackgroundSettingsSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "${(backgroundStrength * 100).toInt()}%",
+                text = "${(strengthDraft * 100).toInt()}%",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Slider(
-            value = backgroundStrength,
-            onValueChange = onBackgroundStrengthChange,
+            value = strengthDraft,
+            onValueChange = {
+                strengthDraft = it
+                onBackgroundStrengthPreview(it)
+            },
+            onValueChangeFinished = { onBackgroundStrengthChange(strengthDraft) },
             valueRange = 0f..1f,
         )
         Row(
@@ -555,14 +806,15 @@ private fun BackgroundSettingsSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "${(backgroundBlurStrength * 100).toInt()}%",
+                    text = "${(blurStrengthDraft * 100).toInt()}%",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Slider(
-                value = backgroundBlurStrength,
-                onValueChange = onBackgroundBlurStrengthChange,
+                value = blurStrengthDraft,
+                onValueChange = { blurStrengthDraft = it },
+                onValueChangeFinished = { onBackgroundBlurStrengthChange(blurStrengthDraft) },
                 valueRange = 0f..1f,
             )
         }
@@ -670,6 +922,7 @@ private fun WebDavBackupSettingsSection(
     var services by remember { mutableStateOf<List<WebDavServiceProfile>>(emptyList()) }
     var ledgerSelected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var totpSelected by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var servicesReady by remember { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<WebDavServiceProfile?>(null) }
     var isCreating by remember { mutableStateOf(false) }
     var deletingProfile by remember { mutableStateOf<WebDavServiceProfile?>(null) }
@@ -685,6 +938,7 @@ private fun WebDavBackupSettingsSection(
         services = loaded.first
         ledgerSelected = loaded.second
         totpSelected = loaded.third
+        servicesReady = true
     }
 
     Text(
@@ -693,7 +947,25 @@ private fun WebDavBackupSettingsSection(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
-    if (services.isEmpty()) {
+    if (!servicesReady) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+            )
+            Text(
+                text = strings.loading,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    } else if (services.isEmpty()) {
         Text(
             text = strings.webDavNoServiceHint,
             style = MaterialTheme.typography.bodyMedium,
@@ -735,30 +1007,25 @@ private fun WebDavBackupSettingsSection(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    CompositionLocalProvider(
-                        LocalMinimumInteractiveComponentSize provides Dp.Unspecified,
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TextButton(
-                                onClick = {
-                                    editingProfile = profile
-                                    isCreating = false
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            ) {
-                                Text(strings.editAction)
-                            }
-                            IconButton(
-                                onClick = { deletingProfile = profile },
-                                modifier = Modifier.size(32.dp),
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_delete),
-                                    contentDescription = strings.deleteAction,
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                            }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(
+                            onClick = {
+                                editingProfile = profile
+                                isCreating = false
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Text(strings.editAction)
+                        }
+                        IconButton(
+                            onClick = { deletingProfile = profile },
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_delete),
+                                contentDescription = strings.deleteAction,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.error,
+                            )
                         }
                     }
                 }
@@ -857,7 +1124,6 @@ private fun WebDavBackupSettingsSection(
                         }
                         store.upsertService(updated, defaultTools = defaults)
                     }
-                    editingProfile = null
                     version++
                     Toast.makeText(context, strings.webDavConfigSaved, Toast.LENGTH_SHORT).show()
                 }
@@ -957,24 +1223,50 @@ private fun WebDavServiceEditDialog(
         )
     }
 
+    var pageVisible by remember { mutableStateOf(false) }
+    var closing by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { pageVisible = true }
+    fun requestClose() {
+        if (testing || closing) return
+        closing = true
+        pageVisible = false
+    }
+    LaunchedEffect(closing) {
+        if (!closing) return@LaunchedEffect
+        delay(240)
+        onDismiss()
+    }
     fun saveProfile() {
         if (testing) return
-        buildValidProfile()?.let(onSave)
+        buildValidProfile()?.let {
+            onSave(it)
+            requestClose()
+        }
     }
 
     Dialog(
-        onDismissRequest = { if (!testing) onDismiss() },
+        onDismissRequest = ::requestClose,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             decorFitsSystemWindows = false,
         ),
     ) {
         val opaqueBg = MaterialTheme.colorScheme.background.copy(alpha = 1f)
-        CompositionLocalProvider(LocalAcrylicBackground provides AcrylicBackgroundState()) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = opaqueBg,
+        Box(modifier = Modifier.fillMaxSize()) {
+            AnimatedVisibility(
+                visible = pageVisible,
+                enter = slideInHorizontally(
+                    animationSpec = tween(280, easing = FastOutSlowInEasing),
+                ) { it } + fadeIn(tween(160)),
+                exit = slideOutHorizontally(
+                    animationSpec = tween(240, easing = FastOutSlowInEasing),
+                ) { it } + fadeOut(tween(140)),
             ) {
+                CompositionLocalProvider(LocalAcrylicBackground provides AcrylicBackgroundState()) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = opaqueBg,
+                    ) {
                 Scaffold(
                     containerColor = opaqueBg,
                     topBar = {
@@ -984,7 +1276,7 @@ private fun WebDavServiceEditDialog(
                         } else {
                             strings.webDavEditServiceTitle
                         },
-                        onBack = { if (!testing) onDismiss() },
+                        onBack = ::requestClose,
                         backLabel = strings.cancelAction,
                         actions = {
                             TextButton(
@@ -1001,8 +1293,12 @@ private fun WebDavServiceEditDialog(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
+                        .imePadding()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(
+                            horizontal = readableHorizontalPadding(),
+                            vertical = 12.dp,
+                        ),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                 OutlinedTextField(
@@ -1102,7 +1398,9 @@ private fun WebDavServiceEditDialog(
                         },
                     )
                 }
+                    }
                 }
+                    }
                 }
             }
         }
@@ -1129,5 +1427,39 @@ private fun WebDavServiceEditDialog(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun BlankRowStepper(
+    label: String,
+    value: Int,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(onClick = onDecrease, enabled = value > 0) {
+            Text("−")
+        }
+        Text(
+            text = value.toString(),
+            modifier = Modifier.width(24.dp),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        TextButton(
+            onClick = onIncrease,
+            enabled = value < HomeGridLayout.MAX_BLANK_ROWS,
+        ) {
+            Text("+")
+        }
     }
 }

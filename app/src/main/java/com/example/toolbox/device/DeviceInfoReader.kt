@@ -111,6 +111,7 @@ object DeviceInfoReader {
     fun readQuickStatus(context: Context): QuickStatus {
         val intent = batteryStatusIntent(context)
         val stat = dataStatFs()
+        val memory = readMemory(context)
         return QuickStatus(
             batteryPercent = batteryPercent(
                 intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1,
@@ -121,6 +122,8 @@ object DeviceInfoReader {
             ),
             storageAvailable = stat.availableBytes,
             storageTotal = stat.totalBytes,
+            memoryAvailable = memory.available,
+            memoryTotal = memory.total,
         )
     }
 

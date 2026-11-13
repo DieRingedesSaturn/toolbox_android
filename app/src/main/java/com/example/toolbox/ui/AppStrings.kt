@@ -78,6 +78,14 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "立即备份设置" else "Back up settings now"
     val settingsBackupDone: String
         get() = if (chinese) "设置备份已保存" else "Settings backup saved"
+    val backupPassphraseLoading: String
+        get() = if (chinese) "正在读取已保存的备份密码…" else "Reading the saved backup passphrase…"
+    val backupPassphraseLoadFailed: String
+        get() = if (chinese) "无法读取已保存的备份密码，可重试或重新输入。" else "Could not read the saved backup passphrase. Retry or enter it again."
+    val backupPassphraseSaveFailed: String
+        get() = if (chinese) "备份已完成，但密码未能保存到本机，下次需要重新输入。" else "Backup finished, but the passphrase could not be saved on this device. You will need to enter it again next time."
+    val retryAction: String
+        get() = if (chinese) "重试" else "Retry"
     fun settingsRestoreWarning(count: Int): String = if (chinese) {
         "此版本包含 $count 项通用偏好。确认后先保存加密的恢复前副本，再替换通用设置。外观立即生效，其他设置重新打开对应页面后生效；WebDAV 配置、账本、令牌和权限不受影响。"
     } else "This version contains $count general preferences. An encrypted checkpoint is saved before replacement. Appearance changes immediately; reopen other screens to load their settings. WebDAV configuration, ledger records, tokens and permissions remain unchanged."
@@ -143,9 +151,12 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "纬度" else "Lat"
     val mockLongitudeLabel: String
         get() = if (chinese) "经度" else "Lon"
-    val mockLocationSettingsHint: String
-        get() = if (chinese) "仅用于学习与合法测试；需先在开发者选项中选中 Toolbox，会话会自动停止。"
-        else "For lawful developer testing only; select Toolbox in Developer options first, and sessions stop automatically."
+    val aboutMockLocationNote: String
+        get() = if (chinese) {
+            "模拟定位仅用于学习与合法测试：请先在开发者选项中选中 Toolbox，会话会在选定时间后自动停止，也可随时手动停止；模拟坐标可被其他应用识别。"
+        } else {
+            "Mock location is for learning and lawful testing only. Select Toolbox in Developer options first; a session stops automatically after the chosen time or when you stop it, and other apps can detect mock coordinates."
+        }
     val mockLocationDuration: String
         get() = if (chinese) "自动停止时长" else "Stop automatically after"
     fun mockLocationMinutes(minutes: Int): String = if (chinese) "${minutes}分" else "${minutes}m"
@@ -910,8 +921,6 @@ class ToolboxStrings(val language: AppLanguage) {
         ToolboxModule.FX -> if (chinese) "汇率换算" else "Currency converter"
         ToolboxModule.TOTP -> if (chinese) "动态令牌 (TOTP)" else "TOTP Authenticator"
         ToolboxModule.PRIVACY -> if (chinese) "隐私" else "Privacy"
-        ToolboxModule.SETTINGS -> settings
-        ToolboxModule.ABOUT -> about
     }
 
     fun moduleShortTitle(module: ToolboxModule): String = when (module) {
@@ -926,8 +935,6 @@ class ToolboxStrings(val language: AppLanguage) {
         ToolboxModule.FX -> if (chinese) "汇率" else "FX"
         ToolboxModule.TOTP -> if (chinese) "令牌" else "TOTP"
         ToolboxModule.PRIVACY -> if (chinese) "隐私" else "Privacy"
-        ToolboxModule.SETTINGS -> settings
-        ToolboxModule.ABOUT -> about
     }
 
     val privacyIntro: String
@@ -938,6 +945,12 @@ class ToolboxStrings(val language: AppLanguage) {
         }
     val privacyNotFound: String
         get() = if (chinese) "此设备上未找到" else "Not found on this device"
+    val privacyLoading: String
+        get() = if (chinese) "正在检查可用的系统设置…" else "Checking available system settings…"
+    val privacyLoadFailed: String
+        get() = if (chinese) "读取系统设置列表失败。" else "Could not read the system settings list."
+    val privacyEmpty: String
+        get() = if (chinese) "此设备上没有可用的快捷方式。" else "No shortcuts are available on this device."
     val privacyNotExported: String
         get() = if (chinese) "未导出，普通应用无法打开" else "Not exported"
     val privacyLaunchFailed: String
@@ -949,9 +962,25 @@ class ToolboxStrings(val language: AppLanguage) {
     val privacyPinShortcut: String
         get() = if (chinese) "创建主屏幕快捷方式" else "Home-screen shortcut"
     val privacyPinRequested: String
-        get() = if (chinese) "已请求创建快捷方式" else "Shortcut requested"
+        get() = if (chinese) {
+            "已发送创建请求，请在系统弹窗中确认"
+        } else {
+            "Shortcut request sent; confirm it in the system dialog"
+        }
     val privacyPinUnsupported: String
-        get() = if (chinese) "启动器不支持固定快捷方式" else "This launcher cannot pin shortcuts"
+        get() = if (chinese) {
+            "当前桌面不支持固定快捷方式，或未授予创建快捷方式权限"
+        } else {
+            "This launcher does not support pinned shortcuts, or the shortcut permission is not granted"
+        }
+    val privacyPinPermissionDenied: String
+        get() = if (chinese) {
+            "系统拒绝创建快捷方式，请检查桌面或快捷方式权限"
+        } else {
+            "The system denied the shortcut request; check launcher or shortcut permissions"
+        }
+    val privacyPinFailed: String
+        get() = if (chinese) "无法创建快捷方式" else "Couldn't create the shortcut"
 
     val ledger: String
         get() = if (chinese) "记账与成本摊销" else "Ledger & Cost Tracker"
@@ -987,14 +1016,30 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "每年等效固定成本" else "Equivalent Yearly Cost"
     val monthExpenseLabel: String
         get() = if (chinese) "本月支出" else "Spending"
+    val monthlyRegularExpenseLabel: String
+        get() = if (chinese) "本月日常支出" else "Monthly regular spending"
+    val actualMonthExpenseLabel: String
+        get() = if (chinese) "实际支出" else "Actual outlays"
+    val monthlyRegularSpendingRule: String
+        get() = if (chinese) {
+            "结余仅扣除普通支出和当月已入账的月付订阅；长期一次性购买、年付等其他周期订阅计入实际支出和平均成本。"
+        } else {
+            "Net deducts ordinary spending and recorded monthly subscriptions. Long-term purchases and other subscription cycles remain in actual outlays and average costs."
+        }
+    fun actualMonthExpenseLine(amount: String, forBudget: Boolean = false): String =
+        if (chinese) {
+            "实际支出 $amount" + if (forBudget) "（预算按此计算）" else ""
+        } else {
+            "Actual outlays $amount" + if (forBudget) " (used for budget)" else ""
+        }
     val monthIncomeLabel: String
         get() = if (chinese) "收入" else "Income"
     val monthNetLabel: String
         get() = if (chinese) "结余" else "Net"
     fun trendTitle(months: Int): String =
-        if (chinese) "近 $months 个月收支" else "Last $months months"
+        if (chinese) "近 $months 个月实际收支" else "Cash flow over $months months"
     val trendExpenseLegend: String
-        get() = if (chinese) "支出" else "Spending"
+        get() = actualMonthExpenseLabel
     fun trendMonthLabel(month: YearMonth): String =
         if (chinese) {
             "${month.monthValue}月"
@@ -1003,15 +1048,15 @@ class ToolboxStrings(val language: AppLanguage) {
         }
     fun trendMonthDetail(month: YearMonth, expense: String, income: String): String =
         if (chinese) {
-            "${formatLedgerMonth(month)} 支出 $expense · 收入 $income"
+            "${formatLedgerMonth(month)} 实际支出 $expense · 收入 $income"
         } else {
-            "${formatLedgerMonth(month)}: spent $expense · income $income"
+            "${formatLedgerMonth(month)}: actual outlays $expense · income $income"
         }
     fun trendAverageExpense(months: Int, amount: String): String =
         if (chinese) {
-            "近 $months 个完整月平均每月支出 $amount"
+            "近 $months 个完整月平均实际支出 $amount"
         } else {
-            "Average over the last $months full months: $amount spent per month"
+            "Actual outlays over the last $months full months: $amount per month"
         }
     val trendTapHint: String
         get() = if (chinese) "点月份查看当月明细，长按复制" else "Tap a month to open its entries; long-press to copy"
@@ -1037,16 +1082,38 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "下移" else "Move down"
     val ledgerOverviewOrderReset: String
         get() = if (chinese) "恢复默认" else "Reset"
-    val homeModulesOrderAction: String
-        get() = if (chinese) "排序" else "Reorder"
-    val homeModulesOrderTitle: String
-        get() = if (chinese) "工具卡片排序" else "Reorder tools"
-    val homeModulesOrderHint: String
+    val homeGridReset: String
+        get() = if (chinese) "重置布局" else "Reset layout"
+    val homeOpenSettings: String
+        get() = if (chinese) "打开设置" else "Open settings"
+    val homeAccessibilityTitle: String
+        get() = if (chinese) "首页" else "Home"
+    fun homePageIndicator(page: Int, total: Int): String =
+        if (chinese) "第 $page 页，共 $total 页" else "Page $page of $total"
+    val homeGridResetMessage: String
         get() = if (chinese) {
-            "拖动工具调整首页显示顺序，修改会立即保存。"
+            "清空自定义位置和留白，恢复默认排列？"
         } else {
-            "Drag a tool to reorder the home grid; changes save immediately."
+            "Clear custom positions and blank rows and restore the default arrangement?"
         }
+    val homeGridTopBlank: String
+        get() = if (chinese) "顶部空行" else "Blank rows above"
+    val homeGridBottomBlank: String
+        get() = if (chinese) "底部空行" else "Blank rows below"
+    val homeEditHint: String
+        get() = if (chinese) {
+            "拖动卡片调整位置，完成后点击右下角“完成”。"
+        } else {
+            "Drag cards to move them, then tap Done at the bottom right."
+        }
+    val homeMoveLeft: String
+        get() = if (chinese) "左移" else "Move left"
+    val homeMoveRight: String
+        get() = if (chinese) "右移" else "Move right"
+    val homeMoveUp: String
+        get() = if (chinese) "上移" else "Move up"
+    val homeMoveDown: String
+        get() = if (chinese) "下移" else "Move down"
     val homeSummaryConfigAction: String
         get() = if (chinese) "主卡片" else "Card"
     val homeSummaryConfigTitle: String
@@ -1061,18 +1128,55 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "展示信息项" else "Visible items"
     val homeSummaryItemDeviceInfo: String
         get() = if (chinese) "设备型号与系统版本" else "Device model & OS version"
+    val homeSummaryItemDate: String
+        get() = if (chinese) "今日日期" else "Today's date"
     val homeSummaryItemBattery: String
         get() = if (chinese) "电池电量" else "Battery"
     val homeSummaryItemStorage: String
         get() = if (chinese) "存储空间" else "Storage"
+    val homeSummaryItemMemory: String
+        get() = if (chinese) "内存" else "Memory"
+    val homeSummaryItemDisplay: String
+        get() = if (chinese) "屏幕" else "Display"
+    val homeSummaryItemNetwork: String
+        get() = if (chinese) "网络连接" else "Network"
     val homeSummaryItemAssets: String
         get() = if (chinese) "总资产" else "Total assets"
     val homeSummaryItemMonthBalance: String
         get() = if (chinese) "本月结余" else "Month balance"
+    val homeSummaryItemTodaySpend: String
+        get() = if (chinese) "今日收支" else "Today's in/out"
+    internal fun homeSummaryItemLabel(item: HomeSummaryItem): String = when (item) {
+        HomeSummaryItem.DATE -> homeSummaryItemDate
+        HomeSummaryItem.DEVICE_INFO -> homeSummaryItemDeviceInfo
+        HomeSummaryItem.BATTERY -> homeSummaryItemBattery
+        HomeSummaryItem.STORAGE -> homeSummaryItemStorage
+        HomeSummaryItem.MEMORY -> homeSummaryItemMemory
+        HomeSummaryItem.DISPLAY -> homeSummaryItemDisplay
+        HomeSummaryItem.NETWORK -> homeSummaryItemNetwork
+        HomeSummaryItem.TODAY_SPEND -> homeSummaryItemTodaySpend
+        HomeSummaryItem.MONTH_BALANCE -> homeSummaryItemMonthBalance
+        HomeSummaryItem.ASSETS -> homeSummaryItemAssets
+    }
+    fun homeSummaryDate(date: LocalDate): String {
+        val locale = if (chinese) Locale.CHINA else Locale.US
+        val pattern = if (chinese) "M月d日 · EEEE" else "EEEE, MMM d"
+        return date.format(DateTimeFormatter.ofPattern(pattern, locale))
+    }
     val homeSummaryEmptyHint: String
         get() = if (chinese) "未选择任何内容，主卡片将自动隐藏。" else "Nothing selected; the card will stay hidden."
     val homeSettingsTitle: String
         get() = if (chinese) "首页" else "Home"
+    val settingsAppearanceTitle: String
+        get() = if (chinese) "外观" else "Appearance"
+    val settingsAppearanceSummary: String
+        get() = if (chinese) "语言、主题、强调色与背景" else "Language, theme, accent, and wallpaper"
+    val settingsHomeSummary: String
+        get() = if (chinese) "主卡片、空行与布局" else "Summary card, blank rows, and layout"
+    val settingsBackupSummary: String
+        get() = if (chinese) "WebDAV 服务与设置备份" else "WebDAV services and settings backup"
+    val settingsAboutSummary: String
+        get() = if (chinese) "版本与功能说明" else "Version and features"
     val doneAction: String
         get() = if (chinese) "完成" else "Done"
 
@@ -1107,7 +1211,7 @@ class ToolboxStrings(val language: AppLanguage) {
         if (chinese) "预算 $budget · 已超支 $over" else "Budget $budget · over by $over"
     fun budgetOfTotal(spent: String, budget: String): String = "$spent / $budget"
     val categoryBreakdownMonthTitle: String
-        get() = if (chinese) "本月支出分类" else "Spending by category"
+        get() = if (chinese) "本月实际支出分类" else "Actual outlays by category"
     val noExpenseThisMonth: String
         get() = if (chinese) "本月暂无支出" else "No expenses this month"
     val dailyCostCaption: String
@@ -1156,6 +1260,24 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "上个月" else "Previous month"
     val nextMonth: String
         get() = if (chinese) "下个月" else "Next month"
+    val selectLedgerMonth: String
+        get() = if (chinese) "选择年月" else "Choose month"
+    val ledgerYearLabel: String
+        get() = if (chinese) "年份" else "Year"
+    fun ledgerYearRangeHint(latestYear: Int): String =
+        if (chinese) "年份需在 1–$latestYear 之间" else "Enter a year from 1 to $latestYear"
+    val previousLedgerYear: String
+        get() = if (chinese) "上一年" else "Previous year"
+    val nextLedgerYear: String
+        get() = if (chinese) "下一年" else "Next year"
+    fun ledgerMonthLabel(month: Int): String =
+        if (chinese) "${month}月" else java.time.Month.of(month).getDisplayName(TextStyle.SHORT, Locale.ENGLISH)
+    val searchTagsHint: String
+        get() = if (chinese) "搜索标签" else "Search tags"
+    val noMatchingTags: String
+        get() = if (chinese) "没有匹配的标签" else "No matching tags"
+    fun tagFilterCount(count: Int): String =
+        if (count == 0) tagFilterAction else "$tagFilterAction · $count"
     val confirmAction: String
         get() = if (chinese) "确定" else "OK"
     val addLedgerEntry: String
@@ -1844,8 +1966,6 @@ class ToolboxStrings(val language: AppLanguage) {
         ToolboxModule.FX -> if (chinese) "欧洲央行参考汇率" else "ECB reference rates"
         ToolboxModule.TOTP -> if (chinese) "双因素动态验证码与加密备份" else "2FA dynamic codes & encrypted backup"
         ToolboxModule.PRIVACY -> if (chinese) "被系统藏起的 Google 与系统设置" else "Google and system settings some ROMs hide"
-        ToolboxModule.SETTINGS -> if (chinese) "外观、主题与偏好设置" else "Appearance, theme, and preferences"
-        ToolboxModule.ABOUT -> if (chinese) "版本与应用信息" else "Version and app info"
         else -> ""
     }
 
@@ -2024,6 +2144,10 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "恢复订阅" else "Resume"
     val editAction: String
         get() = if (chinese) "编辑" else "Edit"
+    val costShowDetails: String
+        get() = if (chinese) "展开成本详情" else "Expand cost details"
+    val costHideDetails: String
+        get() = if (chinese) "收起成本详情" else "Collapse cost details"
     val lifespanActualDays: String
         get() = if (chinese) "按实际持有天数" else "Actual days held"
     val deleteEntryConfirm: String
@@ -2102,6 +2226,10 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "全部标签" else "All tags"
     val clearFilter: String
         get() = if (chinese) "清除" else "Clear"
+    val clearAction: String
+        get() = if (chinese) "清空" else "Clear"
+    val fxReferenceRates: String
+        get() = if (chinese) "参考汇率" else "Reference rates"
     val filteredBadge: String
         get() = if (chinese) "已筛选" else "Filtered"
     val breakdownByTags: String
@@ -2514,6 +2642,10 @@ class ToolboxStrings(val language: AppLanguage) {
         get() = if (chinese) "编辑令牌" else "Edit token"
     val totpUriFieldLabel: String
         get() = if (chinese) "otpauth:// 链接" else "otpauth:// URI"
+    val totpShowUri: String
+        get() = if (chinese) "显示链接" else "Show URI"
+    val totpHideUri: String
+        get() = if (chinese) "隐藏链接" else "Hide URI"
     val totpParseUriButton: String
         get() = if (chinese) "粘贴并解析链接" else "Paste & parse URI"
     val totpUriParsedToast: String

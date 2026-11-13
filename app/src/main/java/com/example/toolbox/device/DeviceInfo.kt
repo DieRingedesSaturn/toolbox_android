@@ -60,4 +60,6 @@ data class QuickStatus(
     val isCharging: Boolean?,
     val storageAvailable: Long,
     val storageTotal: Long,
+    val memoryAvailable: Long,
+    val memoryTotal: Long,
 )

@@ -19,9 +19,13 @@ object LedgerCalculator {
         val expenseCents: Long,
         val incomeCents: Long,
         val expenseByCategory: List<Pair<LedgerCategory, Long>>,
+        /** Ordinary spending plus recorded monthly subscriptions; excludes long-term outlays. */
+        val regularExpenseCents: Long = expenseCents,
     ) {
         val netCents: Long
             get() = incomeCents - expenseCents
+        val regularNetCents: Long
+            get() = incomeCents - regularExpenseCents
     }
 
     data class DayGroup(
@@ -335,10 +339,14 @@ object LedgerCalculator {
         entries: List<LedgerEntry>,
         month: YearMonth,
         zone: ZoneId = ZoneId.systemDefault(),
+        referenceEntries: List<LedgerEntry> = entries,
     ): MonthSummary {
         var expenseCents = 0L
+        var regularExpenseCents = 0L
         var incomeCents = 0L
         val expenseByCategory = HashMap<LedgerCategory, Long>()
+        // Include tombstoned parents for classification of historical renewals.
+        val byUuid = referenceEntries.associateBy { it.uuid }
         for (entry in entries) {
             if (entry.deletedAtMillis != null) continue
             val entryMonth = YearMonth.from(
@@ -349,6 +357,9 @@ object LedgerCalculator {
                 LedgerEntryType.INCOME -> incomeCents += entry.baseAmountCents
                 LedgerEntryType.EXPENSE -> {
                     expenseCents += entry.baseAmountCents
+                    if (countsAsRegularExpense(entry, byUuid)) {
+                        regularExpenseCents += entry.baseAmountCents
+                    }
                     expenseByCategory.merge(
                         entry.categoryEnum,
                         entry.baseAmountCents,
@@ -365,11 +376,57 @@ object LedgerCalculator {
             month = month,
             expenseCents = expenseCents,
             incomeCents = incomeCents,
+            regularExpenseCents = regularExpenseCents,
             expenseByCategory = expenseByCategory.entries
                 .filter { it.value > 0L }
                 .sortedByDescending { it.value }
                 .map { it.key to it.value },
         )
+    }
+
+    /** Today's actual income and expense totals, excluding reconcile adjustments. */
+    fun dayTotals(
+        entries: List<LedgerEntry>,
+        date: LocalDate,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Pair<Long, Long> {
+        var expenseCents = 0L
+        var incomeCents = 0L
+        for (entry in entries) {
+            if (entry.deletedAtMillis != null) continue
+            if (entry.type == LedgerEntryType.ADJUSTMENT) continue
+            val entryDate = Instant.ofEpochMilli(entry.occurredAtMillis).atZone(zone).toLocalDate()
+            if (entryDate != date) continue
+            when (entry.type) {
+                LedgerEntryType.INCOME -> incomeCents += entry.baseAmountCents
+                LedgerEntryType.EXPENSE -> expenseCents += entry.baseAmountCents
+                LedgerEntryType.TRANSFER,
+                LedgerEntryType.ADJUSTMENT,
+                -> Unit
+            }
+        }
+        return expenseCents to incomeCents
+    }
+
+    private fun countsAsRegularExpense(
+        entry: LedgerEntry,
+        byUuid: Map<String, LedgerEntry>,
+    ): Boolean {
+        // Renewal children have mode NONE; their billing rule belongs to the parent.
+        // An orphan renewal has no known cycle, so keep it in actual outlays only.
+        val source = if (entry.linkType == LINK_TYPE_RENEWAL) {
+            byUuid[entry.parentUuid] ?: return false
+        } else {
+            entry
+        }
+        return when (source.costTrackingMode) {
+            CostTrackingMode.NONE -> entry.linkType != LINK_TYPE_RENEWAL
+            CostTrackingMode.ONE_TIME_AMORTIZED -> false
+            CostTrackingMode.PERIODIC_SUBSCRIPTION ->
+                source.billingCycle == BillingCycle.MONTHLY ||
+                    (source.billingCycle == BillingCycle.CUSTOM_DAYS &&
+                        source.customCycleUnit == CycleUnit.MONTHS && source.customCycleDays == 1)
+        }
     }
 
     fun monthlyTrend(

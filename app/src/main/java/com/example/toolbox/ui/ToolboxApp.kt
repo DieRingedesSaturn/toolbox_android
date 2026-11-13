@@ -17,6 +17,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,8 +61,6 @@ enum class ToolboxModule {
     FX,
     TOTP,
     PRIVACY,
-    SETTINGS,
-    ABOUT,
 }
 
 @Composable
@@ -87,6 +86,7 @@ fun ToolboxApp(
     var backgroundBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var blurredBackgroundBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var moduleName by rememberSaveable { mutableStateOf(ToolboxModule.HOME.name) }
+    val openSettingsOnStart = moduleName == "SETTINGS" || moduleName == "ABOUT"
 
     val language = runCatching { AppLanguage.valueOf(languageName) }
         .getOrDefault(AppLanguage.ENGLISH)
@@ -148,21 +148,46 @@ fun ToolboxApp(
         }
         rawBackgroundBitmap = raw
         backgroundBitmap = raw?.asImageBitmap()
-        if (raw == null) {
-            blurredBackgroundBitmap = null
-        }
+        // The previous blur belongs to the old image and must not be shown
+        // against the new one while the replacement is being calculated.
+        blurredBackgroundBitmap = null
     }
 
     LaunchedEffect(rawBackgroundBitmap, backgroundBlurEnabled, backgroundBlurStrength) {
         val raw = rawBackgroundBitmap ?: return@LaunchedEffect
         if (!backgroundBlurEnabled) return@LaunchedEffect
-        blurredBackgroundBitmap = withContext(Dispatchers.IO) {
-            AppBackground.blurForBackdrop(raw, backgroundBlurStrength).asImageBitmap()
+        val strength = backgroundBlurStrength
+        val blurred = withContext(Dispatchers.IO) {
+            AppBackground.blurForBackdrop(raw, strength).asImageBitmap()
+        }
+        // A restarted effect cancels the previous one; this guard also rejects
+        // a stale result if the parameters changed while it was computing.
+        if (rawBackgroundBitmap === raw && backgroundBlurStrength == strength) {
+            blurredBackgroundBitmap = blurred
         }
     }
 
-    val module = runCatching { ToolboxModule.valueOf(moduleName) }
-        .getOrDefault(ToolboxModule.HOME)
+    val module = if (openSettingsOnStart) {
+        ToolboxModule.HOME
+    } else {
+        runCatching { ToolboxModule.valueOf(moduleName) }.getOrDefault(ToolboxModule.HOME)
+    }
+    val pagerState = rememberPagerState(
+        initialPage = if (openSettingsOnStart) 1 else 0,
+        pageCount = { 2 },
+    )
+    var homeEditMode by remember { mutableStateOf(false) }
+    var settingsInSubmenu by remember { mutableStateOf(false) }
+    var homePrefsRevision by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        if (openSettingsOnStart) moduleName = ToolboxModule.HOME.name
+    }
+
+    fun openSettings() {
+        moduleName = ToolboxModule.HOME.name
+        scope.launch { pagerState.animateScrollToPage(1) }
+    }
 
     fun updateLanguage(value: AppLanguage) {
         languageName = value.name
@@ -266,15 +291,102 @@ fun ToolboxApp(
         ) { target ->
             pageStates.SaveableStateProvider(target.name) {
                 when (target) {
-                    ToolboxModule.HOME -> HomeScreen(
-                        strings = strings,
-                        deviceInfo = deviceInfo,
-                        status = homeStatus,
-                        onStatusChange = { homeStatus = it },
-                        onOpen = { moduleName = it.name },
-                        onOpenLedgerAccounts = {
-                            ledgerTabRequest = 3
-                            moduleName = ToolboxModule.LEDGER.name
+                    ToolboxModule.HOME -> HomePager(
+                        pagerState = pagerState,
+                        userScrollEnabled = !homeEditMode && !settingsInSubmenu,
+                        pageIndicatorLabel = strings.homePageIndicator(
+                            pagerState.currentPage + 1,
+                            pagerState.pageCount,
+                        ),
+                        showIndicator = !homeEditMode && !settingsInSubmenu,
+                        home = {
+                            HomeScreen(
+                                strings = strings,
+                                deviceInfo = deviceInfo,
+                                status = homeStatus,
+                                onStatusChange = { homeStatus = it },
+                                onOpen = { moduleName = it.name },
+                                onOpenLedgerAccounts = {
+                                    ledgerTabRequest = 3
+                                    moduleName = ToolboxModule.LEDGER.name
+                                },
+                                onOpenSettings = ::openSettings,
+                                onEditModeChange = { homeEditMode = it },
+                                homePrefsRevision = homePrefsRevision,
+                            )
+                        },
+                        settings = {
+                            SettingsScreen(
+                                strings = strings,
+                                language = language,
+                                themeMode = themeMode,
+                                accentColor = accentColor,
+                                customAccentRgb = customAccentRgb,
+                                onLanguageChange = ::updateLanguage,
+                                onThemeModeChange = ::updateTheme,
+                                onAccentColorChange = ::updateAccent,
+                                onCustomAccentChange = ::updateCustomAccent,
+                                backgroundImage = backgroundBitmap,
+                                backgroundStrength = backgroundStrength,
+                                onBackgroundStrengthPreview = { backgroundStrength = it },
+                                onBackgroundStrengthChange = {
+                                    backgroundStrength = it
+                                    preferences.saveBackgroundStrength(it)
+                                },
+                                backgroundBlurEnabled = backgroundBlurEnabled,
+                                onBackgroundBlurEnabledChange = {
+                                    backgroundBlurEnabled = it
+                                    preferences.saveBackgroundBlurEnabled(it)
+                                },
+                                backgroundBlurStrength = backgroundBlurStrength,
+                                onBackgroundBlurStrengthChange = {
+                                    backgroundBlurStrength = it
+                                    preferences.saveBackgroundBlurStrength(it)
+                                },
+                                backgroundScale = backgroundScale,
+                                backgroundOffsetX = backgroundOffsetX,
+                                backgroundOffsetY = backgroundOffsetY,
+                                onBackgroundTransformChange = { scale, x, y ->
+                                    backgroundScale = scale
+                                    backgroundOffsetX = x
+                                    backgroundOffsetY = y
+                                    preferences.saveBackgroundTransform(scale, x, y)
+                                },
+                                onBackgroundChanged = {
+                                    backgroundSeed = preferences.backgroundSeedRgb()
+                                    backgroundScale = preferences.backgroundScale()
+                                    backgroundOffsetX = preferences.backgroundOffsetX()
+                                    backgroundOffsetY = preferences.backgroundOffsetY()
+                                    backgroundVersion++
+                                },
+                                onSettingsRestored = {
+                                    scope.launch {
+                                        val appearance = withContext(Dispatchers.IO) {
+                                            Triple(preferences.language(), preferences.themeMode(), preferences.accentColor()) to
+                                                preferences.customAccentRgb()
+                                        }
+                                        languageName = appearance.first.first.name
+                                        themeName = appearance.first.second.name
+                                        accentName = appearance.first.third.name
+                                        customAccentRgb = appearance.second
+                                        backgroundSeed = preferences.backgroundSeedRgb()
+                                        backgroundStrength = preferences.backgroundStrength()
+                                        backgroundBlurEnabled = preferences.backgroundBlurEnabled()
+                                        backgroundBlurStrength = preferences.backgroundBlurStrength()
+                                        backgroundScale = preferences.backgroundScale()
+                                        backgroundOffsetX = preferences.backgroundOffsetX()
+                                        backgroundOffsetY = preferences.backgroundOffsetY()
+                                        backgroundVersion++
+                                        withContext(Dispatchers.IO) { LedgerWidget.refreshAll(context.applicationContext) }
+                                    }
+                                },
+                                onBack = {
+                                    scope.launch { pagerState.animateScrollToPage(0) }
+                                },
+                                isActive = pagerState.currentPage == 1,
+                                onSubmenuChange = { settingsInSubmenu = it },
+                                onHomePrefsChange = { homePrefsRevision++ },
+                            )
                         },
                     )
 
@@ -317,7 +429,7 @@ fun ToolboxApp(
                     ToolboxModule.LEDGER -> LedgerScreen(
                         strings = strings,
                         onBack = { moduleName = ToolboxModule.HOME.name },
-                        onOpenSettings = { moduleName = ToolboxModule.SETTINGS.name },
+                        onOpenSettings = ::openSettings,
                         openEditorRequested = ledgerEditorRequested,
                         onEditorRequestHandled = { ledgerEditorRequested = false },
                         tabRequest = ledgerTabRequest,
@@ -336,81 +448,10 @@ fun ToolboxApp(
                     ToolboxModule.TOTP -> TotpScreen(
                         strings = strings,
                         onBack = { moduleName = ToolboxModule.HOME.name },
-                        onOpenSettings = { moduleName = ToolboxModule.SETTINGS.name },
+                        onOpenSettings = ::openSettings,
                     )
 
                     ToolboxModule.PRIVACY -> PrivacyScreen(
-                        strings = strings,
-                        onBack = { moduleName = ToolboxModule.HOME.name },
-                    )
-
-                    ToolboxModule.SETTINGS -> SettingsScreen(
-                        strings = strings,
-                        language = language,
-                        themeMode = themeMode,
-                        accentColor = accentColor,
-                        customAccentRgb = customAccentRgb,
-                        onLanguageChange = ::updateLanguage,
-                        onThemeModeChange = ::updateTheme,
-                        onAccentColorChange = ::updateAccent,
-                        onCustomAccentChange = ::updateCustomAccent,
-                        backgroundImage = backgroundBitmap,
-                        backgroundStrength = backgroundStrength,
-                        onBackgroundStrengthChange = {
-                            backgroundStrength = it
-                            preferences.saveBackgroundStrength(it)
-                        },
-                        backgroundBlurEnabled = backgroundBlurEnabled,
-                        onBackgroundBlurEnabledChange = {
-                            backgroundBlurEnabled = it
-                            preferences.saveBackgroundBlurEnabled(it)
-                        },
-                        backgroundBlurStrength = backgroundBlurStrength,
-                        onBackgroundBlurStrengthChange = {
-                            backgroundBlurStrength = it
-                            preferences.saveBackgroundBlurStrength(it)
-                        },
-                        backgroundScale = backgroundScale,
-                        backgroundOffsetX = backgroundOffsetX,
-                        backgroundOffsetY = backgroundOffsetY,
-                        onBackgroundTransformChange = { scale, x, y ->
-                            backgroundScale = scale
-                            backgroundOffsetX = x
-                            backgroundOffsetY = y
-                            preferences.saveBackgroundTransform(scale, x, y)
-                        },
-                        onBackgroundChanged = {
-                            backgroundSeed = preferences.backgroundSeedRgb()
-                            backgroundScale = preferences.backgroundScale()
-                            backgroundOffsetX = preferences.backgroundOffsetX()
-                            backgroundOffsetY = preferences.backgroundOffsetY()
-                            backgroundVersion++
-                        },
-                        onSettingsRestored = {
-                            scope.launch {
-                                val appearance = withContext(Dispatchers.IO) {
-                                    Triple(preferences.language(), preferences.themeMode(), preferences.accentColor()) to
-                                        preferences.customAccentRgb()
-                                }
-                                languageName = appearance.first.first.name
-                                themeName = appearance.first.second.name
-                                accentName = appearance.first.third.name
-                                customAccentRgb = appearance.second
-                                backgroundSeed = preferences.backgroundSeedRgb()
-                                backgroundStrength = preferences.backgroundStrength()
-                                backgroundBlurEnabled = preferences.backgroundBlurEnabled()
-                                backgroundBlurStrength = preferences.backgroundBlurStrength()
-                                backgroundScale = preferences.backgroundScale()
-                                backgroundOffsetX = preferences.backgroundOffsetX()
-                                backgroundOffsetY = preferences.backgroundOffsetY()
-                                backgroundVersion++
-                                withContext(Dispatchers.IO) { LedgerWidget.refreshAll(context.applicationContext) }
-                            }
-                        },
-                        onBack = { moduleName = ToolboxModule.HOME.name },
-                    )
-
-                    ToolboxModule.ABOUT -> AboutScreen(
                         strings = strings,
                         onBack = { moduleName = ToolboxModule.HOME.name },
                     )

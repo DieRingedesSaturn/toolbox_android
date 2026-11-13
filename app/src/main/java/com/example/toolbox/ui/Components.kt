@@ -8,9 +8,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -51,9 +53,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -329,16 +332,16 @@ fun InfoRow(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
-    copyAction: String = "Copy",
+    copyAction: String? = null,
     onCopy: (String) -> Unit,
 ) {
     val tabularBody = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum")
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onCopy(value) }
-            .semantics { contentDescription = "$copyAction $label" }
-            .padding(vertical = 2.dp),
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClickLabel = copyAction) { onCopy(value) }
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -379,6 +382,33 @@ fun IssueActionRow(
             TextButton(onClick = onAction) { Text(action) }
         }
     }
+}
+
+/**
+ * Keeps long-form lists readable on tablets by growing the side padding
+ * instead of stretching cards and text across the whole window.
+ */
+@Composable
+fun readableContentPadding(
+    maxWidth: Dp = 840.dp,
+    vertical: Dp = 16.dp,
+    extraBottom: Dp = 0.dp,
+): PaddingValues {
+    val horizontal = readableHorizontalPadding(maxWidth)
+    return PaddingValues(
+        start = horizontal,
+        top = vertical,
+        end = horizontal,
+        bottom = vertical + extraBottom,
+    )
+}
+
+/** The same idea for full-screen editors that apply their own edge padding. */
+@Composable
+fun readableHorizontalPadding(maxWidth: Dp = 720.dp): Dp {
+    val density = LocalDensity.current
+    val width = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
+    return ((width - maxWidth) / 2).coerceAtLeast(16.dp)
 }
 
 fun formatBytes(bytes: Long): String {

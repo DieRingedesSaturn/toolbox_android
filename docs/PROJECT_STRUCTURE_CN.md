@@ -124,6 +124,11 @@ app/src/main/java/com/example/toolbox/
 │   ├── AppSettingsBackup.kt
 │   ├── SettingsBackupSection.kt
 │   ├── HomeScreen.kt
+│   ├── HomePager.kt
+│   ├── HomeGridLayout.kt
+│   ├── HomeGridGeometry.kt
+│   ├── HomeGridRows.kt
+│   ├── HomeModuleGrid.kt
 │   ├── MonitorScreen.kt
 │   ├── DeviceScreen.kt
 │   ├── LocationScreen.kt

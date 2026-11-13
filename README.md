@@ -4,7 +4,7 @@
 
 Toolbox is a lightweight Android toolbox. It reads device, location, network, and usage data on demand, and it keeps a local ledger, exchange rates, and TOTP tokens on the device. There is no sign-in and no fixed server. Optional pieces (the floating monitor, WebDAV sync, mock location, and others) run only after you turn them on.
 
-Current version **0.1** (`minSdk 26`, `targetSdk 36`). This version has no speed test, Shizuku/root integration, process manager, or ads.
+Current version **0.1** (`minSdk 26`, `targetSdk 36`). 
 
 ## Features
 
@@ -14,11 +14,15 @@ Current version **0.1** (`minSdk 26`, `targetSdk 36`). This version has no speed
 - **Network**: local connection details; public IP / GeoIP / proxy hints only after a tap; a cancellable LAN scan with heuristic camera-port hints, not a complete discovery.
 - **App usage**: needs Usage Access. Foreground time and traffic for today, yesterday, 7 days, and 30 days.
 - **Astronomy**: a night-sky timeline for the chosen coordinates, with image export. Without a location fix it uses a default coordinate (Beijing) and says so on screen.
-- **Ledger and cost amortization**: on-device SQLite ledger with multiple accounts, tags, budgets, subscription amortization, and transfers. Encrypted JSON backup/import, plaintext CSV export, manual HTTPS WebDAV sync (files live in an automatically created `Toolbox/ledger/` subfolder), and a home-screen widget. **Notification quick entry is temporarily disabled** (its menu entry is hidden and the notification listener is off). The code remains so it can be turned back on. Notification bodies are not stored in plaintext, and any body text already saved is cleared on startup.
+- **Ledger and cost amortization**: on-device SQLite ledger with multiple accounts, tags, budgets, subscription amortization, and transfers. Cost cards show a compact summary; tap to expand details and actions, or long-press to copy. Transactions include searchable multi-select tag filters and a direct year/month picker. Encrypted JSON backup/import, plaintext CSV export, manual HTTPS WebDAV sync (files live in an automatically created `Toolbox/ledger/` subfolder), and a home-screen widget. **Notification quick entry is temporarily disabled** (its menu entry is hidden and the notification listener is off). The code remains so it can be turned back on. Notification bodies are not stored in plaintext, and any body text already saved is cleared on startup.
 - **Exchange rates**: reference rates fetched on demand (Frankfurter → European Central Bank → the community currency-api). Results show the date and source and can be used from the local cache.
 - **TOTP**: RFC 6238 tokens (camera or gallery QR, or manual entry). Stored with Android Keystore, and the screen blocks screenshots. Encrypted backups use a passphrase you choose, locally or in the `Toolbox/totp/` subfolder of an HTTPS WebDAV folder you configure. If the local vault cannot be decrypted, it is left unchanged and sync will not overwrite it.
 - **Privacy**: shortcuts to Google and system settings that some ROMs hide (Google settings, location accuracy, ads, usage diagnostics, phone-number verification, and a few system pages). Only exported activities are opened.
 - **Appearance**: system/dark/light themes, dynamic, Everforest, sage or a custom accent, plus an optional background image with a strength slider; the accent can be sampled from that image. Tap its preview to open a full-screen editor: drag to reposition, pinch to zoom, then Save or Cancel. Zoom uses gestures rather than a slider. The image stays on the device and needs no permission.
+
+Monthly net in Home, Ledger month summaries and the widget is income minus ordinary spending and recorded monthly subscriptions (including a custom cycle of exactly one calendar month). Long-term one-time purchases and subscriptions with other cycles stay in actual outlays and average holding costs. Renewals still require confirmation; no payment is invented for an unrecorded month. Actual-payment budgets, account balances, transaction rows and cash-flow charts keep all recorded amounts. Renewal classification uses its parent, including a soft-deleted parent; an orphan with an unknown cycle stays in actual outlays only. Cost cards show up to two tags when collapsed and all live tags when expanded, with different header colours for assets, subscriptions and recurring income.
+
+Home has no title bar. Swipe sideways between Home and Settings, like Android launcher pages. A screen-reader action opens Settings. About is a Settings submenu, alongside Appearance, Home, and Backup. Custom blank-row counts stay intact; if the grid only slightly exceeds the viewport, blank-row heights and gaps compress before scrolling is enabled. Tool cards and the status summary retain their measured size, including at larger font settings. Long-press editing disables pager swipes and shows a floating Done button.
 
 ## Backup and recovery
 
