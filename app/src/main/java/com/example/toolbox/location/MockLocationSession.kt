@@ -29,7 +29,7 @@ object MockLocationSession {
     }
 
     fun stop(context: Context) {
-        runCatching { MockLocationService.stop(context) }.onFailure { failure(MockLocationFailure.START) }
+        runCatching { MockLocationService.stop(context) }.onFailure { failure(MockLocationFailure.STOP) }
     }
 
     fun failure(reason: MockLocationFailure) = MockLocationService.reportFailure(reason)

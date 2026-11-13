@@ -209,7 +209,7 @@ app/src/main/java/com/example/toolbox/
 
 - `LedgerScreen` 保留分页、筛选、列表加载及导航；页面作用域内的 `LedgerBackupSession`、`LedgerCostSession`、`LedgerEditorSession` 和 `LedgerManagementSession` 分别承接备份、续费/处置、编辑保存、标签/账户/预算操作。它们使用页面传入的协程作用域，离开页面即取消；不创建常驻任务。弹窗 Host 与对应会话放在一起。
 - `LedgerEntryDraft.resolve()` 负责纯表单到条目的转换；成本、账户与转账输入组件独立。`LedgerDb` 管建表、迁移及升级前快照，`LedgerMapping` 管行映射，`LedgerStore` 管 CRUD 和事务；数据库版本保持不变。
-- `WholeFileWebDavSync` 共用旧路径回退、条件写入、重试和历史快照。记账/TOTP 仅提供编解码与合并函数。多目标同步并行读取全部目标，本地合并一次，再并行条件写入；412 会整组重新读取重试，最多三轮。同目录同凭据的重复配置合并为一个目标。读取或解密失败时不发布主文件；写入阶段可能部分成功，按目标报告结果，不能保证跨服务器原子性。
+- `WholeFileWebDavSync` 共用旧路径回退、条件写入、重试和历史快照。记账/TOTP 仅提供编解码与合并函数。多目标同步并行读取全部目标，本地合并一次，再并行条件写入；412 会整组重新读取重试，最多三轮。同目录同凭据的重复配置合并为一个目标。读取或解密失败的目标保持不变并单独报告，成功读取的目标继续同步；写入阶段可能部分成功，按目标报告结果，不能保证跨服务器原子性。
 - `MonitorSession.state` 是页面和悬浮窗服务的共享状态：服务运行时由服务采样，否则仅可见页面采样。`MockLocationSession` 暴露服务的同一个状态流，页面不再镜像启动/停止状态；test provider 的所有权及清理仍归服务负责。
 - `ToolboxStrings` 保持原有调用方式，文案实现按功能放在同级 `*Strings.kt` 扩展中。首页通过 `HomeStatusReader` 读取本机摘要，不直接查询账本；不会因此增加联网行为。
 

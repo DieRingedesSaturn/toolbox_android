@@ -282,7 +282,7 @@ class LedgerWebDavSyncTest {
     }
 
     @Test
-    fun failedTargetReadDoesNotPublishOrPartiallyApplyOtherTargets() = runBlocking {
+    fun failedTargetReadLeavesThatTargetUntouchedWhileHealthyTargetSyncs() = runBlocking {
         val other = FakeWebDavServer(WebDavPaths.basicAuthHeader("user", "pass"))
         try {
             val body = LedgerSyncSerializer.toJsonString(LedgerSyncPayload(entries = listOf(entry("remote", 100))))
@@ -294,11 +294,67 @@ class LedgerWebDavSyncTest {
                 WebDavClient(target.folderUrl, "user", "pass"), loadLocal = { emptyList() }, loadLocalTags = { emptyList() }, applyMerged = {},
             ).engine }
             val result = WholeFileWebDavSync.syncTargets(engines, { LedgerSyncPayload(entries = emptyList()) }, { applied = true }, 1000L)
-            assertTrue(result.all { it.isFailure })
-            assertFalse(applied)
-            assertEquals(0, server.requests("PUT", LedgerWebDavSync.LEDGER_FILE))
-            assertEquals(body, server.bodyOf(LedgerWebDavSync.LEDGER_FILE))
+            assertTrue(result[0].isSuccess)
+            assertEquals(WebDavFailure.VERSION_UNAVAILABLE,
+                (result[1].exceptionOrNull() as WebDavException).failure)
+            assertTrue(applied)
+            assertEquals(1, server.requests("PUT", LedgerWebDavSync.LEDGER_FILE))
+            assertEquals(0, other.requests("PUT", LedgerWebDavSync.LEDGER_FILE))
+            assertEquals(body, other.bodyOf(LedgerWebDavSync.LEDGER_FILE))
         } finally { other.stop() }
+    }
+
+    @Test
+    fun wrongTotpPasswordOnlyBlocksTheAffectedTarget() = runBlocking {
+        val other = FakeWebDavServer(WebDavPaths.basicAuthHeader("user", "pass"))
+        val pass = "correct-backup-password"
+        val token = TotpEntry(uuid = "healthy", issuer = "Service", accountName = "account",
+            secret = "JBSWY3DPEHPK3PXP", createdAtMillis = 100L)
+        try {
+            server.putRaw(TotpWebDavSync.VAULT_FILE,
+                TotpVaultCrypto.encryptVault(listOf(token), pass, iterations = 1000))
+            val unreadable = TotpVaultCrypto.encryptVault(listOf(token.copy(uuid = "unreadable")),
+                "different-backup-password", iterations = 1000)
+            other.putRaw(TotpWebDavSync.VAULT_FILE, unreadable)
+            var local = listOf(token.copy(uuid = "local"))
+            var applied = 0
+            val engines = listOf(server, other).map { target ->
+                TotpWebDavSync(WebDavClient(target.folderUrl, "user", "pass"), pass,
+                    loadLocal = { emptyList() }, applyMerged = {}, iterations = 1000).engine
+            }
+            val results = WholeFileWebDavSync.syncTargets(engines, { local }, {
+                local = it
+                applied++
+            }, 1000L)
+            assertTrue(results[0].isSuccess)
+            assertTrue(results[1].exceptionOrNull() is TotpVaultException)
+            assertEquals(1, applied)
+            assertEquals(setOf("healthy", "local"), local.map { it.uuid }.toSet())
+            assertEquals(setOf("healthy", "local"), TotpVaultCrypto.decryptVault(
+                server.bodyOf(TotpWebDavSync.VAULT_FILE)!!, pass).map { it.uuid }.toSet())
+            assertEquals(unreadable, other.bodyOf(TotpWebDavSync.VAULT_FILE))
+            assertEquals(0, other.requests("PUT", TotpWebDavSync.VAULT_FILE))
+        } finally {
+            other.stop()
+        }
+    }
+
+    @Test
+    fun allReadFailuresKeepTheirOwnErrorsAndDoNotApply() = runBlocking {
+        server.putRaw(LedgerWebDavSync.LEDGER_FILE,
+            LedgerSyncSerializer.toJsonString(LedgerSyncPayload(entries = listOf(entry("remote", 100)))))
+        server.omitEtagOnGet = true
+        var applied = false
+        val engines = listOf("wrong", "pass").map { password ->
+            LedgerWebDavSync(WebDavClient(server.folderUrl, "user", password),
+                loadLocal = { emptyList() }, loadLocalTags = { emptyList() }, applyMerged = {}).engine
+        }
+        val results = WholeFileWebDavSync.syncTargets(engines,
+            { LedgerSyncPayload(entries = emptyList()) }, { applied = true }, 1000L)
+        assertEquals(listOf(WebDavFailure.UNAUTHORIZED, WebDavFailure.VERSION_UNAVAILABLE),
+            results.map { (it.exceptionOrNull() as WebDavException).failure })
+        assertFalse(applied)
+        assertEquals(0, server.requests("PUT", LedgerWebDavSync.LEDGER_FILE))
     }
 
     @Test

@@ -84,7 +84,7 @@ internal class WholeFileWebDavSync<T>(
         const val MAX_ATTEMPTS = 3
 
         /**
-         * Read every target before publishing anywhere. Reuse each response's ETag;
+         * Attempt every target before publishing to those read successfully. Reuse each response's ETag;
          * retry the whole fan-out after a 412 so a later target's new rows reach earlier ones.
          * [apply] must atomically merge against current local data, never replace a stale snapshot.
          */
@@ -111,17 +111,17 @@ internal class WholeFileWebDavSync<T>(
                 var candidate = load()
                 repeat(MAX_ATTEMPTS) { attempt ->
                     val reads = parallel(targets) { it.prepare() }
-                    // Failed decrypts / reads abort before local writes or remote publication.
-                    reads.firstOrNull { it.isFailure }?.exceptionOrNull()?.let { throw it }
-                    val remotes = reads.map { it.getOrThrow() }
+                    // A failed target is left untouched and keeps its own error result.
                     val local = load()
                     candidate = targets.first().merge(candidate, local).payload
                     for (index in targets.indices) {
-                        candidate = targets[index].combine(candidate, remotes[index]).payload
+                        reads[index].getOrNull()?.let { remote ->
+                            candidate = targets[index].combine(candidate, remote).payload
+                        }
                     }
                     val merged = candidate
                     val writes = parallel(targets.indices.toList()) { index ->
-                        targets[index].publish(merged, remotes[index], now)
+                        targets[index].publish(merged, reads[index].getOrThrow(), now)
                     }
                     val conflict = writes.any {
                         (it.exceptionOrNull() as? WebDavException)?.failure == WebDavFailure.PRECONDITION_FAILED
@@ -132,8 +132,9 @@ internal class WholeFileWebDavSync<T>(
                     if (writes.any { it.isSuccess }) apply(merged)
                     return@withContext parallel(targets.indices.toList()) { index ->
                         val body = writes[index].getOrThrow()
-                        val pulled = targets[index].combine(local, remotes[index]).pulled
-                        val pushed = targets[index].combine(merged, remotes[index]).pushed
+                        val remote = reads[index].getOrThrow()
+                        val pulled = targets[index].combine(local, remote).pulled
+                        val pushed = targets[index].combine(merged, remote).pushed
                         targets[index].result(FileMerge(merged, pulled, pushed), body, now)
                     }
                 }

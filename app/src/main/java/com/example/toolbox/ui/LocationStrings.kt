@@ -124,6 +124,7 @@ fun ToolboxStrings.mockLocationFailure(failure: MockLocationFailure): String = w
     MockLocationFailure.NOTIFICATIONS -> mockLocationNotificationNeeded
     MockLocationFailure.PROVIDER -> if (chinese) "系统拒绝了测试定位源，请检查开发者选项后重试。" else "The system rejected a test provider. Check Developer options and retry."
     MockLocationFailure.START -> if (chinese) "无法启动模拟服务，请返回此页面重试。" else "Could not start the mock service. Return to this page and retry."
+    MockLocationFailure.STOP -> if (chinese) "无法停止模拟服务，请重试停止或清理。" else "Could not stop the mock service. Retry stopping or cleaning up."
 }
 
 val ToolboxStrings.location: String

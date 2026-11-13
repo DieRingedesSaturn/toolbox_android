@@ -20,17 +20,18 @@ class MonitorSessionTest {
         MonitorSession.stopped()
         try {
             assertFalse(MonitorSession.state.value.overlayRunning)
+            val previous = MonitorSession.state.value.sample
             MonitorSession.publishOverlay(sample())
-            assertNull(MonitorSession.state.value.sample)
+            assertSame(previous, MonitorSession.state.value.sample)
             MonitorSession.started()
             val sample = sample()
             MonitorSession.publishOverlay(sample)
             assertTrue(MonitorSession.state.value.overlayRunning)
             assertSame(sample, MonitorSession.state.value.sample)
             MonitorSession.stopped()
-            MonitorSession.publishOverlay(sample)
+            MonitorSession.publishOverlay(sample())
             assertFalse(MonitorSession.state.value.overlayRunning)
-            assertNull(MonitorSession.state.value.sample)
+            assertSame(sample, MonitorSession.state.value.sample)
         } finally { MonitorSession.stopped() }
     }
 

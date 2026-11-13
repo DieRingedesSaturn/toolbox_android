@@ -25,7 +25,7 @@ internal object MonitorSession {
     }
 
     fun stopped() {
-        mutableState.value = MonitorSessionState()
+        mutableState.update { it.copy(overlayRunning = false) }
     }
 
     fun publishOverlay(sample: MonitorSample) {

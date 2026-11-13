@@ -32,7 +32,7 @@ data class MockLocationConfig(
 
 enum class MockLocationPhase { STOPPED, STARTING, RUNNING, STOPPING, ERROR, CLEANUP_REQUIRED }
 
-enum class MockLocationFailure { ACCESS, SERVICES_DISABLED, NOTIFICATIONS, PROVIDER, START }
+enum class MockLocationFailure { ACCESS, SERVICES_DISABLED, NOTIFICATIONS, PROVIDER, START, STOP }
 
 data class MockLocationState(
     val phase: MockLocationPhase = MockLocationPhase.STOPPED,
