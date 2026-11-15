@@ -170,7 +170,7 @@ internal fun FxScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(scaffoldPadding),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = readableContentPadding(maxWidth = 900.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {

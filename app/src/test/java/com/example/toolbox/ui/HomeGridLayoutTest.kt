@@ -189,4 +189,19 @@ class HomeGridLayoutTest {
         assertEquals(0, enabled.summaryRow)
         assertEquals(1, enabled.cellOf(order[0])?.row)
     }
+
+    @Test
+    fun outerBlankRowsAreRemovedBeforeAlignment() {
+        val padded = HomeGridLayout.default(order.take(4), 2, summaryExpected = true)
+            .withTopBlankRows(3)
+            .withBottomBlankRows(2)
+
+        val normalized = padded.withoutOuterBlankRows()
+
+        assertEquals(0, normalized.summaryRow)
+        assertEquals(0, normalized.topBlankRows)
+        assertEquals(0, normalized.bottomBlankRows)
+        assertEquals(1, normalized.cellOf(order[0])?.row)
+        assertEquals(3, normalized.rows)
+    }
 }

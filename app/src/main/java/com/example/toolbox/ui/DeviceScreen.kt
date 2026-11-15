@@ -65,7 +65,7 @@ fun DeviceScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = readableContentPadding(maxWidth = 900.dp),
             ) {
                 item {
                     InfoCard(strings.device) {
@@ -84,7 +84,7 @@ fun DeviceScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = readableContentPadding(maxWidth = 900.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (lastUpdated != null) {

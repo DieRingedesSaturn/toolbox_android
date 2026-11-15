@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -37,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
@@ -140,6 +142,7 @@ internal fun HomeScreen(
     var summaryEnabled by remember { mutableStateOf(preferences.homeSummaryEnabled()) }
     var summaryItems by remember { mutableStateOf(preferences.homeSummaryItems()) }
     var summaryCustomText by remember { mutableStateOf(preferences.homeSummaryCustomText()) }
+    var verticalAlign by remember { mutableStateOf(preferences.homeGridVerticalAlign()) }
     var editMode by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnStatusChange by rememberUpdatedState(onStatusChange)
@@ -149,6 +152,7 @@ internal fun HomeScreen(
         summaryEnabled = preferences.homeSummaryEnabled()
         summaryItems = preferences.homeSummaryItems()
         summaryCustomText = preferences.homeSummaryCustomText()
+        verticalAlign = preferences.homeGridVerticalAlign()
     }
 
     BackHandler(enabled = editMode) {
@@ -217,13 +221,39 @@ internal fun HomeScreen(
                     .padding(padding),
             ) {
                 val spacing = 10.dp
-                val columns = (
-                    (maxWidth - 32.dp + spacing) / (150.dp + spacing)
+                val density = LocalDensity.current
+                val windowSize = LocalWindowInfo.current.containerSize
+                // Keep the tablet column count stable across rotation by using
+                // the short side of the window; phones keep width-based columns.
+                val shortSide = with(density) {
+                    minOf(windowSize.width, windowSize.height).toDp()
+                }
+                val isTablet = shortSide >= 600.dp
+                val horizontalPadding = if (isTablet) {
+                    ((maxWidth - 1100.dp) / 2).coerceAtLeast(16.dp)
+                } else {
+                    16.dp
+                }
+                val contentWidth = (maxWidth - horizontalPadding * 2).coerceAtLeast(0.dp)
+                val columnBasis = if (isTablet) shortSide else contentWidth
+                val columnsFromBasis = (
+                    (columnBasis - 32.dp + spacing) / (150.dp + spacing)
                     ).toInt().coerceIn(2, HomeGridLayout.MAX_COLUMNS)
+                val maxColumnsByWidth = (
+                    (contentWidth + spacing) / (150.dp + spacing)
+                    ).toInt().coerceAtLeast(2)
+                val columns = columnsFromBasis
+                    .coerceAtMost(maxColumnsByWidth)
+                    .coerceIn(2, HomeGridLayout.MAX_COLUMNS)
                 val cellWidth = (
-                    (maxWidth - 32.dp - spacing * (columns - 1)) / columns
+                    (contentWidth - spacing * (columns - 1)) / columns
                     ).coerceAtLeast(0.dp)
                 val iconSize = (cellWidth * 0.24f).coerceIn(28.dp, 40.dp)
+                val summaryColumns = when {
+                    isTablet -> 4
+                    contentWidth >= 600.dp -> 3
+                    else -> 2
+                }
                 val showSummary = summaryEnabled
                 val layout = remember(layoutRaw, columns, showSummary) {
                     HomeGridLayout.parse(
@@ -231,7 +261,7 @@ internal fun HomeScreen(
                         order = preferences.homeModuleOrder(),
                         columns = columns,
                         summaryExpected = showSummary,
-                    ).reflow(columns)
+                    ).reflow(columns).withoutOuterBlankRows()
                 }
                 LaunchedEffect(layoutRaw, columns, showSummary) {
                     if (layoutRaw == null) {
@@ -246,50 +276,60 @@ internal fun HomeScreen(
                     }
                 }
                 val availableHeightPx = with(LocalDensity.current) {
-                    (maxHeight.roundToPx() - 2 * 16.dp.roundToPx()).coerceAtLeast(0)
+                    val bottom = if (editMode) 80.dp else HomePagerIndicatorClearance
+                    (maxHeight - 16.dp - bottom).roundToPx().coerceAtLeast(0)
                 }
 
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(
-                            start = 16.dp,
+                            start = horizontalPadding,
                             top = 16.dp,
-                            end = 16.dp,
+                            end = horizontalPadding,
                             bottom = if (editMode) 80.dp else HomePagerIndicatorClearance,
                         ),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.Top,
                 ) {
-                    HomeModuleGrid(
-                        strings = strings,
-                        deviceInfo = deviceInfo,
-                        status = status,
-                        layout = layout,
-                        columns = columns,
-                        cellWidth = cellWidth,
-                        spacing = spacing,
-                        iconSize = iconSize,
-                        availableHeightPx = availableHeightPx,
-                        summaryItems = summaryItems,
-                        summaryCustomText = summaryCustomText,
-                        editMode = editMode,
-                        onEditModeChange = { editMode = it },
-                        onPersistLayout = { next ->
-                            val raw = next.format()
-                            layoutRaw = raw
-                            preferences.saveHomeGridLayout(raw)
-                            preferences.saveHomeModuleOrder(next.readingOrder())
-                        },
-                        onOpen = onOpen,
-                        onOpenLedgerAccounts = onOpenLedgerAccounts,
-                    )
-                    if (editMode) {
-                        Text(
-                            text = strings.homeEditHint,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 2.dp),
+                    if (verticalAlign != HomeGridVerticalAlign.TOP) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        HomeModuleGrid(
+                            strings = strings,
+                            deviceInfo = deviceInfo,
+                            status = status,
+                            layout = layout,
+                            columns = columns,
+                            cellWidth = cellWidth,
+                            spacing = spacing,
+                            iconSize = iconSize,
+                            summaryColumns = summaryColumns,
+                            availableHeightPx = availableHeightPx,
+                            summaryItems = summaryItems,
+                            summaryCustomText = summaryCustomText,
+                            editMode = editMode,
+                            onEditModeChange = { editMode = it },
+                            onPersistLayout = { next ->
+                                val raw = next.format()
+                                layoutRaw = raw
+                                preferences.saveHomeGridLayout(raw)
+                                preferences.saveHomeModuleOrder(next.readingOrder())
+                            },
+                            onOpen = onOpen,
+                            onOpenLedgerAccounts = onOpenLedgerAccounts,
                         )
+                        if (editMode) {
+                            Text(
+                                text = strings.homeEditHint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                    }
+                    if (verticalAlign != HomeGridVerticalAlign.BOTTOM) {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }

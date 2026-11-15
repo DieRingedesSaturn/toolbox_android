@@ -1,5 +1,12 @@
 package com.example.toolbox.ui
 
+/** Vertical placement of the whole card group inside the available page height. */
+enum class HomeGridVerticalAlign {
+    TOP,
+    CENTER,
+    BOTTOM,
+}
+
 /** One tool placed on an explicit home-grid cell. */
 internal data class HomeGridCell(
     val module: ToolboxModule,
@@ -66,6 +73,22 @@ internal data class HomeGridLayout(
             }
         }
         return copy(cells = moved)
+    }
+
+    /** Removes leading/trailing empty rows so alignment can use the page space. */
+    fun withoutOuterBlankRows(): HomeGridLayout {
+        val top = topBlankRows
+        val shifted = cells.map { it.copy(row = it.row - top) }
+        val shiftedSummary = summaryRow?.let { it - top }
+        val contentRows = maxOf(
+            (shifted.maxOfOrNull { it.row } ?: -1) + 1,
+            (shiftedSummary ?: -1) + 1,
+        ).coerceAtLeast(1)
+        return copy(
+            minRows = contentRows,
+            cells = shifted,
+            summaryRow = shiftedSummary,
+        )
     }
 
     /** Adds or removes blank rows above the first occupied row. */

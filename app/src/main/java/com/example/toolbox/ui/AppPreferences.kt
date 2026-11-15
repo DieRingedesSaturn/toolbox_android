@@ -25,6 +25,7 @@ private const val LEDGER_LAST_ACCOUNT_KEY = "ledger_last_account"
 private const val LEDGER_OVERVIEW_ORDER_KEY = "ledger_overview_order"
 private const val HOME_MODULE_ORDER_KEY = "home_module_order"
 private const val HOME_GRID_LAYOUT_KEY = "home_grid_layout"
+private const val HOME_GRID_VERTICAL_ALIGN_KEY = "home_grid_vertical_alignment"
 private const val HOME_SUMMARY_ENABLED_KEY = "home_summary_enabled"
 private const val HOME_SUMMARY_ITEMS_KEY = "home_summary_items"
 private const val HOME_SUMMARY_CUSTOM_TEXT_KEY = "home_summary_custom_text"
@@ -244,6 +245,17 @@ class AppPreferences(context: Context) {
         preferences.edit { remove(HOME_GRID_LAYOUT_KEY) }
     }
 
+    fun homeGridVerticalAlign(): HomeGridVerticalAlign =
+        runCatching {
+            HomeGridVerticalAlign.valueOf(
+                preferences.getString(HOME_GRID_VERTICAL_ALIGN_KEY, null) ?: "TOP",
+            )
+        }.getOrDefault(HomeGridVerticalAlign.TOP)
+
+    fun saveHomeGridVerticalAlign(value: HomeGridVerticalAlign) {
+        preferences.edit { putString(HOME_GRID_VERTICAL_ALIGN_KEY, value.name) }
+    }
+
     fun homeSummaryEnabled(): Boolean =
         preferences.getBoolean(HOME_SUMMARY_ENABLED_KEY, true)
 
@@ -316,7 +328,8 @@ class AppPreferences(context: Context) {
 
         private val STRING_KEYS = setOf(LANGUAGE_KEY, THEME_KEY, ACCENT_KEY, MONITOR_CPU_DISPLAY_MODE_KEY,
             MONITOR_OVERLAY_THEME_KEY, LEDGER_LAST_ACCOUNT_KEY, LEDGER_OVERVIEW_ORDER_KEY,
-            HOME_MODULE_ORDER_KEY, HOME_GRID_LAYOUT_KEY, HOME_SUMMARY_ITEMS_KEY,
+            HOME_MODULE_ORDER_KEY, HOME_GRID_LAYOUT_KEY, HOME_GRID_VERTICAL_ALIGN_KEY,
+            HOME_SUMMARY_ITEMS_KEY,
             HOME_SUMMARY_CUSTOM_TEXT_KEY,
             FX_PINNED_CURRENCIES_KEY, MOCK_LOCATION_ACCURACY_KEY)
         private val INT_KEYS = setOf(CUSTOM_ACCENT_RGB_KEY, MONITOR_OVERLAY_CUSTOM_COLOR_KEY,

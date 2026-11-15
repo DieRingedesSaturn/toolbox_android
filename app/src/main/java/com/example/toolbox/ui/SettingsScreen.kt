@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.height
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -134,6 +133,7 @@ fun SettingsScreen(
     var summaryItems by remember { mutableStateOf(preferences.homeSummaryItems()) }
     var summaryCustomText by remember { mutableStateOf(preferences.homeSummaryCustomText()) }
     var gridLayoutRaw by remember { mutableStateOf(preferences.homeGridLayout()) }
+    var gridVerticalAlign by remember { mutableStateOf(preferences.homeGridVerticalAlign()) }
     var showSummaryConfigDialog by rememberSaveable { mutableStateOf(false) }
     var showResetGridDialog by rememberSaveable { mutableStateOf(false) }
     val gridLayout = remember(gridLayoutRaw, summaryEnabled) {
@@ -368,28 +368,26 @@ fun SettingsScreen(
                             )
                         }
                     }
-                    BlankRowStepper(
-                        label = strings.homeGridTopBlank,
-                        value = gridLayout.topBlankRows,
-                        onDecrease = {
-                            saveGridLayout(gridLayout.withTopBlankRows(gridLayout.topBlankRows - 1))
-                        },
-                        onIncrease = {
-                            saveGridLayout(gridLayout.withTopBlankRows(gridLayout.topBlankRows + 1))
-                        },
+                    Text(
+                        text = strings.homeGridVerticalAlign,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
-                    BlankRowStepper(
-                        label = strings.homeGridBottomBlank,
-                        value = gridLayout.bottomBlankRows,
-                        onDecrease = {
-                            saveGridLayout(
-                                gridLayout.withBottomBlankRows(gridLayout.bottomBlankRows - 1),
-                            )
+                    ChoiceStrip(
+                        options = HomeGridVerticalAlign.entries.toList(),
+                        selected = gridVerticalAlign,
+                        label = { align ->
+                            when (align) {
+                                HomeGridVerticalAlign.TOP -> strings.homeGridAlignTop
+                                HomeGridVerticalAlign.CENTER -> strings.homeGridAlignCenter
+                                HomeGridVerticalAlign.BOTTOM -> strings.homeGridAlignBottom
+                            }
                         },
-                        onIncrease = {
-                            saveGridLayout(
-                                gridLayout.withBottomBlankRows(gridLayout.bottomBlankRows + 1),
-                            )
+                        onSelected = { align ->
+                            gridVerticalAlign = align
+                            preferences.saveHomeGridVerticalAlign(align)
+                            onHomePrefsChange()
                         },
                     )
                 }
@@ -413,6 +411,7 @@ fun SettingsScreen(
                             summaryItems = preferences.homeSummaryItems()
                             summaryCustomText = preferences.homeSummaryCustomText()
                             gridLayoutRaw = preferences.homeGridLayout()
+                            gridVerticalAlign = preferences.homeGridVerticalAlign()
                             onHomePrefsChange()
                             onSettingsRestored()
                         },
@@ -472,7 +471,9 @@ fun SettingsScreen(
                         showResetGridDialog = false
                         preferences.clearHomeGridLayout()
                         preferences.saveHomeModuleOrder(HomeModuleOrder.DEFAULT)
+                        preferences.saveHomeGridVerticalAlign(HomeGridVerticalAlign.TOP)
                         gridLayoutRaw = null
+                        gridVerticalAlign = HomeGridVerticalAlign.TOP
                         onHomePrefsChange()
                     },
                 ) {
@@ -898,36 +899,3 @@ private fun CustomAccentPicker(
     }
 }
 
-@Composable
-private fun BlankRowStepper(
-    label: String,
-    value: Int,
-    onDecrease: () -> Unit,
-    onIncrease: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        TextButton(onClick = onDecrease, enabled = value > 0) {
-            Text("−")
-        }
-        Text(
-            text = value.toString(),
-            modifier = Modifier.width(24.dp),
-            style = MaterialTheme.typography.labelLarge,
-        )
-        TextButton(
-            onClick = onIncrease,
-            enabled = value < HomeGridLayout.MAX_BLANK_ROWS,
-        ) {
-            Text("+")
-        }
-    }
-}

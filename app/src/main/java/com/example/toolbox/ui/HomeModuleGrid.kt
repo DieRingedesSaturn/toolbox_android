@@ -96,6 +96,7 @@ internal fun HomeModuleGrid(
     cellWidth: Dp,
     spacing: Dp,
     iconSize: Dp,
+    summaryColumns: Int,
     availableHeightPx: Int,
     summaryItems: Set<HomeSummaryItem>,
     summaryCustomText: String,
@@ -284,6 +285,7 @@ internal fun HomeModuleGrid(
                             visibleItems = summaryItems,
                             customText = trimmedCustomText,
                             interactionEnabled = !editMode,
+                            summaryColumns = summaryColumns,
                             onOpen = onOpen,
                             onOpenLedgerAccounts = onOpenLedgerAccounts,
                         )
@@ -522,6 +524,7 @@ private fun HomeSummaryCard(
     visibleItems: Set<HomeSummaryItem>,
     customText: String,
     interactionEnabled: Boolean,
+    summaryColumns: Int,
     onOpen: (ToolboxModule) -> Unit,
     onOpenLedgerAccounts: () -> Unit,
 ) {
@@ -710,7 +713,7 @@ private fun HomeSummaryCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            statTiles.chunked(2).forEach { rowTiles ->
+            statTiles.chunked(summaryColumns).forEach { rowTiles ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -725,7 +728,7 @@ private fun HomeSummaryCard(
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    if (rowTiles.size == 1) {
+                    repeat(summaryColumns - rowTiles.size) {
                         Spacer(modifier = Modifier.weight(1f))
                     }
                 }

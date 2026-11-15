@@ -47,16 +47,22 @@ fun ToolboxStrings.homePageIndicator(page: Int, total: Int): String =
 
 val ToolboxStrings.homeGridResetMessage: String
     get() = if (chinese) {
-        "清空自定义位置和留白，恢复默认排列？"
+        "清空自定义位置，恢复默认排列？"
     } else {
-        "Clear custom positions and blank rows and restore the default arrangement?"
+        "Clear custom positions and restore the default arrangement?"
     }
 
-val ToolboxStrings.homeGridTopBlank: String
-    get() = if (chinese) "顶部空行" else "Blank rows above"
+val ToolboxStrings.homeGridVerticalAlign: String
+    get() = if (chinese) "卡片垂直位置" else "Card vertical alignment"
 
-val ToolboxStrings.homeGridBottomBlank: String
-    get() = if (chinese) "底部空行" else "Blank rows below"
+val ToolboxStrings.homeGridAlignTop: String
+    get() = if (chinese) "置顶" else "Top"
+
+val ToolboxStrings.homeGridAlignCenter: String
+    get() = if (chinese) "居中" else "Center"
+
+val ToolboxStrings.homeGridAlignBottom: String
+    get() = if (chinese) "置底" else "Bottom"
 
 val ToolboxStrings.homeEditHint: String
     get() = if (chinese) {

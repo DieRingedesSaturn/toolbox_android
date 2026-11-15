@@ -187,7 +187,7 @@ fun AppUsageScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = readableContentPadding(maxWidth = 1100.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 // 1. Time Range Selector Segment

@@ -107,7 +107,7 @@ val ToolboxStrings.settingsAppearanceSummary: String
     get() = if (chinese) "语言、主题、强调色与背景" else "Language, theme, accent, and wallpaper"
 
 val ToolboxStrings.settingsHomeSummary: String
-    get() = if (chinese) "主卡片、空行与布局" else "Summary card, blank rows, and layout"
+    get() = if (chinese) "主卡片与布局" else "Summary card and layout"
 
 val ToolboxStrings.settingsAboutSummary: String
     get() = if (chinese) "版本与功能说明" else "Version and features"

@@ -668,8 +668,8 @@ internal fun TotpScreen(
                     .fillMaxSize()
                     .padding(padding),
                 contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
+                    start = readableHorizontalPadding(900.dp),
+                    end = readableHorizontalPadding(900.dp),
                     top = 8.dp,
                     bottom = 96.dp,
                 ),
