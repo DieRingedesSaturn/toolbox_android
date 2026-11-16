@@ -68,6 +68,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.toolbox.usage.AppCategory
 import com.example.toolbox.usage.AppUsageItem
 import com.example.toolbox.usage.AppUsageReader
+import com.example.toolbox.usage.SharedNetworkTraffic
 import com.example.toolbox.usage.UsageReport
 import com.example.toolbox.usage.UsageSortMode
 import com.example.toolbox.usage.UsageTimeRange
@@ -174,13 +175,25 @@ fun AppUsageScreen(
                 }
             }
 
-            val maxMetricValue = remember(filteredItems, sortMode) {
-                when (sortMode) {
-                    UsageSortMode.DURATION -> filteredItems.maxOfOrNull { it.foregroundDurationMillis } ?: 1L
-                    UsageSortMode.TOTAL_DATA -> filteredItems.maxOfOrNull { it.totalBytes ?: 0L } ?: 1L
-                    UsageSortMode.CELLULAR_DATA -> filteredItems.maxOfOrNull { it.totalCellularBytes ?: 0L } ?: 1L
-                    UsageSortMode.WIFI_DATA -> filteredItems.maxOfOrNull { it.totalWifiBytes ?: 0L } ?: 1L
-                }.coerceAtLeast(1L)
+            val unlistedTraffic = remember(report) {
+                report?.let {
+                    SharedNetworkTraffic.combine(it.sharedNetworkTraffic, it.unattributedTraffic)
+                }
+            }
+            val maxMetricValue = remember(filteredItems, sortMode, unlistedTraffic) {
+                val listed = when (sortMode) {
+                    UsageSortMode.DURATION -> filteredItems.maxOfOrNull { it.foregroundDurationMillis } ?: 0L
+                    UsageSortMode.TOTAL_DATA -> filteredItems.maxOfOrNull { it.totalBytes ?: 0L } ?: 0L
+                    UsageSortMode.CELLULAR_DATA -> filteredItems.maxOfOrNull { it.totalCellularBytes ?: 0L } ?: 0L
+                    UsageSortMode.WIFI_DATA -> filteredItems.maxOfOrNull { it.totalWifiBytes ?: 0L } ?: 0L
+                }
+                val extra = when (sortMode) {
+                    UsageSortMode.DURATION -> 0L
+                    UsageSortMode.TOTAL_DATA -> unlistedTraffic?.totalBytes ?: 0L
+                    UsageSortMode.CELLULAR_DATA -> unlistedTraffic?.cellularBytes ?: 0L
+                    UsageSortMode.WIFI_DATA -> unlistedTraffic?.wifiBytes ?: 0L
+                }
+                maxOf(listed, extra, 1L)
             }
 
             LazyColumn(
@@ -226,6 +239,19 @@ fun AppUsageScreen(
                         sortMode = sortMode,
                         onSelectMode = { sortMode = it },
                     )
+                }
+
+                if (!isLoading && unlistedTraffic?.totalBytes?.let { it > 0L } == true &&
+                    selectedCategory == AppCategory.ALL
+                ) {
+                    item(key = "unlisted-traffic") {
+                        UnlistedTrafficCard(
+                            strings = strings,
+                            traffic = unlistedTraffic,
+                            sortMode = sortMode,
+                            maxMetricValue = maxMetricValue,
+                        )
+                    }
                 }
 
                 // 5. App Usage List
@@ -385,43 +411,6 @@ private fun UsageOverviewCard(
                     value = formatUsageBytes(report.totalWifiBytes, strings),
                     color = Color(0xFF2196F3),
                     modifier = Modifier.weight(1f),
-                )
-            }
-
-            val sharedNetwork = report.sharedNetworkTraffic
-            if (sharedNetwork?.totalBytes?.let { it > 0L } == true) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = strings.sharedNetworkData,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = listOfNotNull(
-                            sharedNetwork.wifiBytes?.let {
-                                "${strings.totalWifiData}: ${formatDataBytes(it)}"
-                            },
-                            sharedNetwork.cellularBytes?.let {
-                                "${strings.totalCellularData}: ${formatDataBytes(it)}"
-                            },
-                        ).joinToString("  ·  "),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = strings.sharedNetworkDataNote,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            if (report.hasUnattributedTraffic) {
-                Text(
-                    text = strings.sharedUidTrafficNote,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -778,11 +767,78 @@ private fun AppUsageListItem(
     }
 }
 
+@Composable
+private fun UnlistedTrafficCard(
+    strings: ToolboxStrings,
+    traffic: SharedNetworkTraffic,
+    sortMode: UsageSortMode,
+    maxMetricValue: Long,
+) {
+    val primary = when (sortMode) {
+        UsageSortMode.DURATION, UsageSortMode.TOTAL_DATA -> traffic.totalBytes
+        UsageSortMode.CELLULAR_DATA -> traffic.cellularBytes
+        UsageSortMode.WIFI_DATA -> traffic.wifiBytes
+    } ?: 0L
+    val fraction = (primary.toFloat() / maxMetricValue.toFloat()).coerceIn(0f, 1f)
+    ToolboxCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = strings.unattributedTraffic,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = listOfNotNull(
+                            traffic.cellularBytes?.takeIf { it > 0L }?.let {
+                                "${strings.totalCellularData}: ${formatDataBytes(it)}"
+                            },
+                            traffic.wifiBytes?.takeIf { it > 0L }?.let {
+                                "${strings.totalWifiData}: ${formatDataBytes(it)}"
+                            },
+                        ).joinToString("  ·  "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = formatDataBytes(primary),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF7B1FA2),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction)
+                        .fillMaxHeight()
+                        .background(Color(0xFF7B1FA2), RoundedCornerShape(2.dp)),
+                )
+            }
+        }
+    }
+}
+
 private fun formatUsageBytes(
     bytes: Long?,
     strings: ToolboxStrings,
     sharedUid: Boolean = false,
 ): String = when {
+    bytes != null && sharedUid -> "${formatDataBytes(bytes)} · ${strings.sharedUidTraffic}"
     bytes != null -> formatDataBytes(bytes)
     sharedUid -> strings.sharedUidTraffic
     else -> strings.notAvailable

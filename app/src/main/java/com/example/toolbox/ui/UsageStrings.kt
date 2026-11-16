@@ -36,24 +36,10 @@ val ToolboxStrings.totalTraffic: String
     get() = if (chinese) "总消耗流量" else "Total Traffic"
 
 val ToolboxStrings.sharedUidTraffic: String
-    get() = if (chinese) "共享 UID，无法归属" else "Shared UID: cannot attribute"
+    get() = if (chinese) "共享 UID" else "Shared UID"
 
-val ToolboxStrings.sharedNetworkData: String
-    get() = if (chinese) "共享网络流量" else "Tethered / P2P data"
-
-val ToolboxStrings.sharedNetworkDataNote: String
-    get() = if (chinese) {
-        "包含热点、USB、蓝牙或 P2P 共享给其他设备的流量，无法归属到本机单个应用；部分厂商或机型可能不公开 P2P 本地侧计数。"
-    } else {
-        "Includes traffic shared with other devices over hotspot, USB, Bluetooth, or P2P; it cannot be assigned to one local app. Some vendors may not expose the P2P local-side counter."
-    }
-
-val ToolboxStrings.sharedUidTrafficNote: String
-    get() = if (chinese) {
-        "总流量包含无法归属到单个应用的 UID 流量；这些流量不计入应用和分类明细。"
-    } else {
-        "Totals include UID traffic that cannot be assigned to one app; app and category details exclude it."
-    }
+val ToolboxStrings.unattributedTraffic: String
+    get() = if (chinese) "未计入应用明细" else "Not listed per app"
 
 val ToolboxStrings.categoryBreakdown: String
     get() = if (chinese) "分类时间分布" else "Category Breakdown"

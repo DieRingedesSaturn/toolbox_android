@@ -25,6 +25,7 @@ data class AppUsageItem(
     val cellularRxBytes: Long?,
     val cellularTxBytes: Long?,
     val sharedUidTraffic: Boolean = false,
+    val uid: Int = -1,
 ) {
     val totalWifiBytes: Long? get() = wifiRxBytes?.let { rx -> wifiTxBytes?.let { rx + it } }
     val totalCellularBytes: Long? get() = cellularRxBytes?.let { rx -> cellularTxBytes?.let { rx + it } }
@@ -53,6 +54,27 @@ data class SharedNetworkTraffic(
         } else {
             (wifiBytes ?: 0L) + (cellularBytes ?: 0L)
         }
+
+    fun plus(other: SharedNetworkTraffic?): SharedNetworkTraffic {
+        if (other == null) return this
+        return SharedNetworkTraffic(
+            wifiBytes = sumOptional(wifiBytes, other.wifiBytes),
+            cellularBytes = sumOptional(cellularBytes, other.cellularBytes),
+        )
+    }
+
+    companion object {
+        fun combine(first: SharedNetworkTraffic?, second: SharedNetworkTraffic?): SharedNetworkTraffic? {
+            val combined = when {
+                first == null -> second
+                else -> first.plus(second)
+            }
+            return combined?.takeIf { (it.totalBytes ?: 0L) > 0L }
+        }
+
+        private fun sumOptional(left: Long?, right: Long?): Long? =
+            if (left == null && right == null) null else (left ?: 0L) + (right ?: 0L)
+    }
 }
 
 data class UsageReport(
@@ -67,6 +89,11 @@ data class UsageReport(
     val categorySummaries: List<CategoryUsageSummary>,
     /** Hotspot/USB/Bluetooth/P2P traffic recorded under UID_TETHERING. */
     val sharedNetworkTraffic: SharedNetworkTraffic? = null,
+    /**
+     * Traffic in the device total that is not assigned to a listed app:
+     * shared UIDs, uninstalled UIDs, and leftover special buckets.
+     */
+    val unattributedTraffic: SharedNetworkTraffic? = null,
 ) {
     val totalBytes: Long? get() = totalWifiBytes?.let { wifi -> totalCellularBytes?.let { wifi + it } }
 }

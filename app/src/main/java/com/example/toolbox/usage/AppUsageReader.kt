@@ -18,11 +18,12 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 
-internal enum class NetworkBucketCategory { APP, TETHERING, IGNORED }
+internal enum class NetworkBucketCategory { APP, TETHERING, REMOVED, IGNORED }
 
-/** Tethering buckets use a negative special UID, so `uid > 0` drops them. */
+/** Tethering and removed-app buckets use negative special UIDs, so `uid > 0` drops them. */
 internal fun classifyNetworkBucket(uid: Int): NetworkBucketCategory = when {
     uid == NetworkStats.Bucket.UID_TETHERING -> NetworkBucketCategory.TETHERING
+    uid == NetworkStats.Bucket.UID_REMOVED -> NetworkBucketCategory.REMOVED
     uid > 0 -> NetworkBucketCategory.APP
     else -> NetworkBucketCategory.IGNORED
 }
@@ -30,8 +31,27 @@ internal fun classifyNetworkBucket(uid: Int): NetworkBucketCategory = when {
 private data class NetworkBucketRead(
     val byUid: Map<Int, Pair<Long, Long>> = emptyMap(),
     val tetheringBytes: Pair<Long, Long>? = null,
+    val leftoverBytes: Pair<Long, Long>? = null,
     val success: Boolean = false,
 )
+
+/** Bytes in [total] that are neither listed on an app row nor counted as tethering. */
+internal fun leftoverTrafficBytes(total: Long?, attributed: Long, tethering: Long): Long? {
+    if (total == null) return null
+    return (total - attributed - tethering).coerceAtLeast(0L)
+}
+
+internal fun preferredTrafficTotal(deviceTotal: Long?, uidTotal: Long?): Long? {
+    if (deviceTotal == null) return uidTotal
+    if (uidTotal == null) return deviceTotal
+    return maxOf(deviceTotal, uidTotal)
+}
+
+/** Counts each UID once so shared-UID siblings do not multiply the total. */
+internal fun attributedTrafficBytes(items: List<AppUsageItem>, wifi: Boolean): Long =
+    items.filter { it.uid > 0 }
+        .distinctBy { it.uid }
+        .sumOf { (if (wifi) it.totalWifiBytes else it.totalCellularBytes) ?: 0L }
 
 private fun Pair<Long, Long>.sum(): Long = first + second
 
@@ -168,12 +188,12 @@ object AppUsageReader {
             val (duration, lastUsed) = usageMap[pkg] ?: Pair(0L, 0L)
             val uid = appInfo?.uid ?: -1
             val sharedUid = uid in sharedUids
-            val wifi = if (wifiAvailable && uid > 0 && !sharedUid) {
+            val wifi = if (wifiAvailable && uid > 0) {
                 wifiTraffic[uid] ?: Pair(0L, 0L)
             } else {
                 null
             }
-            val cellular = if (cellularAvailable && uid > 0 && !sharedUid) {
+            val cellular = if (cellularAvailable && uid > 0) {
                 cellularTraffic[uid] ?: Pair(0L, 0L)
             } else {
                 null
@@ -190,6 +210,7 @@ object AppUsageReader {
                 cellularRxBytes = cellular?.first,
                 cellularTxBytes = cellular?.second,
                 sharedUidTraffic = sharedUid,
+                uid = uid,
             )
 
             if (item.hasUsage) {
@@ -207,32 +228,65 @@ object AppUsageReader {
             wifiBytes = if (wifiAvailable) wifiRead.tetheringBytes?.sum() else null,
             cellularBytes = if (cellularAvailable) cellularRead.tetheringBytes?.sum() else null,
         )
-        val totalWifi = if (wifiAvailable) {
+        val uidWifiTotal = if (wifiAvailable) {
             wifiTraffic.values.sumOf { it.first + it.second } +
-                (wifiRead.tetheringBytes?.sum() ?: 0L)
+                (wifiRead.tetheringBytes?.sum() ?: 0L) +
+                (wifiRead.leftoverBytes?.sum() ?: 0L)
         } else {
             null
         }
-        val totalCellular = if (cellularAvailable) {
+        val uidCellularTotal = if (cellularAvailable) {
             cellularTraffic.values.sumOf { it.first + it.second } +
-                (cellularRead.tetheringBytes?.sum() ?: 0L)
+                (cellularRead.tetheringBytes?.sum() ?: 0L) +
+                (cellularRead.leftoverBytes?.sum() ?: 0L)
         } else {
             null
         }
-        val installedUids = resolvedApps.values.filterNotNull().mapTo(HashSet()) { it.uid }
-        val unattributedUids = (wifiTraffic.keys + cellularTraffic.keys).any { uid ->
-            (uid in sharedUids || uid !in installedUids) &&
-                ((wifiTraffic[uid]?.let { it.first + it.second } ?: 0L) > 0L ||
-                    (cellularTraffic[uid]?.let { it.first + it.second } ?: 0L) > 0L)
+        val deviceWifi = if (wifiAvailable && networkStatsManager != null) {
+            readDeviceTotal(
+                networkStatsManager,
+                NetworkCapabilities.TRANSPORT_WIFI,
+                startTime,
+                endTime,
+            )
+        } else {
+            null
         }
+        val deviceCellular = if (cellularAvailable && networkStatsManager != null) {
+            readDeviceTotal(
+                networkStatsManager,
+                NetworkCapabilities.TRANSPORT_CELLULAR,
+                startTime,
+                endTime,
+            )
+        } else {
+            null
+        }
+        val totalWifi = preferredTrafficTotal(deviceWifi, uidWifiTotal)
+        val totalCellular = preferredTrafficTotal(deviceCellular, uidCellularTotal)
+        val attributedWifi = attributedTrafficBytes(items, wifi = true)
+        val attributedCellular = attributedTrafficBytes(items, wifi = false)
+        val unattributedTraffic = SharedNetworkTraffic(
+            wifiBytes = leftoverTrafficBytes(
+                totalWifi,
+                attributedWifi,
+                wifiRead.tetheringBytes?.sum() ?: 0L,
+            ),
+            cellularBytes = leftoverTrafficBytes(
+                totalCellular,
+                attributedCellular,
+                cellularRead.tetheringBytes?.sum() ?: 0L,
+            ),
+        )
+        val unattributedUids = (unattributedTraffic.totalBytes ?: 0L) > 0L
 
         val categorySummaries = items.groupBy { it.category }.map { (category, list) ->
             CategoryUsageSummary(
                 category = category,
                 totalDurationMillis = list.sumOf { it.foregroundDurationMillis },
-                totalWifiBytes = if (wifiAvailable) list.sumOf { it.totalWifiBytes ?: 0L } else null,
+                totalWifiBytes = if (wifiAvailable) attributedTrafficBytes(list, wifi = true) else null,
                 totalCellularBytes = if (cellularAvailable) {
-                    list.sumOf { it.totalCellularBytes ?: 0L }
+                    attributedTrafficBytes(list, wifi = false)
                 } else {
                     null
                 },
@@ -251,7 +305,20 @@ object AppUsageReader {
             items = items,
             categorySummaries = categorySummaries,
             sharedNetworkTraffic = sharedNetworkTraffic,
+            unattributedTraffic = unattributedTraffic,
         )
+    }
+
+    private fun readDeviceTotal(
+        manager: NetworkStatsManager,
+        transport: Int,
+        startTime: Long,
+        endTime: Long,
+    ): Long? {
+        val bucket = runCatching {
+            manager.querySummaryForDevice(transport, null, startTime, endTime)
+        }.getOrNull() ?: return null
+        return bucket.rxBytes + bucket.txBytes
     }
 
     private fun readNetworkBuckets(
@@ -262,6 +329,7 @@ object AppUsageReader {
     ): NetworkBucketRead {
         val byUid = mutableMapOf<Int, Pair<Long, Long>>()
         var tethering: Pair<Long, Long>? = null
+        var leftover: Pair<Long, Long>? = null
         return try {
             val stats = manager.querySummary(transport, null, startTime, endTime)
             val bucket = NetworkStats.Bucket()
@@ -281,13 +349,23 @@ object AppUsageReader {
                             tethering = (prev.first + bytes.first) to
                                 (prev.second + bytes.second)
                         }
+                        NetworkBucketCategory.REMOVED -> {
+                            val prev = leftover ?: (0L to 0L)
+                            leftover = (prev.first + bytes.first) to
+                                (prev.second + bytes.second)
+                        }
                         NetworkBucketCategory.IGNORED -> Unit
                     }
                 }
             } finally {
                 stats.close()
             }
-            NetworkBucketRead(byUid = byUid, tetheringBytes = tethering, success = true)
+            NetworkBucketRead(
+                byUid = byUid,
+                tetheringBytes = tethering,
+                leftoverBytes = leftover,
+                success = true,
+            )
         } catch (_: Exception) {
             NetworkBucketRead()
         }
