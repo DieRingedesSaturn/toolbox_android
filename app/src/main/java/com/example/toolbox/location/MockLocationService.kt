@@ -45,7 +45,7 @@ class MockLocationService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var session: Job? = null
     private var sessionStrings: ToolboxStrings? = null
-    private var sessionConfig: MockLocationConfig? = null
+    @Volatile private var sessionConfig: MockLocationConfig? = null
     private var sessionEndElapsed: Long = 0L
     private var sessionEndWall: Long = 0L
     private var lastNotifiedRemainingMinutes: Int = -1
@@ -57,6 +57,10 @@ class MockLocationService : Service() {
         if (intent?.action == ACTION_STOP) {
             stopSession()
             return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_UPDATE) {
+            retargetSession(intent)
+            return if (session != null) START_STICKY else START_NOT_STICKY
         }
         if (intent?.action != ACTION_START || session != null) {
             if (session == null) stopSelf()
@@ -116,7 +120,7 @@ class MockLocationService : Service() {
                         failure = MockLocationFailure.NOTIFICATIONS
                         break
                     }
-                    activeController.publish(config)
+                    activeController.publish(sessionConfig ?: config)
                     refreshStatusNotification()
                     delay(1_000L)
                 }
@@ -165,6 +169,26 @@ class MockLocationService : Service() {
                 }
             }
         }
+    }
+
+    private fun retargetSession(intent: Intent) {
+        if (session == null || sessionConfig == null) {
+            if (session == null) stopSelf()
+            return
+        }
+        val incoming = MockLocationConfig(
+            intent.getDoubleExtra("latitude", Double.NaN),
+            intent.getDoubleExtra("longitude", Double.NaN),
+            intent.getFloatExtra("accuracy", Float.NaN),
+            sessionConfig?.durationMinutes ?: 0,
+        )
+        if (!incoming.isValid()) return
+        sessionConfig = incoming
+        lastNotifiedRemainingMinutes = -1
+        publish(
+            MockLocationState(MockLocationPhase.RUNNING, incoming, sessionEndWall),
+        )
+        refreshStatusNotification()
     }
 
     private fun remainingMinutes(): Int {
@@ -252,6 +276,7 @@ class MockLocationService : Service() {
 
     companion object {
         private const val ACTION_START = "com.example.toolbox.location.START_MOCK"
+        private const val ACTION_UPDATE = "com.example.toolbox.location.UPDATE_MOCK"
         private const val ACTION_STOP = "com.example.toolbox.location.STOP_MOCK"
         private const val CHANNEL_ID = "mock_location"
         private const val NOTIFICATION_ID = 7100
@@ -283,6 +308,17 @@ class MockLocationService : Service() {
                 .putExtra("latitude", config.latitude).putExtra("longitude", config.longitude)
                 .putExtra("accuracy", config.accuracyMeters).putExtra("minutes", config.durationMinutes)
                 .putExtra("chinese", chinese))
+        }
+
+        fun update(context: Context, config: MockLocationConfig) {
+            require(config.isValid())
+            context.startService(
+                Intent(context, MockLocationService::class.java)
+                    .setAction(ACTION_UPDATE)
+                    .putExtra("latitude", config.latitude)
+                    .putExtra("longitude", config.longitude)
+                    .putExtra("accuracy", config.accuracyMeters),
+            )
         }
 
         fun stop(context: Context) {

@@ -226,6 +226,13 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
                 },
             ) { Text(if (state.busy) strings.mockLocationStop else strings.mockLocationCleanup) }
         }
+        if (state.phase == MockLocationPhase.RUNNING) {
+            FilledTonalButton(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.small,
+                onClick = { showMapPicker = true },
+            ) { Text(strings.mockLocationMapButton) }
+        }
         if (editing) {
             if (!access) {
                 IssueActionRow(
@@ -379,7 +386,9 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
     }
     if (showMapPicker) {
         val startLatitude = parseMapCoordinate(latitude, -90.0, 90.0)
+            ?: state.config?.latitude
         val startLongitude = parseMapCoordinate(longitude, -180.0, 180.0)
+            ?: state.config?.longitude
         MockLocationMapDialog(
             strings = strings,
             initialLatitude = if (startLatitude != null && startLongitude != null) startLatitude else null,
@@ -388,6 +397,11 @@ internal fun MockLocationCard(strings: ToolboxStrings) {
                 latitude = formatPickedCoordinate(pickedLatitude)
                 longitude = formatPickedCoordinate(pickedLongitude)
                 showMapPicker = false
+                if (state.phase == MockLocationPhase.RUNNING) {
+                    MockLocationConfig.parse(latitude, longitude, accuracy, minutes)?.let { target ->
+                        MockLocationSession.retarget(context, target)
+                    }
+                }
             },
             onDismiss = { showMapPicker = false },
         )

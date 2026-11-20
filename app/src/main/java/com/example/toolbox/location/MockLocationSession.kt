@@ -28,6 +28,12 @@ object MockLocationSession {
             .onFailure { MockLocationService.startRejected() }
     }
 
+    fun retarget(context: Context, config: MockLocationConfig) {
+        if (state.value.phase != MockLocationPhase.RUNNING) return
+        runCatching { MockLocationService.update(context, config) }
+            .onFailure { failure(MockLocationFailure.START) }
+    }
+
     fun stop(context: Context) {
         runCatching { MockLocationService.stop(context) }.onFailure { failure(MockLocationFailure.STOP) }
     }
