@@ -85,22 +85,49 @@ fun selectLaunchable(
     )
 }
 
-/** `adb shell am start` for the candidate, using the resolved component when known. */
+/**
+ * `adb shell am start` for the candidate, using the resolved component when known.
+ *
+ * The copied text is parsed by the host shell, then `adb shell` joins its
+ * arguments and the device shell parses them again. Characters outside a
+ * conservative literal set are single-quoted for both shells, so a class name
+ * like `Settings$TestingSettingsActivity` is not expanded.
+ */
 fun privacyAdbCommand(
     candidate: PrivacyShortcutCandidate,
     activity: ResolvedActivity? = null,
 ): String {
-    val command = StringBuilder("adb shell am start")
+    val args = ArrayList<String>(8)
+    args += "am"
+    args += "start"
     if (!candidate.action.isNullOrBlank()) {
-        command.append(" -a ").append(candidate.action)
+        args += "-a"
+        args += candidate.action
     }
     val packageName = activity?.packageName ?: candidate.packageName
     val className = activity?.className ?: candidate.className
     if (!packageName.isNullOrBlank() && !className.isNullOrBlank()) {
-        command.append(" -n ").append(packageName).append('/').append(className)
+        args += "-n"
+        args += "$packageName/$className"
     }
     if (!candidate.dataUri.isNullOrBlank()) {
-        command.append(" -d ").append(candidate.dataUri)
+        args += "-d"
+        args += candidate.dataUri
     }
-    return command.toString()
+    val remote = args.joinToString(" ") { shellArg(it) }
+    val hostRemote = if (args.all(::shellLiteral)) remote else shellArg(remote)
+    return "adb shell $hostRemote"
 }
+
+private const val SHELL_LITERAL =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:/@+,-"
+
+private fun shellLiteral(value: String): Boolean =
+    value.isNotEmpty() && value.all { it in SHELL_LITERAL }
+
+/** POSIX single quotes. An embedded apostrophe is closed, escaped, and reopened. */
+private fun posixSingleQuote(value: String): String =
+    "'" + value.replace("'", "'\\''") + "'"
+
+private fun shellArg(value: String): String =
+    if (shellLiteral(value)) value else posixSingleQuote(value)

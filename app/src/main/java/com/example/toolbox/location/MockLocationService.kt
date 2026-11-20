@@ -60,7 +60,10 @@ class MockLocationService : Service() {
         }
         if (intent?.action == ACTION_UPDATE) {
             retargetSession(intent)
-            return if (session != null) START_STICKY else START_NOT_STICKY
+            // The start command is START_NOT_STICKY. Returning START_STICKY from
+            // a later command replaces that result, so a killed process would be
+            // started again with a null intent.
+            return START_NOT_STICKY
         }
         if (intent?.action != ACTION_START || session != null) {
             if (session == null) stopSelf()

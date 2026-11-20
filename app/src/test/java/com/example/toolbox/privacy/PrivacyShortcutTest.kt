@@ -1,9 +1,11 @@
 package com.example.toolbox.privacy
 
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class PrivacyShortcutTest {
@@ -110,6 +112,87 @@ class PrivacyShortcutTest {
             "adb shell am start -n com.google.android.gms/com.google.android.gms.app.settings.GoogleSettingsLink",
             privacyAdbCommand(first),
         )
+    }
+
+    @Test
+    fun adbCommandQuotesInnerClassDollarsForBothShells() {
+        val testing = PrivacyShortcutCatalog.entries.first { it.id == "testing_settings" }
+        assertEquals(
+            "adb shell 'am start -n '\\''com.android.settings/" +
+                "com.android.settings.Settings\$TestingSettingsActivity'\\'''",
+            privacyAdbCommand(testing.candidates.first()),
+        )
+    }
+
+    @Test
+    fun adbCommandRoundTripsShellMetacharacters() {
+        assumeTrue(File("/bin/bash").canExecute())
+        val samples = listOf(
+            "com.android.settings/com.android.settings.Settings\$TestingSettingsActivity",
+            "com.example/com.example.O'Brien",
+            "com.example/com.example.My Activity",
+            "com.example/com.example.A`id`",
+            "com.example/com.example.Wow!",
+            "com.example/com.example.A*B",
+            "com.example/com.example.A;id",
+            "com.example/com.example.A\\B\$C",
+        )
+        samples.forEach { component ->
+            val candidate = PrivacyShortcutCandidate(
+                packageName = component.substringBefore('/'),
+                className = component.substringAfter('/'),
+            )
+            val argv = deviceShellArgs(privacyAdbCommand(candidate))
+            assertEquals(listOf("start", "-n", component), argv)
+        }
+        val plain = privacyAdbCommand(
+            PrivacyShortcutCandidate(
+                action = "android.settings.APPLICATION_DETAILS_SETTINGS",
+                dataUri = "package:com.google.android.gms",
+            ),
+            ResolvedActivity(
+                packageName = "com.android.settings",
+                className = "com.android.settings.applications.InstalledAppDetails",
+                exported = true,
+            ),
+        )
+        assertEquals(
+            listOf(
+                "start",
+                "-a",
+                "android.settings.APPLICATION_DETAILS_SETTINGS",
+                "-n",
+                "com.android.settings/com.android.settings.applications.InstalledAppDetails",
+                "-d",
+                "package:com.google.android.gms",
+            ),
+            deviceShellArgs(plain),
+        )
+    }
+
+    /**
+     * Host bash parses [command] the way a pasted terminal line is parsed.
+     * `adb shell` then joins its arguments with spaces and the device shell
+     * parses that string. The returned words are the device `am` arguments.
+     */
+    private fun deviceShellArgs(command: String): List<String> {
+        val hostArgs = bash(
+            "set -- $command\nshift 2\nprintf '%s\\0' \"$@\"",
+        ).split('\u0000').filter { it.isNotEmpty() }
+        val remote = hostArgs.joinToString(" ")
+        return bash(
+            "am() { printf '%s\\0' \"\$@\"; }; $remote",
+        ).split('\u0000').filter { it.isNotEmpty() }
+    }
+
+    private fun bash(script: String): String {
+        val process = ProcessBuilder("/bin/bash", "-c", script)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        val code = process.waitFor()
+        assertEquals(output, 0, code)
+        return output
     }
 
     @Test
