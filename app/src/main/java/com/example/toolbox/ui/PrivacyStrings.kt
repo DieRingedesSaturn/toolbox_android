@@ -3,9 +3,9 @@ package com.example.toolbox.ui
 
 val ToolboxStrings.privacyIntro: String
     get() = if (chinese) {
-        "部分系统藏起来的 Google 与系统设置。灰色项未导出，长按可复制 adb 命令。"
+        "部分系统藏起来的 Google 与系统设置。打不开的项会标成未找到或未导出，长按可复制 adb 命令。"
     } else {
-        "Google and system settings some ROMs hide. Greyed rows aren't exported; long-press to copy an adb command."
+        "Google and system settings some ROMs hide. Rows that can't be opened are labeled not found or not exported; long-press to copy an adb command."
     }
 
 val ToolboxStrings.privacyNotFound: String
